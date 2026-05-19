@@ -8,19 +8,20 @@ export default async function Home() {
   if (!session?.user?.email) redirect("/signin");
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <header className="mb-10 flex items-baseline justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Mykan</h1>
-          <p className="mt-0.5 text-sm text-[var(--color-muted)]">Projects</p>
-        </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-[var(--color-faint)]">{session.user.email}</span>
-          <SignOutButton />
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-2 text-sm">
+          <span className="font-semibold tracking-tight">Mykan</span>
+          <div className="flex items-center gap-4">
+            <span className="text-[var(--color-faint)]">{session.user.email}</span>
+            <SignOutButton />
+          </div>
         </div>
       </header>
 
-      <ProjectsView />
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 pt-4 pb-12">
+        <ProjectsView />
+      </main>
     </div>
   );
 }

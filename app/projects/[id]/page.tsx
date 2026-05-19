@@ -20,20 +20,29 @@ export default async function ProjectPage({
   if (!project) notFound();
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <header className="mb-8 flex items-baseline justify-between">
-        <div className="min-w-0 flex-1">
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-2 text-sm">
           <Link
             href="/"
-            className="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+            className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
           >
             ← Projects
           </Link>
-          <h1 className="mt-2 truncate text-xl font-semibold tracking-tight">
+          <div className="flex items-center gap-4">
+            <span className="text-[var(--color-faint)]">{session.user.email}</span>
+            <SignOutButton />
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
+        <div className="mb-3">
+          <h1 className="truncate text-xl font-semibold tracking-tight">
             {project.name}
           </h1>
           {project.description ? (
-            <p className="mt-1 max-w-2xl text-sm text-[var(--color-muted)]">
+            <p className="mt-0.5 max-w-2xl text-sm text-[var(--color-muted)]">
               {project.description}
             </p>
           ) : null}
@@ -41,16 +50,12 @@ export default async function ProjectPage({
             createdBy={project.created_by}
             updatedBy={project.updated_by}
             updatedAt={project.updated_at}
-            className="mt-2 block"
+            className="mt-1 block"
           />
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-[var(--color-faint)]">{session.user.email}</span>
-          <SignOutButton />
-        </div>
-      </header>
 
-      <ProjectDetailView projectId={project.id} />
+        <ProjectDetailView projectId={project.id} />
+      </main>
     </div>
   );
 }

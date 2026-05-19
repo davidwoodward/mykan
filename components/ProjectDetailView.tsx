@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "r
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
+import { localPart } from "@/lib/format";
 import {
   ITEM_TYPES,
   TYPE_LABEL,
@@ -18,6 +19,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("list");
+  const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [type, setType] = useState<ItemType>("feature");
   const [busy, setBusy] = useState(false);
@@ -102,11 +104,23 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     }
   }
 
-  const grouped = useMemo(() => groupByStatus(items ?? []), [items]);
+  const creators = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items ?? []) if (it.created_by) set.add(it.created_by);
+    return Array.from(set).sort();
+  }, [items]);
+
+  const visibleItems = useMemo(() => {
+    if (!items) return [];
+    if (!creatorFilter) return items;
+    return items.filter((it) => it.created_by === creatorFilter);
+  }, [items, creatorFilter]);
+
+  const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
   return (
     <>
-      <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-4">
+      <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
         <AutoGrowTextarea
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -115,7 +129,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           className="text-base placeholder:text-[var(--color-faint)]"
           aria-label="Item name"
         />
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-2 flex items-center justify-between gap-3">
           <TypeSegmented value={type} onChange={setType} />
           <div className="flex items-center gap-3">
             <span className="hidden text-xs text-[var(--color-faint)] sm:inline">
@@ -125,7 +139,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               type="button"
               onClick={createItem}
               disabled={!name.trim() || busy}
-              className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               Add
             </button>
@@ -134,16 +148,25 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       </section>
 
       {error ? (
-        <p className="mt-4 text-sm text-[var(--color-bug)]">{error}</p>
+        <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
-      <div className="mt-8 mb-4 inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
-        <ViewTab active={view === "list"} onClick={() => setView("list")}>
-          List
-        </ViewTab>
-        <ViewTab active={view === "board"} onClick={() => setView("board")}>
-          Board
-        </ViewTab>
+      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
+          <ViewTab active={view === "list"} onClick={() => setView("list")}>
+            List
+          </ViewTab>
+          <ViewTab active={view === "board"} onClick={() => setView("board")}>
+            Board
+          </ViewTab>
+        </div>
+        {creators.length > 1 ? (
+          <CreatorFilter
+            creators={creators}
+            value={creatorFilter}
+            onChange={setCreatorFilter}
+          />
+        ) : null}
       </div>
 
       {items === null ? (
@@ -216,6 +239,54 @@ function ViewTab({
       type="button"
       onClick={onClick}
       className={`rounded px-3 py-1 transition-colors ${
+        active
+          ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
+          : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CreatorFilter({
+  creators,
+  value,
+  onChange,
+}: {
+  creators: string[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-xs">
+      <span className="px-1.5 text-[var(--color-faint)]">by</span>
+      <FilterPill active={value === null} onClick={() => onChange(null)}>
+        all
+      </FilterPill>
+      {creators.map((c) => (
+        <FilterPill key={c} active={value === c} onClick={() => onChange(c)}>
+          {localPart(c)}
+        </FilterPill>
+      ))}
+    </div>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded px-2 py-1 transition-colors ${
         active
           ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
           : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
