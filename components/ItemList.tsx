@@ -21,10 +21,14 @@ export function ItemList({
   grouped,
   onPatch,
   onDelete,
+  onCreatorClick,
+  activeCreator,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
   onDelete: (id: string) => Promise<void>;
+  onCreatorClick?: (email: string) => void;
+  activeCreator?: string | null;
 }) {
   return (
     <div className="space-y-8">
@@ -48,6 +52,8 @@ export function ItemList({
                   item={it}
                   onPatch={onPatch}
                   onDelete={onDelete}
+                  onCreatorClick={onCreatorClick}
+                  activeCreator={activeCreator}
                 />
               ))}
             </ul>
@@ -62,10 +68,14 @@ function ItemRow({
   item,
   onPatch,
   onDelete,
+  onCreatorClick,
+  activeCreator,
 }: {
   item: Item;
   onPatch: PatchFn;
   onDelete: (id: string) => Promise<void>;
+  onCreatorClick?: (email: string) => void;
+  activeCreator?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.name);
@@ -127,6 +137,8 @@ function ItemRow({
           createdBy={item.created_by}
           updatedBy={item.updated_by}
           updatedAt={item.updated_at}
+          onCreatorClick={onCreatorClick}
+          activeCreator={activeCreator}
           className="mt-1 block"
         />
       </div>

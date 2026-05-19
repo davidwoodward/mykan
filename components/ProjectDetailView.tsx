@@ -104,6 +104,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     }
   }
 
+  const toggleCreatorFilter = useCallback((email: string) => {
+    setCreatorFilter((cur) => (cur === email ? null : email));
+  }, []);
+
   const creators = useMemo(() => {
     const set = new Set<string>();
     for (const it of items ?? []) if (it.created_by) set.add(it.created_by);
@@ -160,7 +164,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             Board
           </ViewTab>
         </div>
-        {creators.length > 1 ? (
+        {creators.length > 0 ? (
           <CreatorFilter
             creators={creators}
             value={creatorFilter}
@@ -172,9 +176,21 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
-        <ItemList grouped={grouped} onPatch={patchItem} onDelete={deleteItem} />
+        <ItemList
+          grouped={grouped}
+          onPatch={patchItem}
+          onDelete={deleteItem}
+          onCreatorClick={toggleCreatorFilter}
+          activeCreator={creatorFilter}
+        />
       ) : (
-        <Board grouped={grouped} onPatch={patchItem} onDelete={deleteItem} />
+        <Board
+          grouped={grouped}
+          onPatch={patchItem}
+          onDelete={deleteItem}
+          onCreatorClick={toggleCreatorFilter}
+          activeCreator={creatorFilter}
+        />
       )}
     </>
   );

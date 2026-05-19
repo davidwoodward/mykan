@@ -33,10 +33,14 @@ export function Board({
   grouped,
   onPatch,
   onDelete,
+  onCreatorClick,
+  activeCreator,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
   onDelete: (id: string) => Promise<void>;
+  onCreatorClick?: (email: string) => void;
+  activeCreator?: string | null;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -78,6 +82,8 @@ export function Board({
             status={status}
             items={grouped[status]}
             onDelete={onDelete}
+            onCreatorClick={onCreatorClick}
+            activeCreator={activeCreator}
           />
         ))}
       </div>
@@ -89,10 +95,14 @@ function Column({
   status,
   items,
   onDelete,
+  onCreatorClick,
+  activeCreator,
 }: {
   status: ItemStatus;
   items: Item[];
   onDelete: (id: string) => Promise<void>;
+  onCreatorClick?: (email: string) => void;
+  activeCreator?: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status, data: { status } });
 
@@ -117,7 +127,13 @@ function Column({
       >
         <ul className="flex min-h-24 flex-col gap-2 p-2">
           {items.map((it) => (
-            <Card key={it.id} item={it} onDelete={onDelete} />
+            <Card
+              key={it.id}
+              item={it}
+              onDelete={onDelete}
+              onCreatorClick={onCreatorClick}
+              activeCreator={activeCreator}
+            />
           ))}
           {items.length === 0 ? (
             <li className="grid place-items-center py-6 text-xs text-[var(--color-faint)]">
@@ -133,9 +149,13 @@ function Column({
 function Card({
   item,
   onDelete,
+  onCreatorClick,
+  activeCreator,
 }: {
   item: Item;
   onDelete: (id: string) => Promise<void>;
+  onCreatorClick?: (email: string) => void;
+  activeCreator?: string | null;
 }) {
   const {
     attributes,
@@ -170,6 +190,8 @@ function Card({
         createdBy={item.created_by}
         updatedBy={item.updated_by}
         updatedAt={item.updated_at}
+        onCreatorClick={onCreatorClick}
+        activeCreator={activeCreator}
         className="mt-1.5 block"
       />
       <div className="mt-2 flex items-center justify-between">
