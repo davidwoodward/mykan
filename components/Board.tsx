@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { TypeBadge } from "@/components/TypeBadge";
+import { Byline } from "@/components/Byline";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -165,6 +166,12 @@ function Card({
       >
         {item.name}
       </div>
+      <Byline
+        createdBy={item.created_by}
+        updatedBy={item.updated_by}
+        updatedAt={item.updated_at}
+        className="mt-1.5 block"
+      />
       <div className="mt-2 flex items-center justify-between">
         <TypeBadge type={item.type} />
         <button

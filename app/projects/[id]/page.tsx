@@ -4,6 +4,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 import { SignOutButton } from "@/components/SignOutButton";
+import { Byline } from "@/components/Byline";
 import type { Project } from "@/lib/types";
 
 export default async function ProjectPage({
@@ -36,6 +37,12 @@ export default async function ProjectPage({
               {project.description}
             </p>
           ) : null}
+          <Byline
+            createdBy={project.created_by}
+            updatedBy={project.updated_by}
+            updatedAt={project.updated_at}
+            className="mt-2 block"
+          />
         </div>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-[var(--color-faint)]">{session.user.email}</span>

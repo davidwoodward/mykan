@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   const { data, error } = await getSupabase()
     .from("projects")
-    .insert({ name, description })
+    .insert({ name, description, created_by: gate.email, updated_by: gate.email })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

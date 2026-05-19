@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
+import { Byline } from "@/components/Byline";
 import type { Project } from "@/lib/types";
 
 export function ProjectsView() {
@@ -134,6 +135,12 @@ export function ProjectsView() {
                       {p.description}
                     </span>
                   ) : null}
+                  <Byline
+                    createdBy={p.created_by}
+                    updatedBy={p.updated_by}
+                    updatedAt={p.updated_at}
+                    className="mt-1"
+                  />
                 </Link>
                 <button
                   type="button"

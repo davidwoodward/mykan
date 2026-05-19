@@ -7,6 +7,8 @@ export interface Project {
   description: string | null;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export interface Item {
@@ -18,6 +20,8 @@ export interface Item {
   position: number;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export const ITEM_TYPES: readonly ItemType[] = ["feature", "bug", "idea"] as const;

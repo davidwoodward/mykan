@@ -36,6 +36,13 @@ create table if not exists items (
 create index if not exists items_project_status_position_idx
   on items (project_id, status, position);
 
+-- Authorship: track which whitelisted user created / last updated each row.
+-- Stamped from the Auth.js session email by the server-only API routes.
+alter table projects add column if not exists created_by text;
+alter table projects add column if not exists updated_by text;
+alter table items    add column if not exists created_by text;
+alter table items    add column if not exists updated_by text;
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

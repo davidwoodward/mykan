@@ -2,6 +2,7 @@
 
 import { useState, type KeyboardEvent } from "react";
 import { TypeBadge } from "@/components/TypeBadge";
+import { Byline } from "@/components/Byline";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -122,6 +123,12 @@ function ItemRow({
             {item.name}
           </button>
         )}
+        <Byline
+          createdBy={item.created_by}
+          updatedBy={item.updated_by}
+          updatedAt={item.updated_at}
+          className="mt-1 block"
+        />
       </div>
       <TypeMenu
         value={item.type}

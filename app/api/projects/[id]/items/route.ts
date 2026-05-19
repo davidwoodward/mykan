@@ -45,7 +45,15 @@ export async function POST(req: Request, { params }: Ctx) {
 
   const { data, error } = await supabase
     .from("items")
-    .insert({ project_id: id, name, type, status: "new", position })
+    .insert({
+      project_id: id,
+      name,
+      type,
+      status: "new",
+      position,
+      created_by: gate.email,
+      updated_by: gate.email,
+    })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

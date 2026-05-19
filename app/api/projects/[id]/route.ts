@@ -36,6 +36,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
   }
   patch.updated_at = new Date().toISOString();
+  patch.updated_by = gate.email;
 
   const { data, error } = await getSupabase()
     .from("projects")
