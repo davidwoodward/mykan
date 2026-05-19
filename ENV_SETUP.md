@@ -90,7 +90,42 @@ Native to Vercel once the GitHub repo is linked — no extra config needed.
 
 A lightweight `.github/workflows/ci.yml` will also be added to run `tsc --noEmit` and `next build` on PRs, so broken code can't merge. (Tell me if you'd rather skip this and rely solely on Vercel's preview deploy as the gate.)
 
-## 9. Checklist — reply when ready
+## 9. Custom domain — kanban.dbwoodward.com
+
+Three steps, in order. Do these *after* the first successful Vercel deploy.
+
+### a. Add a DNS record at your dbwoodward.com DNS provider
+
+| Field | Value |
+|---|---|
+| Type | `CNAME` |
+| Host / Name | `kanban` *(some UIs want the full `kanban.dbwoodward.com`)* |
+| Value / Target | `cname.vercel-dns.com` |
+| TTL | `3600` (or the provider default) |
+
+**Cloudflare specifically:** set the record to **DNS-only** (gray cloud, no proxy) so Vercel can complete the TLS handshake. If the orange cloud is on you'll get cert / redirect-loop errors.
+
+### b. Add the domain to the Vercel project
+
+Dashboard route: **Project → Settings → Domains → Add `kanban.dbwoodward.com`**. Or, from the repo root:
+
+```bash
+vercel domains add kanban.dbwoodward.com
+```
+
+Vercel polls DNS, then auto-issues a Let's Encrypt cert (≈ 1–2 minutes once the CNAME propagates). The current production deploy is automatically aliased to the new domain.
+
+### c. Add the production URL to Google OAuth
+
+In Google Cloud Console → your OAuth client → **Authorized redirect URIs**, add:
+
+```
+https://kanban.dbwoodward.com/api/auth/callback/google
+```
+
+Leaving the `*.vercel.app` redirect in place is safe — Vercel's preview deploys hit that one.
+
+## 10. Checklist — reply when ready
 
 - [ ] `gh` installed and signed in
 - [ ] `vercel` installed and signed in
@@ -100,5 +135,6 @@ A lightweight `.github/workflows/ci.yml` will also be added to run `tsc --noEmit
 - [ ] Google OAuth client created with `http://localhost:3000/api/auth/callback/google` as a redirect URI
 - [ ] `GOOGLE_CLIENT_ID`
 - [ ] `GOOGLE_CLIENT_SECRET`
+- [ ] DNS provider for dbwoodward.com identified (so I can give exact instructions if the generic table above doesn't map cleanly)
 
 Paste the four values into chat (or drop them into `.env.local` yourself and just say "ready") and I'll start the scaffold.

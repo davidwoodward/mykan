@@ -45,8 +45,8 @@ See **[ENV_SETUP.md](./ENV_SETUP.md)** for the full setup walkthrough. Quick ver
 # 1. install
 npm install
 
-# 2. copy .env.example to .env.local and fill in
-cp .env.example .env.local
+# 2. copy .env.local.example to .env.local and fill in
+cp .env.local.example .env.local
 # AUTH_SECRET: openssl rand -base64 32
 # AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET: Google Cloud Console OAuth client
 # SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY: Supabase project Settings → API
@@ -77,6 +77,8 @@ After the first production deploy:
 
 1. Note the assigned domain (e.g. `https://mykan-xxx.vercel.app`).
 2. In Google Cloud Console → OAuth client, add `https://<domain>/api/auth/callback/google` to **Authorized redirect URIs**.
+
+Production is served at **`kanban.dbwoodward.com`**. To wire that up: add a `CNAME` record `kanban → cname.vercel-dns.com` at the dbwoodward.com DNS provider, then `vercel domains add kanban.dbwoodward.com`. Full walkthrough in [ENV_SETUP.md](./ENV_SETUP.md) section 9.
 
 Vercel's GitHub integration handles CI/CD automatically once the repo is linked:
 
