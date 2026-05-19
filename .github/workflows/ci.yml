@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          # Build needs these to be set, but the values don't have to be real —
+          # nothing connects during a static build. Placeholders prevent the
+          # build from throwing on missing env. Real values live in Vercel.
+          AUTH_SECRET: ci-build-placeholder-secret-not-used
+          AUTH_GOOGLE_ID: ci-placeholder
+          AUTH_GOOGLE_SECRET: ci-placeholder
+          SUPABASE_URL: https://ci.placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder

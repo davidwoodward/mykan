@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: oklch(98.5% 0.005 80);
+  --color-surface: oklch(100% 0 0);
+  --color-ink: oklch(20% 0.01 270);
+  --color-muted: oklch(50% 0.01 270);
+  --color-faint: oklch(70% 0.008 270);
+  --color-line: oklch(92% 0.005 270);
+  --color-line-strong: oklch(85% 0.008 270);
+  --color-accent: oklch(55% 0.16 270);
+  --color-accent-soft: oklch(95% 0.03 270);
+  --color-accent-ink: oklch(35% 0.14 270);
+
+  --color-feature: oklch(38% 0.10 150);
+  --color-feature-bg: oklch(95% 0.04 150);
+  --color-feature-line: oklch(85% 0.06 150);
+
+  --color-bug: oklch(42% 0.13 30);
+  --color-bug-bg: oklch(95% 0.05 30);
+  --color-bug-line: oklch(85% 0.08 30);
+
+  --color-idea: oklch(40% 0.12 75);
+  --color-idea-bg: oklch(95% 0.05 75);
+  --color-idea-line: oklch(85% 0.08 75);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html, body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+/* Reserve the scrollbar gutter so layouts don't shift when content height crosses
+   the viewport — important for the board view, which has its own scroll. */
+html {
+  scrollbar-gutter: stable;
+}
