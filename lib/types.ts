@@ -36,7 +36,7 @@ export const STATUS_LABEL: Record<ItemStatus, string> = {
 export const TYPE_LABEL: Record<ItemType, string> = {
   feature: "Feature",
   bug: "Bug",
-  idea: "Idea",
+  idea: "Thought",
 };
 
 export function isItemType(v: unknown): v is ItemType {
