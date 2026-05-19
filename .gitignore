@@ -42,6 +42,10 @@ yarn-error.log*
 .claude/
 skills-lock.json
 
+# Supabase CLI scratch (pooler URL with creds lives here — never commit)
+supabase/.temp/
+.branches/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
