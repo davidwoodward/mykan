@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ProjectsView } from "@/components/ProjectsView";
 import { SignOutButton } from "@/components/SignOutButton";
+import { Brand } from "@/components/Brand";
 
 export default async function Home() {
   const session = await auth();
@@ -11,7 +12,7 @@ export default async function Home() {
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-2 text-sm">
-          <span className="font-semibold tracking-tight">Mykan</span>
+          <Brand />
           <div className="flex items-center gap-4">
             <span className="text-[var(--color-faint)]">{session.user.email}</span>
             <SignOutButton />

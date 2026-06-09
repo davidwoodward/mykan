@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { headers } from "next/headers";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 import { SignOutButton } from "@/components/SignOutButton";
+import { Brand } from "@/components/Brand";
 import { Byline } from "@/components/Byline";
 import type { Project } from "@/lib/types";
 
@@ -23,12 +23,7 @@ export default async function ProjectPage({
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-2 text-sm">
-          <Link
-            href="/"
-            className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            ← Projects
-          </Link>
+          <Brand />
           <div className="flex items-center gap-4">
             <span className="text-[var(--color-faint)]">{session.user.email}</span>
             <SignOutButton />

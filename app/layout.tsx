@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mykan",
+  title: "MyKan",
   description: "Projects, items, and a kanban board.",
 };
 
