@@ -4,7 +4,7 @@ import { useState } from "react";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
-import { AttachmentBadge } from "@/components/AttachmentBadge";
+import { InlineAttachments } from "@/components/InlineAttachments";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -31,6 +31,7 @@ export function ItemList({
   activeTags,
   tagSuggestions,
   onTagsChange,
+  onItemChange,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -42,6 +43,7 @@ export function ItemList({
   activeTags?: string[];
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
+  onItemChange: (item: Item) => void;
 }) {
   return (
     <div className="space-y-8">
@@ -72,6 +74,7 @@ export function ItemList({
                   activeTags={activeTags}
                   tagSuggestions={tagSuggestions}
                   onTagsChange={onTagsChange}
+                  onItemChange={onItemChange}
                 />
               ))}
             </ul>
@@ -93,6 +96,7 @@ function ItemRow({
   activeTags,
   tagSuggestions,
   onTagsChange,
+  onItemChange,
 }: {
   item: Item;
   onPatch: PatchFn;
@@ -104,6 +108,7 @@ function ItemRow({
   activeTags?: string[];
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
+  onItemChange: (item: Item) => void;
 }) {
   const text = richDocText(item.body);
 
@@ -140,10 +145,7 @@ function ItemRow({
           className="mt-1 block"
         />
       </div>
-      <AttachmentBadge
-        count={item.attachments.length}
-        onClick={() => onOpen(item)}
-      />
+      <InlineAttachments item={item} onItemChange={onItemChange} />
       <TypeMenu
         value={item.type}
         onChange={(t) => void onPatch(item.id, { type: t })}

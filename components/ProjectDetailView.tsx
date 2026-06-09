@@ -365,6 +365,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           activeTags={tagFilter}
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
+          onItemChange={replaceItem}
         />
       ) : (
         <Board
@@ -378,6 +379,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           activeTags={tagFilter}
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
+          onItemChange={replaceItem}
         />
       )}
 

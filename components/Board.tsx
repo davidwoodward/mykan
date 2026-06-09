@@ -18,7 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
-import { AttachmentBadge } from "@/components/AttachmentBadge";
+import { InlineAttachments } from "@/components/InlineAttachments";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -37,6 +37,7 @@ type TagProps = {
   activeTags?: string[];
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
+  onItemChange: (item: Item) => void;
 };
 
 export function Board({
@@ -50,6 +51,7 @@ export function Board({
   activeTags,
   tagSuggestions,
   onTagsChange,
+  onItemChange,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -105,6 +107,7 @@ export function Board({
             activeTags={activeTags}
             tagSuggestions={tagSuggestions}
             onTagsChange={onTagsChange}
+            onItemChange={onItemChange}
           />
         ))}
       </div>
@@ -123,6 +126,7 @@ function Column({
   activeTags,
   tagSuggestions,
   onTagsChange,
+  onItemChange,
 }: {
   status: ItemStatus;
   items: Item[];
@@ -165,6 +169,7 @@ function Column({
               activeTags={activeTags}
               tagSuggestions={tagSuggestions}
               onTagsChange={onTagsChange}
+              onItemChange={onItemChange}
             />
           ))}
           {items.length === 0 ? (
@@ -188,6 +193,7 @@ function Card({
   activeTags,
   tagSuggestions,
   onTagsChange,
+  onItemChange,
 }: {
   item: Item;
   onDelete: (id: string) => Promise<void>;
@@ -249,10 +255,7 @@ function Card({
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TypeBadge type={item.type} />
-          <AttachmentBadge
-            count={item.attachments.length}
-            onClick={() => onOpen(item)}
-          />
+          <InlineAttachments item={item} onItemChange={onItemChange} />
         </div>
         <button
           type="button"
