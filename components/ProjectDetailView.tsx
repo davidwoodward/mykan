@@ -134,6 +134,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     );
   }, []);
 
+  const replaceItem = useCallback((updated: Item) => {
+    setItems((prev) =>
+      prev ? prev.map((it) => (it.id === updated.id ? updated : it)) : prev,
+    );
+  }, []);
+
   const toggleTag = useCallback((tag: string) => {
     setTagFilter((cur) =>
       cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag],
@@ -382,6 +388,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           onClose={() => setOpenItemId(null)}
           onSaveBody={saveBody}
           onSaveTags={saveTags}
+          onItemChange={replaceItem}
         />
       ) : null}
     </>

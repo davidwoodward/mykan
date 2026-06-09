@@ -77,6 +77,14 @@ export interface Project {
   updated_by: string | null;
 }
 
+export interface Attachment {
+  id: string;
+  name: string;
+  content_type: string;
+  size: number;
+  path: string;
+}
+
 export interface Item {
   id: string;
   project_id: string;
@@ -86,10 +94,33 @@ export interface Item {
   position: number;
   body: RichDoc | null;
   tags: string[];
+  attachments: Attachment[];
   created_at: string;
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+}
+
+/** True when a browser can render this content type inline (native viewer). */
+export function isViewable(contentType: string): boolean {
+  const t = contentType.toLowerCase();
+  return (
+    t.startsWith("image/") ||
+    t.startsWith("text/") ||
+    t.startsWith("video/") ||
+    t.startsWith("audio/") ||
+    t === "application/pdf" ||
+    t === "application/json"
+  );
+}
+
+/** Human-readable byte size, e.g. "3.4 MB". */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const n = bytes / 1024 ** i;
+  return `${n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)} ${units[i]}`;
 }
 
 /** Normalises tag input: lowercase, trimmed, deduped, capped. */

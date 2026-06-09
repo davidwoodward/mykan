@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { TagEditor } from "@/components/TagEditor";
+import { Attachments } from "@/components/Attachments";
 import { TypeBadge } from "@/components/TypeBadge";
 import { STATUS_LABEL, type Item, type RichDoc } from "@/lib/types";
 
@@ -14,12 +15,14 @@ export function ItemDetailModal({
   onClose,
   onSaveBody,
   onSaveTags,
+  onItemChange,
 }: {
   item: Item;
   allTags: string[];
   onClose: () => void;
   onSaveBody: (id: string, body: RichDoc) => Promise<void>;
   onSaveTags: (id: string, tags: string[]) => Promise<void>;
+  onItemChange: (item: Item) => void;
 }) {
   const [status, setStatus] = useState<SaveStatus>("idle");
 
@@ -113,6 +116,10 @@ export function ItemDetailModal({
 
         <div className="border-t border-[var(--color-line)] px-4 py-2.5">
           <TagEditor value={item.tags} suggestions={allTags} onChange={handleTags} />
+        </div>
+
+        <div className="border-t border-[var(--color-line)] px-4 py-2.5">
+          <Attachments item={item} onItemChange={onItemChange} />
         </div>
 
         <footer className="flex items-center justify-between border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">

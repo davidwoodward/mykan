@@ -4,6 +4,7 @@ import { useState } from "react";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
+import { AttachmentBadge } from "@/components/AttachmentBadge";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -139,6 +140,10 @@ function ItemRow({
           className="mt-1 block"
         />
       </div>
+      <AttachmentBadge
+        count={item.attachments.length}
+        onClick={() => onOpen(item)}
+      />
       <TypeMenu
         value={item.type}
         onChange={(t) => void onPatch(item.id, { type: t })}

@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
+import { AttachmentBadge } from "@/components/AttachmentBadge";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -246,7 +247,13 @@ function Card({
         className="mt-1.5 block"
       />
       <div className="mt-2 flex items-center justify-between">
-        <TypeBadge type={item.type} />
+        <div className="flex items-center gap-2">
+          <TypeBadge type={item.type} />
+          <AttachmentBadge
+            count={item.attachments.length}
+            onClick={() => onOpen(item)}
+          />
+        </div>
         <button
           type="button"
           onClick={() => void onDelete(item.id)}

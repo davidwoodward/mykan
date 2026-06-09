@@ -55,6 +55,12 @@ alter table items add column if not exists body jsonb;
 alter table items add column if not exists tags text[] not null default '{}';
 create index if not exists items_tags_idx on items using gin (tags);
 
+-- File attachments per item: a JSON array of {id, name, content_type, size, path}.
+-- Bytes live in the private "item-attachments" Storage bucket keyed by `path`;
+-- this array is the metadata (count, list, rename target). Mutated server-side
+-- by the /api/items/[id]/attachments routes.
+alter table items add column if not exists attachments jsonb not null default '[]';
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

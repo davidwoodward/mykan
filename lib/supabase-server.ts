@@ -4,6 +4,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 /** Private Storage bucket holding inline images for item rich-text bodies. */
 export const ITEM_IMAGES_BUCKET = "item-images";
 
+/** Private Storage bucket holding item file attachments. */
+export const ITEM_ATTACHMENTS_BUCKET = "item-attachments";
+
 let cached: SupabaseClient | null = null;
 
 export function getSupabase(): SupabaseClient {
