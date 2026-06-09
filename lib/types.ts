@@ -31,6 +31,42 @@ export function richDocHasContent(body: RichDoc | null | undefined): boolean {
   return true;
 }
 
+/**
+ * Flattens the plain text out of a rich-text body — block nodes joined by
+ * newlines, images and other non-text nodes contributing nothing. This is the
+ * single-line label shown for an item.
+ */
+export function richDocText(body: RichDoc | null | undefined): string {
+  if (!body || !Array.isArray(body.content)) return "";
+  const blockText = (node: { content?: unknown[] }): string => {
+    const out: string[] = [];
+    const walk = (nodes: unknown[]) => {
+      for (const c of nodes) {
+        const cc = c as { type?: string; text?: string; content?: unknown[] };
+        if (cc.type === "text" && typeof cc.text === "string") out.push(cc.text);
+        if (Array.isArray(cc.content)) walk(cc.content);
+      }
+    };
+    if (Array.isArray(node.content)) walk(node.content);
+    return out.join("");
+  };
+  return (body.content as { content?: unknown[] }[])
+    .map(blockText)
+    .join("\n")
+    .trim();
+}
+
+/** Builds a minimal document holding a single paragraph of text (empty → empty doc). */
+export function paragraphDoc(text: string): RichDoc {
+  const t = text.trim();
+  return {
+    type: "doc",
+    content: t
+      ? [{ type: "paragraph", content: [{ type: "text", text: t }] }]
+      : [],
+  };
+}
+
 export interface Project {
   id: string;
   name: string;

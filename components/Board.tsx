@@ -20,7 +20,7 @@ import { Byline } from "@/components/Byline";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
-  richDocHasContent,
+  richDocText,
   type Item,
   type ItemStatus,
 } from "@/lib/types";
@@ -166,7 +166,7 @@ function Card({
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
-  const hasNotes = richDocHasContent(item.body);
+  const text = richDocText(item.body);
   const {
     attributes,
     listeners,
@@ -189,12 +189,18 @@ function Card({
         isDragging ? "opacity-50" : ""
       }`}
     >
+      {/* Drag handle doubles as the open trigger: a stationary click opens the
+          editor, movement past the activation distance starts a drag. */}
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab whitespace-pre-wrap break-words leading-5 active:cursor-grabbing"
+        onClick={() => onOpen(item)}
+        title="Open"
+        className="cursor-pointer whitespace-pre-wrap break-words leading-5 transition-colors hover:text-[var(--color-accent)] active:cursor-grabbing"
       >
-        {item.name}
+        {text || (
+          <span className="italic text-[var(--color-accent)]">View content</span>
+        )}
       </div>
       <Byline
         createdBy={item.created_by}
@@ -206,29 +212,14 @@ function Card({
       />
       <div className="mt-2 flex items-center justify-between">
         <TypeBadge type={item.type} />
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => onOpen(item)}
-            className={`text-xs transition-colors hover:text-[var(--color-accent)] ${
-              hasNotes
-                ? "text-[var(--color-accent)]"
-                : "invisible text-[var(--color-faint)] group-hover:visible"
-            }`}
-            aria-label={hasNotes ? `Open notes for ${item.name}` : `Add notes to ${item.name}`}
-            title={hasNotes ? "Has notes" : "Add notes"}
-          >
-            {hasNotes ? "● Notes" : "Notes"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void onDelete(item.id)}
-            className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-            aria-label={`Delete ${item.name}`}
-          >
-            Delete
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => void onDelete(item.id)}
+          className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
+          aria-label={`Delete ${text || "item"}`}
+        >
+          Delete
+        </button>
       </div>
     </li>
   );

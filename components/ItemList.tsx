@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
   STATUS_LABEL,
-  richDocHasContent,
+  richDocText,
   type Item,
   type ItemStatus,
   type ItemType,
@@ -83,29 +83,7 @@ function ItemRow({
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
-  const hasNotes = richDocHasContent(item.body);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(item.name);
-
-  function commit() {
-    const next = draft.trim();
-    setEditing(false);
-    if (!next || next === item.name) {
-      setDraft(item.name);
-      return;
-    }
-    void onPatch(item.id, { name: next });
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Escape") {
-      setEditing(false);
-      setDraft(item.name);
-    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      commit();
-    }
-  }
+  const text = richDocText(item.body);
 
   return (
     <li className="group flex items-start gap-3 px-3 py-2.5">
@@ -114,32 +92,16 @@ function ItemRow({
         onCycle={() => void onPatch(item.id, { status: nextStatus(item.status) })}
       />
       <div className="min-w-0 flex-1">
-        {editing ? (
-          <textarea
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={onKeyDown}
-            rows={1}
-            className="block w-full resize-none overflow-hidden bg-transparent text-sm leading-6 outline-none"
-            style={{ height: "auto" }}
-            ref={(el) => {
-              if (el) {
-                el.style.height = "auto";
-                el.style.height = `${el.scrollHeight}px`;
-              }
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6"
-          >
-            {item.name}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => onOpen(item)}
+          title="Open"
+          className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6 transition-colors hover:text-[var(--color-accent)]"
+        >
+          {text || (
+            <span className="italic text-[var(--color-accent)]">View content</span>
+          )}
+        </button>
         <Byline
           createdBy={item.created_by}
           updatedBy={item.updated_by}
@@ -149,19 +111,6 @@ function ItemRow({
           className="mt-1 block"
         />
       </div>
-      <button
-        type="button"
-        onClick={() => onOpen(item)}
-        className={`self-center text-xs transition-colors hover:text-[var(--color-accent)] ${
-          hasNotes
-            ? "text-[var(--color-accent)]"
-            : "invisible text-[var(--color-faint)] group-hover:visible"
-        }`}
-        aria-label={hasNotes ? `Open notes for ${item.name}` : `Add notes to ${item.name}`}
-        title={hasNotes ? "Has notes" : "Add notes"}
-      >
-        {hasNotes ? "● Notes" : "Notes"}
-      </button>
       <TypeMenu
         value={item.type}
         onChange={(t) => void onPatch(item.id, { type: t })}
@@ -170,7 +119,7 @@ function ItemRow({
         type="button"
         onClick={() => void onDelete(item.id)}
         className="invisible self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-        aria-label={`Delete ${item.name}`}
+        aria-label={`Delete ${text || "item"}`}
       >
         Delete
       </button>

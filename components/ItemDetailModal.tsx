@@ -69,17 +69,12 @@ export function ItemDetailModal({
         className="w-full max-w-2xl rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-[var(--color-line)] px-4 py-3">
-          <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2">
-              <TypeBadge type={item.type} />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
-                {STATUS_LABEL[item.status]}
-              </span>
-            </div>
-            <h2 className="whitespace-pre-wrap break-words text-base font-medium leading-6">
-              {item.name}
-            </h2>
+        <header className="flex items-center justify-between gap-4 border-b border-[var(--color-line)] px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <TypeBadge type={item.type} />
+            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+              {STATUS_LABEL[item.status]}
+            </span>
           </div>
           <button
             type="button"

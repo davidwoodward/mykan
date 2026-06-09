@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { requireSession } from "@/lib/api-auth";
-import { isItemStatus, isItemType, isRichDoc } from "@/lib/types";
+import { isItemStatus, isItemType, isRichDoc, richDocText } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,15 +18,19 @@ export async function PATCH(req: Request, { params }: Ctx) {
     body?: unknown;
   };
   const patch: Record<string, unknown> = {};
-  if (typeof body.name === "string") patch.name = body.name.trim();
   if (isItemType(body.type)) patch.type = body.type;
   if (isItemStatus(body.status)) patch.status = body.status;
   if (typeof body.position === "number" && Number.isFinite(body.position)) {
     patch.position = body.position;
   }
-  // body: a Tiptap doc, or null to clear it.
-  if (isRichDoc(body.body)) patch.body = body.body;
-  else if (body.body === null) patch.body = null;
+  // body is the source of truth; keep the flattened `name` label in sync with it.
+  if (isRichDoc(body.body)) {
+    patch.body = body.body;
+    patch.name = richDocText(body.body);
+  } else if (body.body === null) {
+    patch.body = null;
+    patch.name = "";
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
   }

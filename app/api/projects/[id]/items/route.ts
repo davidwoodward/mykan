@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { requireSession } from "@/lib/api-auth";
-import { isItemType, type ItemType } from "@/lib/types";
+import {
+  isItemType,
+  isRichDoc,
+  paragraphDoc,
+  richDocText,
+  type ItemType,
+} from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -27,10 +33,15 @@ export async function POST(req: Request, { params }: Ctx) {
   const body = (await req.json().catch(() => ({}))) as {
     name?: unknown;
     type?: unknown;
+    body?: unknown;
   };
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
   const type: ItemType = isItemType(body.type) ? body.type : "feature";
+  // The body is the source of truth. An explicit doc wins; otherwise seed one
+  // from the typed text. `name` is the flattened text, kept for display/hygiene.
+  const doc = isRichDoc(body.body)
+    ? body.body
+    : paragraphDoc(typeof body.name === "string" ? body.name : "");
+  const name = richDocText(doc);
 
   const supabase = getSupabase();
   const { data: tail } = await supabase
@@ -48,6 +59,7 @@ export async function POST(req: Request, { params }: Ctx) {
     .insert({
       project_id: id,
       name,
+      body: doc,
       type,
       status: "new",
       position,

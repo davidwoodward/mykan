@@ -135,20 +135,20 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     }
   }
 
-  // Pasting a screenshot into the add field: create the item (using the typed
-  // name, or "Screenshot" if blank), attach the image(s) to its body, then open
-  // the editor so the user lands right where their screenshot is.
+  // Pasting a screenshot into the add field: create the item, keep any text the
+  // user already typed as the first line, append the image(s) below it, then
+  // open the editor so they land right where their screenshot is.
   const createItemWithImages = useCallback(
     async (files: File[]) => {
       if (files.length === 0 || busy) return;
       setBusy(true);
       setError(null);
       try {
-        const itemName = name.trim() || "Screenshot";
+        const itemText = name.trim();
         const createRes = await fetch(`/api/projects/${projectId}/items`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name: itemName, type }),
+          body: JSON.stringify({ name: itemText, type }),
         });
         if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
         const created = (await createRes.json()) as Item;
@@ -170,10 +170,16 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           urls.push(((await up.json()) as { url: string }).url);
         }
 
-        const body: RichDoc = {
-          type: "doc",
-          content: urls.map((src) => ({ type: "image", attrs: { src } })),
-        };
+        const content: unknown[] = [];
+        if (itemText) {
+          content.push({
+            type: "paragraph",
+            content: [{ type: "text", text: itemText }],
+          });
+        }
+        for (const src of urls) content.push({ type: "image", attrs: { src } });
+        const body: RichDoc = { type: "doc", content };
+
         const patchRes = await fetch(`/api/items/${created.id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
