@@ -38,10 +38,14 @@ export function TagEditor({
     }
   }
 
+  // Only suggest once the user has typed — never dump the whole vocabulary,
+  // which could be hundreds of tags.
   const q = draft.trim().toLowerCase();
-  const remaining = suggestions
-    .filter((s) => !value.includes(s) && (!q || s.includes(q)))
-    .slice(0, 8);
+  const matches = q
+    ? suggestions.filter((s) => !value.includes(s) && s.includes(q))
+    : [];
+  const remaining = matches.slice(0, 8);
+  const moreCount = matches.length - remaining.length;
 
   return (
     <div>
@@ -59,10 +63,15 @@ export function TagEditor({
         />
       </div>
       {remaining.length ? (
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {remaining.map((s) => (
             <Tag key={s} label={s} onClick={() => add(s)} className="opacity-70 hover:opacity-100" />
           ))}
+          {moreCount > 0 ? (
+            <span className="text-xs text-[var(--color-faint)]">
+              +{moreCount} more — keep typing
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>

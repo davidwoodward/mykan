@@ -399,17 +399,63 @@ function TagFilterBar({
   onToggle: (tag: string) => void;
   onClear: () => void;
 }) {
+  const [q, setQ] = useState("");
+  const [focused, setFocused] = useState(false);
+
+  const query = q.trim().toLowerCase();
+  const matches = query
+    ? tags.filter((t) => !active.includes(t) && t.includes(query))
+    : [];
+  const shown = matches.slice(0, 10);
+  const more = matches.length - shown.length;
+
   return (
     <div className="mb-3 flex flex-wrap items-center gap-1.5">
-      <span className="text-xs text-[var(--color-faint)]">tags</span>
-      {tags.map((t) => (
-        <Tag
-          key={t}
-          label={t}
-          onClick={() => onToggle(t)}
-          active={active.includes(t)}
-        />
+      <span className="text-xs text-[var(--color-faint)]">filter</span>
+
+      {active.map((t) => (
+        <Tag key={t} label={t} active onClick={() => onToggle(t)} />
       ))}
+
+      <div className="relative">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          placeholder={active.length ? "+ tag" : "filter by tag…"}
+          aria-label="Filter by tag"
+          className="h-6 w-28 rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-2 text-xs outline-none focus:border-[var(--color-accent)]"
+        />
+        {focused && query && shown.length > 0 ? (
+          <div className="absolute left-0 top-7 z-20 flex max-h-56 w-48 flex-col gap-1 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-md">
+            {shown.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onToggle(t);
+                  setQ("");
+                }}
+                className="text-left"
+              >
+                <Tag label={t} />
+              </button>
+            ))}
+            {more > 0 ? (
+              <span className="px-1 py-0.5 text-[10px] text-[var(--color-faint)]">
+                +{more} more — keep typing
+              </span>
+            ) : null}
+          </div>
+        ) : focused && query && shown.length === 0 ? (
+          <div className="absolute left-0 top-7 z-20 w-48 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-faint)] shadow-md">
+            No matching tags
+          </div>
+        ) : null}
+      </div>
+
       {active.length > 0 ? (
         <button
           type="button"
