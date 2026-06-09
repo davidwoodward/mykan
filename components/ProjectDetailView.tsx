@@ -314,56 +314,61 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           <TagEditor value={newTags} suggestions={allTags} onChange={setNewTags} />
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => addFileRef.current?.click()}
-            className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
-          >
-            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-              <path
-                d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Attach
-          </button>
-          <input
-            ref={addFileRef}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              const picked = e.target.files;
-              if (picked && picked.length) {
-                setNewFiles((prev) => [...prev, ...Array.from(picked)]);
-                e.target.value = "";
-              }
-            }}
-          />
-          {newFiles.map((f, i) => (
-            <span
-              key={`${f.name}-${i}`}
-              className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-canvas)] px-2 py-0.5 text-xs text-[var(--color-muted)]"
-            >
-              <span className="max-w-40 truncate">{f.name}</span>
-              <button
-                type="button"
-                onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))}
-                aria-label={`Remove ${f.name}`}
-                className="opacity-60 transition-opacity hover:opacity-100"
+        {newFiles.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {newFiles.map((f, i) => (
+              <span
+                key={`${f.name}-${i}`}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-canvas)] px-2 py-0.5 text-xs text-[var(--color-muted)]"
               >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
+                <span className="max-w-40 truncate">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label={`Remove ${f.name}`}
+                  className="opacity-60 transition-opacity hover:opacity-100"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="mt-2 flex items-center justify-between gap-3">
-          <TypeSegmented value={type} onChange={setType} />
+          <div className="flex items-center gap-2">
+            <TypeSegmented value={type} onChange={setType} />
+            <button
+              type="button"
+              onClick={() => addFileRef.current?.click()}
+              title="Attach files"
+              aria-label="Attach files"
+              className="inline-flex items-center justify-center rounded-md border border-[var(--color-line)] p-1.5 text-[var(--color-muted)] transition-colors hover:border-[var(--color-line-strong)] hover:text-[var(--color-accent)]"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+                <path
+                  d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <input
+              ref={addFileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                const picked = e.target.files;
+                if (picked && picked.length) {
+                  setNewFiles((prev) => [...prev, ...Array.from(picked)]);
+                  e.target.value = "";
+                }
+              }}
+            />
+          </div>
           <div className="flex items-center gap-3">
             <span className="hidden text-xs text-[var(--color-faint)] sm:inline">
               Enter for newline · ⌘/Ctrl+Enter to add
