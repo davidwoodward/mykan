@@ -9,33 +9,30 @@ import type { Attachment } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// Vercel serverless request bodies cap around 4.5 MB; stay safely under it.
-const MAX_BYTES = 4 * 1024 * 1024;
-
-// Uploads one file's raw bytes (Content-Type: the file's type, X-File-Name: its
-// original name) into the item's folder in the private bucket, then appends its
-// metadata to the item's attachments array. Returns the updated item.
+// Confirms an attachment after its bytes were uploaded via a signed URL (see
+// ./sign). Records the metadata on the item and returns the updated item.
 export async function POST(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
 
-  const contentType =
-    (req.headers.get("content-type") ?? "").split(";")[0].trim() ||
-    "application/octet-stream";
-  const rawName = req.headers.get("x-file-name");
-  const name = (rawName ? safeDecode(rawName) : "").trim() || "file";
-
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (bytes.byteLength === 0) {
-    return NextResponse.json({ error: "Empty file" }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as {
+    path?: unknown;
+    name?: unknown;
+    content_type?: unknown;
+    size?: unknown;
+  };
+  const path = typeof body.path === "string" ? body.path : "";
+  // The path must live inside this item's folder — don't let a client point at
+  // another item's (or an arbitrary) storage key.
+  if (!path.startsWith(`${id}/`)) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
   }
-  if (bytes.byteLength > MAX_BYTES) {
-    return NextResponse.json(
-      { error: "File too large (max 4 MB)" },
-      { status: 413 },
-    );
-  }
+  const name = (typeof body.name === "string" ? body.name.trim() : "").slice(0, 200) || "file";
+  const content_type =
+    typeof body.content_type === "string" ? body.content_type : "application/octet-stream";
+  const size =
+    typeof body.size === "number" && Number.isFinite(body.size) ? body.size : 0;
 
   const supabase = getSupabase();
 
@@ -48,20 +45,11 @@ export async function POST(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });
   }
 
-  const ext = name.includes(".") ? name.split(".").pop() : undefined;
-  const path = `${id}/${randomUUID()}${ext ? `.${ext}` : ""}`;
-  const { error: upErr } = await supabase
-    .storage.from(ITEM_ATTACHMENTS_BUCKET)
-    .upload(path, bytes, { contentType, upsert: false });
-  if (upErr) {
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
-  }
-
   const attachment: Attachment = {
     id: randomUUID(),
     name,
-    content_type: contentType,
-    size: bytes.byteLength,
+    content_type,
+    size,
     path,
   };
   const current = Array.isArray(row.attachments) ? row.attachments : [];
@@ -74,17 +62,8 @@ export async function POST(req: Request, { params }: Ctx) {
     .select()
     .single();
   if (error) {
-    // Roll back the orphaned object so storage doesn't drift from metadata.
     await supabase.storage.from(ITEM_ATTACHMENTS_BUCKET).remove([path]);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json(data, { status: 201 });
-}
-
-function safeDecode(v: string): string {
-  try {
-    return decodeURIComponent(v);
-  } catch {
-    return v;
-  }
 }

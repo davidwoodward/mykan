@@ -15,6 +15,7 @@ import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { Tag } from "@/components/Tag";
 import { TagEditor } from "@/components/TagEditor";
+import { uploadAttachment } from "@/lib/client-attachments";
 import { localPart } from "@/lib/format";
 import {
   ITEM_TYPES,
@@ -341,7 +342,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => addFileRef.current?.click()}
-              title="Attach files"
               aria-label="Attach files"
               className="inline-flex items-center justify-center rounded-md border border-[var(--color-line)] p-1.5 text-[var(--color-muted)] transition-colors hover:border-[var(--color-line-strong)] hover:text-[var(--color-accent)]"
             >
@@ -547,22 +547,7 @@ function TagFilterBar({
 async function uploadFilesTo(itemId: string, files: File[]): Promise<Item | null> {
   let latest: Item | null = null;
   for (const file of files) {
-    const res = await fetch(`/api/items/${itemId}/attachments`, {
-      method: "POST",
-      headers: {
-        "content-type": file.type || "application/octet-stream",
-        "x-file-name": encodeURIComponent(file.name),
-      },
-      body: file,
-    });
-    if (!res.ok) {
-      const msg = await res
-        .json()
-        .then((d: { error?: string }) => d.error)
-        .catch(() => null);
-      throw new Error(msg ?? `Upload failed (${res.status})`);
-    }
-    latest = (await res.json()) as Item;
+    latest = await uploadAttachment(itemId, file);
   }
   return latest;
 }

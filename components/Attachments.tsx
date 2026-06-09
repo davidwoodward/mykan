@@ -2,6 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import { formatBytes, isViewable, type Attachment, type Item } from "@/lib/types";
+import { uploadAttachment } from "@/lib/client-attachments";
 
 export function Attachments({
   item,
@@ -25,22 +26,7 @@ export function Attachments({
     setError(null);
     try {
       for (const file of Array.from(files)) {
-        const res = await fetch(base, {
-          method: "POST",
-          headers: {
-            "content-type": file.type || "application/octet-stream",
-            "x-file-name": encodeURIComponent(file.name),
-          },
-          body: file,
-        });
-        if (!res.ok) {
-          const msg = await res
-            .json()
-            .then((d: { error?: string }) => d.error)
-            .catch(() => null);
-          throw new Error(msg ?? `Upload failed (${res.status})`);
-        }
-        onItemChange((await res.json()) as Item);
+        onItemChange(await uploadAttachment(item.id, file));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
