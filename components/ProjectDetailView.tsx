@@ -137,6 +137,16 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     );
   }, []);
 
+  // Fire-and-forget inline tag edits from rows/cards (saveTags is optimistic).
+  const changeItemTags = useCallback(
+    (id: string, tags: string[]) => {
+      void saveTags(id, tags).catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to update tags"),
+      );
+    },
+    [saveTags],
+  );
+
   const deleteItem = useCallback(
     async (id: string) => {
       const before = items;
@@ -340,6 +350,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           activeCreator={creatorFilter}
           onTagClick={toggleTag}
           activeTags={tagFilter}
+          tagSuggestions={allTags}
+          onTagsChange={changeItemTags}
         />
       ) : (
         <Board
@@ -351,6 +363,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           activeCreator={creatorFilter}
           onTagClick={toggleTag}
           activeTags={tagFilter}
+          tagSuggestions={allTags}
+          onTagsChange={changeItemTags}
         />
       )}
 

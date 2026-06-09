@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
-import { Tag } from "@/components/Tag";
+import { InlineTags } from "@/components/InlineTags";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -34,6 +34,8 @@ type PatchFn = (
 type TagProps = {
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
+  tagSuggestions?: string[];
+  onTagsChange?: (id: string, tags: string[]) => void;
 };
 
 export function Board({
@@ -45,6 +47,8 @@ export function Board({
   activeCreator,
   onTagClick,
   activeTags,
+  tagSuggestions,
+  onTagsChange,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -98,6 +102,8 @@ export function Board({
             activeCreator={activeCreator}
             onTagClick={onTagClick}
             activeTags={activeTags}
+            tagSuggestions={tagSuggestions}
+            onTagsChange={onTagsChange}
           />
         ))}
       </div>
@@ -114,6 +120,8 @@ function Column({
   activeCreator,
   onTagClick,
   activeTags,
+  tagSuggestions,
+  onTagsChange,
 }: {
   status: ItemStatus;
   items: Item[];
@@ -154,6 +162,8 @@ function Column({
               activeCreator={activeCreator}
               onTagClick={onTagClick}
               activeTags={activeTags}
+              tagSuggestions={tagSuggestions}
+              onTagsChange={onTagsChange}
             />
           ))}
           {items.length === 0 ? (
@@ -175,6 +185,8 @@ function Card({
   activeCreator,
   onTagClick,
   activeTags,
+  tagSuggestions,
+  onTagsChange,
 }: {
   item: Item;
   onDelete: (id: string) => Promise<void>;
@@ -218,18 +230,13 @@ function Card({
           <span className="italic text-[var(--color-accent)]">View content</span>
         )}
       </div>
-      {item.tags.length > 0 ? (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {item.tags.map((t) => (
-            <Tag
-              key={t}
-              label={t}
-              onClick={onTagClick ? () => onTagClick(t) : undefined}
-              active={activeTags?.includes(t)}
-            />
-          ))}
-        </div>
-      ) : null}
+      <InlineTags
+        tags={item.tags}
+        suggestions={tagSuggestions ?? []}
+        onChange={(tags) => onTagsChange?.(item.id, tags)}
+        onTagClick={onTagClick}
+        activeTags={activeTags}
+      />
       <Byline
         createdBy={item.created_by}
         updatedBy={item.updated_by}
