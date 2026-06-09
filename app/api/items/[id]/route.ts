@@ -23,6 +23,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     position?: unknown;
     body?: unknown;
     tags?: unknown;
+    archived?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (isItemType(body.type)) patch.type = body.type;
@@ -31,6 +32,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
     patch.position = body.position;
   }
   if (Array.isArray(body.tags)) patch.tags = normalizeTags(body.tags);
+  // Soft delete / restore.
+  if (typeof body.archived === "boolean") {
+    patch.archived_at = body.archived ? new Date().toISOString() : null;
+  }
   // body is the source of truth; keep the flattened `name` label in sync with it.
   if (isRichDoc(body.body)) {
     patch.body = body.body;

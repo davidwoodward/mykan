@@ -34,6 +34,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [view, setView] = useState<View>("list");
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<ItemType>("feature");
   const [newTags, setNewTags] = useState<string[]>([]);
@@ -179,6 +180,36 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     [items],
   );
 
+  // Soft delete / restore. Optimistically flips archived_at so the item moves
+  // between the active and archived views immediately.
+  const setArchived = useCallback(
+    async (id: string, archived: boolean) => {
+      const before = items;
+      const stamp = archived ? new Date().toISOString() : null;
+      setItems((prev) =>
+        prev ? prev.map((it) => (it.id === id ? { ...it, archived_at: stamp } : it)) : prev,
+      );
+      try {
+        const res = await fetch(`/api/items/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ archived }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const updated = (await res.json()) as Item;
+        setItems((prev) =>
+          prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+        );
+      } catch (e) {
+        setItems(before ?? null);
+        setError(e instanceof Error ? e.message : "Failed to update");
+      }
+    },
+    [items],
+  );
+  const archiveItem = useCallback((id: string) => void setArchived(id, true), [setArchived]);
+  const restoreItem = useCallback((id: string) => void setArchived(id, false), [setArchived]);
+
   function onNameKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -270,27 +301,39 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     setCreatorFilter((cur) => (cur === email ? null : email));
   }, []);
 
+  const archivedCount = useMemo(
+    () => (items ?? []).filter((it) => it.archived_at).length,
+    [items],
+  );
+
+  // The pool for the current view: archived items when the archived view is on,
+  // active items otherwise. All filters/derivations work off this pool.
+  const pool = useMemo(
+    () => (items ?? []).filter((it) => (showArchived ? it.archived_at : !it.archived_at)),
+    [items, showArchived],
+  );
+
   const creators = useMemo(() => {
     const set = new Set<string>();
-    for (const it of items ?? []) if (it.created_by) set.add(it.created_by);
+    for (const it of pool) if (it.created_by) set.add(it.created_by);
     return Array.from(set).sort();
-  }, [items]);
+  }, [pool]);
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    for (const it of items ?? []) for (const t of it.tags ?? []) set.add(t);
+    for (const it of pool) for (const t of it.tags ?? []) set.add(t);
     return Array.from(set).sort();
-  }, [items]);
+  }, [pool]);
 
   const visibleItems = useMemo(() => {
-    let list = items ?? [];
+    let list = pool;
     if (creatorFilter) list = list.filter((it) => it.created_by === creatorFilter);
     // AND semantics: an item must carry every selected tag.
     if (tagFilter.length) {
       list = list.filter((it) => tagFilter.every((t) => it.tags?.includes(t)));
     }
     return list;
-  }, [items, creatorFilter, tagFilter]);
+  }, [pool, creatorFilter, tagFilter]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
@@ -301,6 +344,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
   return (
     <>
+      {!showArchived ? (
       <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
         <AutoGrowTextarea
           value={name}
@@ -385,19 +429,36 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           </div>
         </div>
       </section>
+      ) : null}
 
       {error ? (
         <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
       <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
-          <ViewTab active={view === "list"} onClick={() => setView("list")}>
-            List
-          </ViewTab>
-          <ViewTab active={view === "board"} onClick={() => setView("board")}>
-            Board
-          </ViewTab>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
+            <ViewTab active={view === "list"} onClick={() => setView("list")}>
+              List
+            </ViewTab>
+            <ViewTab active={view === "board"} onClick={() => setView("board")}>
+              Board
+            </ViewTab>
+          </div>
+          {showArchived || archivedCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className={`rounded-md border px-3 py-1 text-sm transition-colors ${
+                showArchived
+                  ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]"
+                  : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+              }`}
+              title="Show archived items"
+            >
+              {showArchived ? "← Active" : `Archived${archivedCount ? ` (${archivedCount})` : ""}`}
+            </button>
+          ) : null}
         </div>
         {creators.length > 0 ? (
           <CreatorFilter
@@ -423,7 +484,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         <ItemList
           grouped={grouped}
           onPatch={patchItem}
-          onDelete={deleteItem}
+          archivedView={showArchived}
+          onArchive={archiveItem}
+          onRestore={restoreItem}
+          onPurge={deleteItem}
           onOpen={(it) => setOpenItemId(it.id)}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
@@ -437,7 +501,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         <Board
           grouped={grouped}
           onPatch={patchItem}
-          onDelete={deleteItem}
+          archivedView={showArchived}
+          onArchive={archiveItem}
+          onRestore={restoreItem}
+          onPurge={deleteItem}
           onOpen={(it) => setOpenItemId(it.id)}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}

@@ -55,6 +55,12 @@ alter table items add column if not exists body jsonb;
 alter table items add column if not exists tags text[] not null default '{}';
 create index if not exists items_tags_idx on items using gin (tags);
 
+-- Soft delete: the Delete action sets archived_at; archived items are hidden from
+-- the normal list/board and shown only in the Archived view, where they can be
+-- restored (archived_at = null) or permanently removed (row DELETE).
+alter table items add column if not exists archived_at timestamptz;
+create index if not exists items_archived_idx on items (project_id, archived_at);
+
 -- File attachments per item: a JSON array of {id, name, content_type, size, path}.
 -- Bytes live in the private "item-attachments" Storage bucket keyed by `path`;
 -- this array is the metadata (count, list, rename target). Mutated server-side

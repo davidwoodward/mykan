@@ -95,6 +95,7 @@ export interface Item {
   body: RichDoc | null;
   tags: string[];
   attachments: Attachment[];
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

@@ -23,7 +23,10 @@ type PatchFn = (
 export function ItemList({
   grouped,
   onPatch,
-  onDelete,
+  archivedView,
+  onArchive,
+  onRestore,
+  onPurge,
   onOpen,
   onCreatorClick,
   activeCreator,
@@ -35,7 +38,10 @@ export function ItemList({
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
-  onDelete: (id: string) => Promise<void>;
+  archivedView?: boolean;
+  onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
@@ -66,7 +72,10 @@ export function ItemList({
                   key={it.id}
                   item={it}
                   onPatch={onPatch}
-                  onDelete={onDelete}
+                  archivedView={archivedView}
+                  onArchive={onArchive}
+                  onRestore={onRestore}
+                  onPurge={onPurge}
                   onOpen={onOpen}
                   onCreatorClick={onCreatorClick}
                   activeCreator={activeCreator}
@@ -88,7 +97,10 @@ export function ItemList({
 function ItemRow({
   item,
   onPatch,
-  onDelete,
+  archivedView,
+  onArchive,
+  onRestore,
+  onPurge,
   onOpen,
   onCreatorClick,
   activeCreator,
@@ -100,7 +112,10 @@ function ItemRow({
 }: {
   item: Item;
   onPatch: PatchFn;
-  onDelete: (id: string) => Promise<void>;
+  archivedView?: boolean;
+  onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
@@ -150,14 +165,36 @@ function ItemRow({
         value={item.type}
         onChange={(t) => void onPatch(item.id, { type: t })}
       />
-      <button
-        type="button"
-        onClick={() => void onDelete(item.id)}
-        className="invisible self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-        aria-label={`Delete ${text || "item"}`}
-      >
-        Delete
-      </button>
+      {archivedView ? (
+        <div className="flex shrink-0 items-center gap-3 self-center text-xs">
+          <button
+            type="button"
+            onClick={() => onRestore(item.id)}
+            className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+            aria-label={`Restore ${text || "item"}`}
+          >
+            Restore
+          </button>
+          <button
+            type="button"
+            onClick={() => onPurge(item.id)}
+            className="text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)]"
+            aria-label={`Permanently delete ${text || "item"}`}
+            title="Permanently delete — cannot be undone"
+          >
+            Delete forever
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onArchive(item.id)}
+          className="invisible self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
+          aria-label={`Delete ${text || "item"}`}
+        >
+          Delete
+        </button>
+      )}
     </li>
   );
 }

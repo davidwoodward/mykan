@@ -38,12 +38,19 @@ type TagProps = {
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
   onItemChange: (item: Item) => void;
+  archivedView?: boolean;
+  onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
 };
 
 export function Board({
   grouped,
   onPatch,
-  onDelete,
+  archivedView,
+  onArchive,
+  onRestore,
+  onPurge,
   onOpen,
   onCreatorClick,
   activeCreator,
@@ -55,7 +62,6 @@ export function Board({
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
-  onDelete: (id: string) => Promise<void>;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
@@ -99,7 +105,10 @@ export function Board({
             key={status}
             status={status}
             items={grouped[status]}
-            onDelete={onDelete}
+            archivedView={archivedView}
+            onArchive={onArchive}
+            onRestore={onRestore}
+            onPurge={onPurge}
             onOpen={onOpen}
             onCreatorClick={onCreatorClick}
             activeCreator={activeCreator}
@@ -118,7 +127,10 @@ export function Board({
 function Column({
   status,
   items,
-  onDelete,
+  archivedView,
+  onArchive,
+  onRestore,
+  onPurge,
   onOpen,
   onCreatorClick,
   activeCreator,
@@ -130,7 +142,6 @@ function Column({
 }: {
   status: ItemStatus;
   items: Item[];
-  onDelete: (id: string) => Promise<void>;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
@@ -161,7 +172,10 @@ function Column({
             <Card
               key={it.id}
               item={it}
-              onDelete={onDelete}
+              archivedView={archivedView}
+              onArchive={onArchive}
+              onRestore={onRestore}
+              onPurge={onPurge}
               onOpen={onOpen}
               onCreatorClick={onCreatorClick}
               activeCreator={activeCreator}
@@ -185,7 +199,10 @@ function Column({
 
 function Card({
   item,
-  onDelete,
+  archivedView,
+  onArchive,
+  onRestore,
+  onPurge,
   onOpen,
   onCreatorClick,
   activeCreator,
@@ -196,7 +213,6 @@ function Card({
   onItemChange,
 }: {
   item: Item;
-  onDelete: (id: string) => Promise<void>;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
@@ -257,14 +273,36 @@ function Card({
           <TypeBadge type={item.type} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
         </div>
-        <button
-          type="button"
-          onClick={() => void onDelete(item.id)}
-          className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-          aria-label={`Delete ${text || "item"}`}
-        >
-          Delete
-        </button>
+        {archivedView ? (
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              type="button"
+              onClick={() => onRestore(item.id)}
+              className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+              aria-label={`Restore ${text || "item"}`}
+            >
+              Restore
+            </button>
+            <button
+              type="button"
+              onClick={() => onPurge(item.id)}
+              className="text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)]"
+              aria-label={`Permanently delete ${text || "item"}`}
+              title="Permanently delete — cannot be undone"
+            >
+              Delete forever
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onArchive(item.id)}
+            className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
+            aria-label={`Delete ${text || "item"}`}
+          >
+            Delete
+          </button>
+        )}
       </div>
     </li>
   );
