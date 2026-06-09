@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from "react";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
@@ -128,6 +135,75 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     }
   }
 
+  // Pasting a screenshot into the add field: create the item (using the typed
+  // name, or "Screenshot" if blank), attach the image(s) to its body, then open
+  // the editor so the user lands right where their screenshot is.
+  const createItemWithImages = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0 || busy) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const itemName = name.trim() || "Screenshot";
+        const createRes = await fetch(`/api/projects/${projectId}/items`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: itemName, type }),
+        });
+        if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
+        const created = (await createRes.json()) as Item;
+
+        const urls: string[] = [];
+        for (const file of files) {
+          const up = await fetch(`/api/items/${created.id}/images`, {
+            method: "POST",
+            headers: { "content-type": file.type },
+            body: file,
+          });
+          if (!up.ok) {
+            const msg = await up
+              .json()
+              .then((d: { error?: string }) => d.error)
+              .catch(() => null);
+            throw new Error(msg ?? `Upload failed (${up.status})`);
+          }
+          urls.push(((await up.json()) as { url: string }).url);
+        }
+
+        const body: RichDoc = {
+          type: "doc",
+          content: urls.map((src) => ({ type: "image", attrs: { src } })),
+        };
+        const patchRes = await fetch(`/api/items/${created.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ body }),
+        });
+        const withBody = patchRes.ok
+          ? ((await patchRes.json()) as Item)
+          : { ...created, body };
+
+        setItems((prev) => (prev ? [...prev, withBody] : [withBody]));
+        setName("");
+        setOpenItemId(withBody.id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to add image");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [name, type, busy, projectId],
+  );
+
+  function onNamePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    if (files.length === 0) return; // plain text paste — leave it alone
+    e.preventDefault();
+    void createItemWithImages(files);
+  }
+
   const toggleCreatorFilter = useCallback((email: string) => {
     setCreatorFilter((cur) => (cur === email ? null : email));
   }, []);
@@ -158,7 +234,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={onNameKeyDown}
-          placeholder="Add an item…"
+          onPaste={onNamePaste}
+          placeholder="Add an item…  (or paste a screenshot)"
           className="text-base placeholder:text-[var(--color-faint)]"
           aria-label="Item name"
         />

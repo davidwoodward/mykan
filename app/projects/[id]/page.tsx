@@ -38,7 +38,7 @@ export default async function ProjectPage({
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
         <div className="mb-3">
-          <h1 className="truncate text-xl font-semibold tracking-tight text-[var(--color-bug)]">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-[var(--color-accent)]">
             {project.name}
           </h1>
           {project.description ? (
