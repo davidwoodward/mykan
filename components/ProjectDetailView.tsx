@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
@@ -35,6 +36,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<ItemType>("feature");
   const [newTags, setNewTags] = useState<string[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const addFileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
@@ -62,15 +65,19 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const created = (await res.json()) as Item;
-      setItems((prev) => (prev ? [...prev, created] : [created]));
+      const final = newFiles.length
+        ? ((await uploadFilesTo(created.id, newFiles)) ?? created)
+        : created;
+      setItems((prev) => (prev ? [...prev, final] : [final]));
       setName("");
       setNewTags([]);
+      setNewFiles([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create");
     } finally {
       setBusy(false);
     }
-  }, [name, type, newTags, busy, projectId]);
+  }, [name, type, newTags, newFiles, busy, projectId]);
 
   const patchItem = useCallback(
     async (
@@ -231,18 +238,22 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         const withBody = patchRes.ok
           ? ((await patchRes.json()) as Item)
           : { ...created, body };
+        const final = newFiles.length
+          ? ((await uploadFilesTo(created.id, newFiles)) ?? withBody)
+          : withBody;
 
-        setItems((prev) => (prev ? [...prev, withBody] : [withBody]));
+        setItems((prev) => (prev ? [...prev, final] : [final]));
         setName("");
         setNewTags([]);
-        setOpenItemId(withBody.id);
+        setNewFiles([]);
+        setOpenItemId(final.id);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to add image");
       } finally {
         setBusy(false);
       }
     },
-    [name, type, newTags, busy, projectId],
+    [name, type, newTags, newFiles, busy, projectId],
   );
 
   function onNamePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
@@ -302,6 +313,55 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         <div className="mt-2">
           <TagEditor value={newTags} suggestions={allTags} onChange={setNewTags} />
         </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => addFileRef.current?.click()}
+            className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+              <path
+                d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Attach
+          </button>
+          <input
+            ref={addFileRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              const picked = e.target.files;
+              if (picked && picked.length) {
+                setNewFiles((prev) => [...prev, ...Array.from(picked)]);
+                e.target.value = "";
+              }
+            }}
+          />
+          {newFiles.map((f, i) => (
+            <span
+              key={`${f.name}-${i}`}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-canvas)] px-2 py-0.5 text-xs text-[var(--color-muted)]"
+            >
+              <span className="max-w-40 truncate">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))}
+                aria-label={`Remove ${f.name}`}
+                className="opacity-60 transition-opacity hover:opacity-100"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
         <div className="mt-2 flex items-center justify-between gap-3">
           <TypeSegmented value={type} onChange={setType} />
           <div className="flex items-center gap-3">
@@ -476,6 +536,30 @@ function TagFilterBar({
       ) : null}
     </div>
   );
+}
+
+/** Uploads staged files to a freshly-created item; returns the latest item. */
+async function uploadFilesTo(itemId: string, files: File[]): Promise<Item | null> {
+  let latest: Item | null = null;
+  for (const file of files) {
+    const res = await fetch(`/api/items/${itemId}/attachments`, {
+      method: "POST",
+      headers: {
+        "content-type": file.type || "application/octet-stream",
+        "x-file-name": encodeURIComponent(file.name),
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const msg = await res
+        .json()
+        .then((d: { error?: string }) => d.error)
+        .catch(() => null);
+      throw new Error(msg ?? `Upload failed (${res.status})`);
+    }
+    latest = (await res.json()) as Item;
+  }
+  return latest;
 }
 
 function groupByStatus(items: Item[]): Record<ItemStatus, Item[]> {
