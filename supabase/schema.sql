@@ -49,6 +49,12 @@ alter table items    add column if not exists updated_by text;
 --   storage bucket "item-images" (private) — see lib/supabase-server.ts ITEM_IMAGES_BUCKET
 alter table items add column if not exists body jsonb;
 
+-- Free-form tags per item (normalised lowercase, deduped by the API). The set of
+-- available tags is derived as the union across a project's items — there is no
+-- separate tags table. GIN index supports tag-membership filters.
+alter table items add column if not exists tags text[] not null default '{}';
+create index if not exists items_tags_idx on items using gin (tags);
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

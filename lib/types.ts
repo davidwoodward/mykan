@@ -85,10 +85,46 @@ export interface Item {
   status: ItemStatus;
   position: number;
   body: RichDoc | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+}
+
+/** Normalises tag input: lowercase, trimmed, deduped, capped. */
+export function normalizeTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  for (const raw of input) {
+    if (typeof raw !== "string") continue;
+    const v = raw.trim().toLowerCase().replace(/\s+/g, " ");
+    if (!v || v.length > 32) continue;
+    if (!out.includes(v)) out.push(v);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+/** Stable hue (0–359) derived from a tag's text, for consistent auto-colouring. */
+export function tagHue(tag: string): number {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+/** Chip colours for a tag — light fill, dark ink, soft border — all on one hue. */
+export function tagStyle(tag: string): {
+  backgroundColor: string;
+  color: string;
+  borderColor: string;
+} {
+  const h = tagHue(tag);
+  return {
+    backgroundColor: `oklch(95% 0.045 ${h})`,
+    color: `oklch(45% 0.13 ${h})`,
+    borderColor: `oklch(88% 0.06 ${h})`,
+  };
 }
 
 export const ITEM_TYPES: readonly ItemType[] = ["feature", "bug", "idea"] as const;

@@ -17,6 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
+import { Tag } from "@/components/Tag";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -30,6 +31,11 @@ type PatchFn = (
   patch: Partial<Pick<Item, "name" | "type" | "status" | "position">>,
 ) => Promise<void>;
 
+type TagProps = {
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
+};
+
 export function Board({
   grouped,
   onPatch,
@@ -37,6 +43,8 @@ export function Board({
   onOpen,
   onCreatorClick,
   activeCreator,
+  onTagClick,
+  activeTags,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -44,7 +52,7 @@ export function Board({
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
-}) {
+} & TagProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -88,6 +96,8 @@ export function Board({
             onOpen={onOpen}
             onCreatorClick={onCreatorClick}
             activeCreator={activeCreator}
+            onTagClick={onTagClick}
+            activeTags={activeTags}
           />
         ))}
       </div>
@@ -102,6 +112,8 @@ function Column({
   onOpen,
   onCreatorClick,
   activeCreator,
+  onTagClick,
+  activeTags,
 }: {
   status: ItemStatus;
   items: Item[];
@@ -109,7 +121,7 @@ function Column({
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
-}) {
+} & TagProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status, data: { status } });
 
   return (
@@ -140,6 +152,8 @@ function Column({
               onOpen={onOpen}
               onCreatorClick={onCreatorClick}
               activeCreator={activeCreator}
+              onTagClick={onTagClick}
+              activeTags={activeTags}
             />
           ))}
           {items.length === 0 ? (
@@ -159,13 +173,15 @@ function Card({
   onOpen,
   onCreatorClick,
   activeCreator,
+  onTagClick,
+  activeTags,
 }: {
   item: Item;
   onDelete: (id: string) => Promise<void>;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
-}) {
+} & TagProps) {
   const text = richDocText(item.body);
   const {
     attributes,
@@ -202,6 +218,18 @@ function Card({
           <span className="italic text-[var(--color-accent)]">View content</span>
         )}
       </div>
+      {item.tags.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {item.tags.map((t) => (
+            <Tag
+              key={t}
+              label={t}
+              onClick={onTagClick ? () => onTagClick(t) : undefined}
+              active={activeTags?.includes(t)}
+            />
+          ))}
+        </div>
+      ) : null}
       <Byline
         createdBy={item.created_by}
         updatedBy={item.updated_by}

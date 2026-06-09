@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { TagEditor } from "@/components/TagEditor";
 import { TypeBadge } from "@/components/TypeBadge";
 import { STATUS_LABEL, type Item, type RichDoc } from "@/lib/types";
 
@@ -9,12 +10,16 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export function ItemDetailModal({
   item,
+  allTags,
   onClose,
   onSaveBody,
+  onSaveTags,
 }: {
   item: Item;
+  allTags: string[];
   onClose: () => void;
   onSaveBody: (id: string, body: RichDoc) => Promise<void>;
+  onSaveTags: (id: string, tags: string[]) => Promise<void>;
 }) {
   const [status, setStatus] = useState<SaveStatus>("idle");
 
@@ -38,6 +43,19 @@ export function ItemDetailModal({
       }
     },
     [item.id, onSaveBody],
+  );
+
+  const handleTags = useCallback(
+    async (tags: string[]) => {
+      setStatus("saving");
+      try {
+        await onSaveTags(item.id, tags);
+        setStatus("saved");
+      } catch {
+        setStatus("error");
+      }
+    },
+    [item.id, onSaveTags],
   );
 
   const uploadImage = useCallback(
@@ -92,6 +110,10 @@ export function ItemDetailModal({
           onUploadImage={uploadImage}
           autoFocus
         />
+
+        <div className="border-t border-[var(--color-line)] px-4 py-2.5">
+          <TagEditor value={item.tags} suggestions={allTags} onChange={handleTags} />
+        </div>
 
         <footer className="flex items-center justify-between border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">
           <span>Paste or drop an image to embed it</span>

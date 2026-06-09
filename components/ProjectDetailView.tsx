@@ -12,6 +12,7 @@ import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
+import { Tag } from "@/components/Tag";
 import { localPart } from "@/lib/format";
 import {
   ITEM_TYPES,
@@ -29,6 +30,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("list");
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [type, setType] = useState<ItemType>("feature");
   const [busy, setBusy] = useState(false);
@@ -112,6 +114,28 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     },
     [],
   );
+
+  const saveTags = useCallback(async (id: string, tags: string[]) => {
+    setItems((prev) =>
+      prev ? prev.map((it) => (it.id === id ? { ...it, tags } : it)) : prev,
+    );
+    const res = await fetch(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tags }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const updated = (await res.json()) as Item;
+    setItems((prev) =>
+      prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+    );
+  }, []);
+
+  const toggleTag = useCallback((tag: string) => {
+    setTagFilter((cur) =>
+      cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag],
+    );
+  }, []);
 
   const deleteItem = useCallback(
     async (id: string) => {
@@ -220,11 +244,21 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     return Array.from(set).sort();
   }, [items]);
 
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items ?? []) for (const t of it.tags ?? []) set.add(t);
+    return Array.from(set).sort();
+  }, [items]);
+
   const visibleItems = useMemo(() => {
-    if (!items) return [];
-    if (!creatorFilter) return items;
-    return items.filter((it) => it.created_by === creatorFilter);
-  }, [items, creatorFilter]);
+    let list = items ?? [];
+    if (creatorFilter) list = list.filter((it) => it.created_by === creatorFilter);
+    // AND semantics: an item must carry every selected tag.
+    if (tagFilter.length) {
+      list = list.filter((it) => tagFilter.every((t) => it.tags?.includes(t)));
+    }
+    return list;
+  }, [items, creatorFilter, tagFilter]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
@@ -285,6 +319,15 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         ) : null}
       </div>
 
+      {allTags.length > 0 ? (
+        <TagFilterBar
+          tags={allTags}
+          active={tagFilter}
+          onToggle={toggleTag}
+          onClear={() => setTagFilter([])}
+        />
+      ) : null}
+
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
@@ -295,6 +338,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           onOpen={(it) => setOpenItemId(it.id)}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
+          onTagClick={toggleTag}
+          activeTags={tagFilter}
         />
       ) : (
         <Board
@@ -304,17 +349,56 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           onOpen={(it) => setOpenItemId(it.id)}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
+          onTagClick={toggleTag}
+          activeTags={tagFilter}
         />
       )}
 
       {openItem ? (
         <ItemDetailModal
           item={openItem}
+          allTags={allTags}
           onClose={() => setOpenItemId(null)}
           onSaveBody={saveBody}
+          onSaveTags={saveTags}
         />
       ) : null}
     </>
+  );
+}
+
+function TagFilterBar({
+  tags,
+  active,
+  onToggle,
+  onClear,
+}: {
+  tags: string[];
+  active: string[];
+  onToggle: (tag: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-[var(--color-faint)]">tags</span>
+      {tags.map((t) => (
+        <Tag
+          key={t}
+          label={t}
+          onClick={() => onToggle(t)}
+          active={active.includes(t)}
+        />
+      ))}
+      {active.length > 0 ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-1 text-xs text-[var(--color-faint)] underline-offset-2 transition-colors hover:text-[var(--color-ink)] hover:underline"
+        >
+          clear
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
+import { Tag } from "@/components/Tag";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -25,6 +26,8 @@ export function ItemList({
   onOpen,
   onCreatorClick,
   activeCreator,
+  onTagClick,
+  activeTags,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -32,6 +35,8 @@ export function ItemList({
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
 }) {
   return (
     <div className="space-y-8">
@@ -58,6 +63,8 @@ export function ItemList({
                   onOpen={onOpen}
                   onCreatorClick={onCreatorClick}
                   activeCreator={activeCreator}
+                  onTagClick={onTagClick}
+                  activeTags={activeTags}
                 />
               ))}
             </ul>
@@ -75,6 +82,8 @@ function ItemRow({
   onOpen,
   onCreatorClick,
   activeCreator,
+  onTagClick,
+  activeTags,
 }: {
   item: Item;
   onPatch: PatchFn;
@@ -82,6 +91,8 @@ function ItemRow({
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
 }) {
   const text = richDocText(item.body);
 
@@ -102,6 +113,18 @@ function ItemRow({
             <span className="italic text-[var(--color-accent)]">View content</span>
           )}
         </button>
+        {item.tags.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {item.tags.map((t) => (
+              <Tag
+                key={t}
+                label={t}
+                onClick={onTagClick ? () => onTagClick(t) : undefined}
+                active={activeTags?.includes(t)}
+              />
+            ))}
+          </div>
+        ) : null}
         <Byline
           createdBy={item.created_by}
           updatedBy={item.updated_by}

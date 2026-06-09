@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { requireSession } from "@/lib/api-auth";
-import { isItemStatus, isItemType, isRichDoc, richDocText } from "@/lib/types";
+import {
+  isItemStatus,
+  isItemType,
+  isRichDoc,
+  normalizeTags,
+  richDocText,
+} from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -16,6 +22,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     status?: unknown;
     position?: unknown;
     body?: unknown;
+    tags?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (isItemType(body.type)) patch.type = body.type;
@@ -23,6 +30,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (typeof body.position === "number" && Number.isFinite(body.position)) {
     patch.position = body.position;
   }
+  if (Array.isArray(body.tags)) patch.tags = normalizeTags(body.tags);
   // body is the source of truth; keep the flattened `name` label in sync with it.
   if (isRichDoc(body.body)) {
     patch.body = body.body;
