@@ -361,11 +361,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               multiple
               hidden
               onChange={(e) => {
-                const picked = e.target.files;
-                if (picked && picked.length) {
-                  setNewFiles((prev) => [...prev, ...Array.from(picked)]);
-                  e.target.value = "";
-                }
+                // Materialise the File list NOW: resetting input.value below
+                // empties the live FileList, and the setState updater runs
+                // afterwards — reading Array.from(picked) there yields nothing.
+                const files = e.target.files ? Array.from(e.target.files) : [];
+                e.target.value = "";
+                if (files.length) setNewFiles((prev) => [...prev, ...files]);
               }}
             />
           </div>
