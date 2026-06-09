@@ -1,0 +1,116 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { TypeBadge } from "@/components/TypeBadge";
+import { STATUS_LABEL, type Item, type RichDoc } from "@/lib/types";
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+export function ItemDetailModal({
+  item,
+  onClose,
+  onSaveBody,
+}: {
+  item: Item;
+  onClose: () => void;
+  onSaveBody: (id: string, body: RichDoc) => Promise<void>;
+}) {
+  const [status, setStatus] = useState<SaveStatus>("idle");
+
+  // Close on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleChange = useCallback(
+    async (body: RichDoc) => {
+      setStatus("saving");
+      try {
+        await onSaveBody(item.id, body);
+        setStatus("saved");
+      } catch {
+        setStatus("error");
+      }
+    },
+    [item.id, onSaveBody],
+  );
+
+  const uploadImage = useCallback(
+    async (file: File): Promise<string> => {
+      const res = await fetch(`/api/items/${item.id}/images`, {
+        method: "POST",
+        headers: { "content-type": file.type },
+        body: file,
+      });
+      if (!res.ok) {
+        const msg = await res
+          .json()
+          .then((d: { error?: string }) => d.error)
+          .catch(() => null);
+        throw new Error(msg ?? `Upload failed (${res.status})`);
+      }
+      const { url } = (await res.json()) as { url: string };
+      return url;
+    },
+    [item.id],
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-[8vh]"
+      onMouseDown={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-[var(--color-line)] px-4 py-3">
+          <div className="min-w-0">
+            <div className="mb-1 flex items-center gap-2">
+              <TypeBadge type={item.type} />
+              <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+                {STATUS_LABEL[item.status]}
+              </span>
+            </div>
+            <h2 className="whitespace-pre-wrap break-words text-base font-medium leading-6">
+              {item.name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            ✕
+          </button>
+        </header>
+
+        <RichTextEditor
+          value={item.body}
+          onChange={handleChange}
+          onUploadImage={uploadImage}
+          autoFocus
+        />
+
+        <footer className="flex items-center justify-between border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">
+          <span>Paste or drop an image to embed it</span>
+          <SaveIndicator status={status} />
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  if (status === "saving") return <span>Saving…</span>;
+  if (status === "saved") return <span className="text-[var(--color-feature)]">Saved</span>;
+  if (status === "error")
+    return <span className="text-[var(--color-bug)]">Save failed</span>;
+  return null;
+}

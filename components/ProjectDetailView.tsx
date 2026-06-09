@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "r
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
+import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { localPart } from "@/lib/format";
 import {
   ITEM_TYPES,
@@ -11,6 +12,7 @@ import {
   type Item,
   type ItemStatus,
   type ItemType,
+  type RichDoc,
 } from "@/lib/types";
 
 type View = "list" | "board";
@@ -23,6 +25,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<ItemType>("feature");
   const [busy, setBusy] = useState(false);
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +61,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   }, [name, type, busy, projectId]);
 
   const patchItem = useCallback(
-    async (id: string, patch: Partial<Pick<Item, "name" | "type" | "status" | "position">>) => {
+    async (
+      id: string,
+      patch: Partial<Pick<Item, "name" | "type" | "status" | "position" | "body">>,
+    ) => {
       const before = items;
       setItems((prev) =>
         prev ? prev.map((it) => (it.id === id ? { ...it, ...patch } : it)) : prev,
@@ -80,6 +86,24 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       }
     },
     [items],
+  );
+
+  // Rich-text body saves go through the same optimistic PATCH path. Re-thrown so
+  // the modal can show a save-failed state.
+  const saveBody = useCallback(
+    async (id: string, body: RichDoc) => {
+      const res = await fetch(`/api/items/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const updated = (await res.json()) as Item;
+      setItems((prev) =>
+        prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+      );
+    },
+    [],
   );
 
   const deleteItem = useCallback(
@@ -121,6 +145,11 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   }, [items, creatorFilter]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
+
+  const openItem = useMemo(
+    () => (openItemId ? (items?.find((it) => it.id === openItemId) ?? null) : null),
+    [openItemId, items],
+  );
 
   return (
     <>
@@ -180,6 +209,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           grouped={grouped}
           onPatch={patchItem}
           onDelete={deleteItem}
+          onOpen={(it) => setOpenItemId(it.id)}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
         />
@@ -188,10 +218,19 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           grouped={grouped}
           onPatch={patchItem}
           onDelete={deleteItem}
+          onOpen={(it) => setOpenItemId(it.id)}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
         />
       )}
+
+      {openItem ? (
+        <ItemDetailModal
+          item={openItem}
+          onClose={() => setOpenItemId(null)}
+          onSaveBody={saveBody}
+        />
+      ) : null}
     </>
   );
 }

@@ -7,6 +7,7 @@ import {
   ITEM_STATUSES,
   ITEM_TYPES,
   STATUS_LABEL,
+  richDocHasContent,
   type Item,
   type ItemStatus,
   type ItemType,
@@ -21,12 +22,14 @@ export function ItemList({
   grouped,
   onPatch,
   onDelete,
+  onOpen,
   onCreatorClick,
   activeCreator,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
   onDelete: (id: string) => Promise<void>;
+  onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
@@ -52,6 +55,7 @@ export function ItemList({
                   item={it}
                   onPatch={onPatch}
                   onDelete={onDelete}
+                  onOpen={onOpen}
                   onCreatorClick={onCreatorClick}
                   activeCreator={activeCreator}
                 />
@@ -68,15 +72,18 @@ function ItemRow({
   item,
   onPatch,
   onDelete,
+  onOpen,
   onCreatorClick,
   activeCreator,
 }: {
   item: Item;
   onPatch: PatchFn;
   onDelete: (id: string) => Promise<void>;
+  onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
+  const hasNotes = richDocHasContent(item.body);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.name);
 
@@ -142,6 +149,19 @@ function ItemRow({
           className="mt-1 block"
         />
       </div>
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
+        className={`self-center text-xs transition-colors hover:text-[var(--color-accent)] ${
+          hasNotes
+            ? "text-[var(--color-accent)]"
+            : "invisible text-[var(--color-faint)] group-hover:visible"
+        }`}
+        aria-label={hasNotes ? `Open notes for ${item.name}` : `Add notes to ${item.name}`}
+        title={hasNotes ? "Has notes" : "Add notes"}
+      >
+        {hasNotes ? "● Notes" : "Notes"}
+      </button>
       <TypeMenu
         value={item.type}
         onChange={(t) => void onPatch(item.id, { type: t })}

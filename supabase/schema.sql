@@ -43,6 +43,12 @@ alter table projects add column if not exists updated_by text;
 alter table items    add column if not exists created_by text;
 alter table items    add column if not exists updated_by text;
 
+-- Rich-text body for items (Tiptap/ProseMirror document JSON). Inline images are
+-- stored in the private "item-images" Storage bucket and referenced by URL, so the
+-- JSON here stays small. Created out-of-band:
+--   storage bucket "item-images" (private) — see lib/supabase-server.ts ITEM_IMAGES_BUCKET
+alter table items add column if not exists body jsonb;
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

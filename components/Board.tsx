@@ -20,6 +20,7 @@ import { Byline } from "@/components/Byline";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
+  richDocHasContent,
   type Item,
   type ItemStatus,
 } from "@/lib/types";
@@ -33,12 +34,14 @@ export function Board({
   grouped,
   onPatch,
   onDelete,
+  onOpen,
   onCreatorClick,
   activeCreator,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
   onDelete: (id: string) => Promise<void>;
+  onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
@@ -82,6 +85,7 @@ export function Board({
             status={status}
             items={grouped[status]}
             onDelete={onDelete}
+            onOpen={onOpen}
             onCreatorClick={onCreatorClick}
             activeCreator={activeCreator}
           />
@@ -95,12 +99,14 @@ function Column({
   status,
   items,
   onDelete,
+  onOpen,
   onCreatorClick,
   activeCreator,
 }: {
   status: ItemStatus;
   items: Item[];
   onDelete: (id: string) => Promise<void>;
+  onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
@@ -131,6 +137,7 @@ function Column({
               key={it.id}
               item={it}
               onDelete={onDelete}
+              onOpen={onOpen}
               onCreatorClick={onCreatorClick}
               activeCreator={activeCreator}
             />
@@ -149,14 +156,17 @@ function Column({
 function Card({
   item,
   onDelete,
+  onOpen,
   onCreatorClick,
   activeCreator,
 }: {
   item: Item;
   onDelete: (id: string) => Promise<void>;
+  onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
 }) {
+  const hasNotes = richDocHasContent(item.body);
   const {
     attributes,
     listeners,
@@ -196,14 +206,29 @@ function Card({
       />
       <div className="mt-2 flex items-center justify-between">
         <TypeBadge type={item.type} />
-        <button
-          type="button"
-          onClick={() => void onDelete(item.id)}
-          className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-          aria-label={`Delete ${item.name}`}
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onOpen(item)}
+            className={`text-xs transition-colors hover:text-[var(--color-accent)] ${
+              hasNotes
+                ? "text-[var(--color-accent)]"
+                : "invisible text-[var(--color-faint)] group-hover:visible"
+            }`}
+            aria-label={hasNotes ? `Open notes for ${item.name}` : `Add notes to ${item.name}`}
+            title={hasNotes ? "Has notes" : "Add notes"}
+          >
+            {hasNotes ? "● Notes" : "Notes"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onDelete(item.id)}
+            className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
+            aria-label={`Delete ${item.name}`}
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </li>
   );
