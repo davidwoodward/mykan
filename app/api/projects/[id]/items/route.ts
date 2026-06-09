@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/api-auth";
 import {
   isItemType,
   isRichDoc,
+  normalizeTags,
   paragraphDoc,
   richDocText,
   type ItemType,
@@ -34,8 +35,10 @@ export async function POST(req: Request, { params }: Ctx) {
     name?: unknown;
     type?: unknown;
     body?: unknown;
+    tags?: unknown;
   };
   const type: ItemType = isItemType(body.type) ? body.type : "feature";
+  const tags = normalizeTags(body.tags);
   // The body is the source of truth. An explicit doc wins; otherwise seed one
   // from the typed text. `name` is the flattened text, kept for display/hygiene.
   const doc = isRichDoc(body.body)
@@ -60,6 +63,7 @@ export async function POST(req: Request, { params }: Ctx) {
       project_id: id,
       name,
       body: doc,
+      tags,
       type,
       status: "new",
       position,

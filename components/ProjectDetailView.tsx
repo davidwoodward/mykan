@@ -13,6 +13,7 @@ import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { Tag } from "@/components/Tag";
+import { TagEditor } from "@/components/TagEditor";
 import { localPart } from "@/lib/format";
 import {
   ITEM_TYPES,
@@ -33,6 +34,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [type, setType] = useState<ItemType>("feature");
+  const [newTags, setNewTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
@@ -56,18 +58,19 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       const res = await fetch(`/api/projects/${projectId}/items`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: trimmed, type }),
+        body: JSON.stringify({ name: trimmed, type, tags: newTags }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const created = (await res.json()) as Item;
       setItems((prev) => (prev ? [...prev, created] : [created]));
       setName("");
+      setNewTags([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create");
     } finally {
       setBusy(false);
     }
-  }, [name, type, busy, projectId]);
+  }, [name, type, newTags, busy, projectId]);
 
   const patchItem = useCallback(
     async (
@@ -182,7 +185,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         const createRes = await fetch(`/api/projects/${projectId}/items`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name: itemText, type }),
+          body: JSON.stringify({ name: itemText, type, tags: newTags }),
         });
         if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
         const created = (await createRes.json()) as Item;
@@ -225,6 +228,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
         setItems((prev) => (prev ? [...prev, withBody] : [withBody]));
         setName("");
+        setNewTags([]);
         setOpenItemId(withBody.id);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to add image");
@@ -232,7 +236,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         setBusy(false);
       }
     },
-    [name, type, busy, projectId],
+    [name, type, newTags, busy, projectId],
   );
 
   function onNamePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
@@ -289,6 +293,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           className="text-base placeholder:text-[var(--color-faint)]"
           aria-label="Item name"
         />
+        <div className="mt-2">
+          <TagEditor value={newTags} suggestions={allTags} onChange={setNewTags} />
+        </div>
         <div className="mt-2 flex items-center justify-between gap-3">
           <TypeSegmented value={type} onChange={setType} />
           <div className="flex items-center gap-3">
