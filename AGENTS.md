@@ -4,6 +4,12 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# Commits
+# Commits & shipping
 
-When a change is complete and verified, commit it — don't leave finished work uncommitted. Use [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `fix(items): …`, `feat(tags): …`), matching the style already in the git log.
+When a change is complete and verified, **ship it end to end without being asked** — do not stop at a local commit:
+
+1. Commit with a [Conventional Commits](https://www.conventionalcommits.org/) message (e.g. `fix(items): …`, `feat(tags): …`), matching the style already in the git log.
+2. Put the work on a branch, push it, and open a PR (`gh pr create`).
+3. Merge the PR into `main` (`gh pr merge`) — this is what triggers the Vercel production deploy. Then sync local `main`.
+
+Don't leave finished work sitting uncommitted, unpushed, or in an open PR waiting on a nudge.
