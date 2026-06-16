@@ -14,7 +14,7 @@ import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { Tag } from "@/components/Tag";
-import { TagEditor } from "@/components/TagEditor";
+import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { uploadAttachment } from "@/lib/client-attachments";
 import { localPart } from "@/lib/format";
 import {
@@ -40,6 +40,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [newTags, setNewTags] = useState<string[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const addFileRef = useRef<HTMLInputElement>(null);
+  const tagEditorRef = useRef<TagEditorHandle>(null);
   const [busy, setBusy] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
@@ -59,11 +60,13 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     if (!trimmed || busy) return;
     setBusy(true);
     setError(null);
+    // Pull in a tag the user typed but never confirmed with Enter.
+    const tags = tagEditorRef.current?.flush() ?? newTags;
     try {
       const res = await fetch(`/api/projects/${projectId}/items`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: trimmed, type, tags: newTags }),
+        body: JSON.stringify({ name: trimmed, type, tags }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const created = (await res.json()) as Item;
@@ -356,7 +359,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           aria-label="Item name"
         />
         <div className="mt-2">
-          <TagEditor value={newTags} suggestions={allTags} onChange={setNewTags} />
+          <TagEditor ref={tagEditorRef} value={newTags} suggestions={allTags} onChange={setNewTags} />
         </div>
 
         {newFiles.length > 0 ? (

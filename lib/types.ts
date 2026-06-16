@@ -31,29 +31,60 @@ export function richDocHasContent(body: RichDoc | null | undefined): boolean {
   return true;
 }
 
+// Block-level node types whose siblings should be separated by a newline when
+// flattening to text. Inline nodes (text, hardBreak) are not block-level.
+const BLOCK_NODE_TYPES = new Set([
+  "paragraph",
+  "heading",
+  "blockquote",
+  "bulletList",
+  "orderedList",
+  "listItem",
+  "taskList",
+  "taskItem",
+  "codeBlock",
+  "horizontalRule",
+]);
+
 /**
- * Flattens the plain text out of a rich-text body — block nodes joined by
- * newlines, images and other non-text nodes contributing nothing. This is the
- * single-line label shown for an item.
+ * Flattens the plain text out of a rich-text body, preserving the line
+ * structure: block siblings (paragraphs, list items, code lines, headings) are
+ * joined by newlines and hard line breaks become newlines, so the label shown
+ * for an item keeps the line feeds and indentation the user typed. Images and
+ * other non-text nodes contribute nothing.
  */
 export function richDocText(body: RichDoc | null | undefined): string {
   if (!body || !Array.isArray(body.content)) return "";
-  const blockText = (node: { content?: unknown[] }): string => {
-    const out: string[] = [];
-    const walk = (nodes: unknown[]) => {
-      for (const c of nodes) {
-        const cc = c as { type?: string; text?: string; content?: unknown[] };
-        if (cc.type === "text" && typeof cc.text === "string") out.push(cc.text);
-        if (Array.isArray(cc.content)) walk(cc.content);
+  const flatten = (node: {
+    type?: string;
+    text?: string;
+    content?: unknown[];
+  }): string => {
+    if (node.type === "text") return typeof node.text === "string" ? node.text : "";
+    if (node.type === "hardBreak") return "\n";
+    if (!Array.isArray(node.content)) return "";
+    const kids = node.content as {
+      type?: string;
+      text?: string;
+      content?: unknown[];
+    }[];
+    let out = "";
+    for (let i = 0; i < kids.length; i++) {
+      // Separate consecutive block-level siblings with a newline; inline runs
+      // (text, marks, hard breaks) stay on the same line.
+      if (
+        i > 0 &&
+        (BLOCK_NODE_TYPES.has(kids[i - 1].type ?? "") ||
+          BLOCK_NODE_TYPES.has(kids[i].type ?? ""))
+      ) {
+        out += "\n";
       }
-    };
-    if (Array.isArray(node.content)) walk(node.content);
-    return out.join("");
+      out += flatten(kids[i]);
+    }
+    return out;
   };
-  return (body.content as { content?: unknown[] }[])
-    .map(blockText)
-    .join("\n")
-    .trim();
+  // Trim only outer blank lines/space — interior newlines and indentation stay.
+  return flatten(body as { content?: unknown[] }).replace(/^\s+|\s+$/g, "");
 }
 
 /** Builds a minimal document holding a single paragraph of text (empty → empty doc). */
