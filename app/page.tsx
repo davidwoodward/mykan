@@ -2,6 +2,7 @@ import { auth, isOwner } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ProjectsView } from "@/components/ProjectsView";
 import { SignOutButton } from "@/components/SignOutButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Brand } from "@/components/Brand";
 
 export default async function Home() {
@@ -15,6 +16,7 @@ export default async function Home() {
           <Brand />
           <div className="flex items-center gap-4">
             <span className="text-[var(--color-faint)]">{session.user.email}</span>
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </div>

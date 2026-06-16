@@ -22,7 +22,7 @@ export function Tag({
 }) {
   const c = tagStyle(label);
   const style = active
-    ? { backgroundColor: c.color, color: "#fff", borderColor: c.color }
+    ? { backgroundColor: c.color, color: "var(--tag-active-ink)", borderColor: c.color }
     : c;
   const base =
     "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs leading-4";
