@@ -1,14 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { loadProjectForAccess, requireSession } from "@/lib/api-auth";
-import {
-  isItemType,
-  isRichDoc,
-  normalizeTags,
-  paragraphDoc,
-  richDocText,
-  type ItemType,
-} from "@/lib/types";
+import { createItem } from "@/lib/items-core";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,41 +36,12 @@ export async function POST(req: Request, { params }: Ctx) {
     body?: unknown;
     tags?: unknown;
   };
-  const type: ItemType = isItemType(body.type) ? body.type : "feature";
-  const tags = normalizeTags(body.tags);
-  // The body is the source of truth. An explicit doc wins; otherwise seed one
-  // from the typed text. `name` is the flattened text, kept for display/hygiene.
-  const doc = isRichDoc(body.body)
-    ? body.body
-    : paragraphDoc(typeof body.name === "string" ? body.name : "");
-  const name = richDocText(doc);
-
-  const supabase = getSupabase();
-  const { data: tail } = await supabase
-    .from("items")
-    .select("position")
-    .eq("project_id", id)
-    .eq("status", "new")
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const position = (tail?.position ?? 0) + 1024;
-
-  const { data, error } = await supabase
-    .from("items")
-    .insert({
-      project_id: id,
-      name,
-      body: doc,
-      tags,
-      type,
-      status: "new",
-      position,
-      created_by: gate.email,
-      updated_by: gate.email,
-    })
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data, { status: 201 });
+  const r = await createItem(getSupabase(), gate.email, id, {
+    name: body.name,
+    type: body.type,
+    body: body.body,
+    tags: body.tags,
+  });
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+  return NextResponse.json(r.data, { status: 201 });
 }
