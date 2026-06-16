@@ -4,7 +4,7 @@ import {
   getSupabase,
   ITEM_ATTACHMENTS_BUCKET,
 } from "@/lib/supabase-server";
-import { requireSession } from "@/lib/api-auth";
+import { denyItemAccess, requireSession } from "@/lib/api-auth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,6 +15,9 @@ export async function POST(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
+
+  const deny = await denyItemAccess(id, gate.email);
+  if (deny) return deny;
 
   const body = (await req.json().catch(() => ({}))) as { name?: unknown };
   const name = typeof body.name === "string" ? body.name : "file";

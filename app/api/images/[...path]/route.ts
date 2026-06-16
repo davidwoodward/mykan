@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabase, ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
-import { requireSession } from "@/lib/api-auth";
+import { denyItemAccess, requireSession } from "@/lib/api-auth";
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
@@ -13,6 +13,11 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const { path } = await params;
   const key = path.join("/");
+
+  // The first path segment is the owning item id; gate by its project's
+  // visibility so a private project's images can't be fetched by URL.
+  const deny = await denyItemAccess(path[0], gate.email);
+  if (deny) return deny;
 
   const { data, error } = await getSupabase()
     .storage.from(ITEM_IMAGES_BUCKET)

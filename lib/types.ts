@@ -102,6 +102,8 @@ export interface Project {
   id: string;
   name: string;
   description: string | null;
+  /** When true, visible only to its creator (the owner). Defaults to public. */
+  is_private: boolean;
   created_at: string;
   updated_at: string;
   created_by: string | null;
