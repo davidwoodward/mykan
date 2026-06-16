@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { requireSession } from "@/lib/api-auth";
+import { listProjects } from "@/lib/projects-core";
 
 export async function GET() {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
-
-  const { data, error } = await getSupabase()
-    .from("projects")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  // Hide private projects from everyone but their creator (the owner). Filtered
-  // in JS to avoid interpolating the email into a PostgREST `.or()` filter.
-  const visible = (data ?? []).filter(
-    (p) => !p.is_private || p.created_by === gate.email,
-  );
-  return NextResponse.json(visible);
+  const r = await listProjects(getSupabase(), gate.email);
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+  return NextResponse.json(r.data);
 }
 
 export async function POST(req: Request) {
