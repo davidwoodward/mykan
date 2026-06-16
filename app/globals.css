@@ -29,16 +29,76 @@
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* Dark theme. Activated by the `dark` class on <html> (set before paint by the
+   inline script in layout.tsx, toggled by ThemeToggle). Every surface reads these
+   `var(--color-*)` tokens, so overriding them here re-themes the whole UI. Values
+   mirror the light ramp inverted in lightness, keeping the same violet accent and
+   warm/cool hues for a cohesive counterpart. */
+:root {
+  color-scheme: light;
+  /* Auto-coloured tag chips (tagStyle in lib/types.ts) keep their per-tag hue but
+     take lightness from these so they invert with the theme. */
+  --tag-l-bg: 95%;
+  --tag-l-fg: 45%;
+  --tag-l-bd: 88%;
+  --tag-active-ink: oklch(100% 0 0);
+}
+html.dark {
+  color-scheme: dark;
+
+  --tag-l-bg: 30%;
+  --tag-l-fg: 82%;
+  --tag-l-bd: 42%;
+  --tag-active-ink: oklch(18% 0.01 270);
+
+  --color-canvas: oklch(17% 0.012 270);
+  --color-surface: oklch(21% 0.014 270);
+  --color-ink: oklch(93% 0.01 270);
+  --color-muted: oklch(68% 0.014 270);
+  --color-faint: oklch(52% 0.014 270);
+  --color-line: oklch(28% 0.012 270);
+  --color-line-strong: oklch(37% 0.014 270);
+  --color-accent: oklch(70% 0.15 270);
+  --color-accent-soft: oklch(30% 0.06 270);
+  --color-accent-ink: oklch(83% 0.13 270);
+
+  --color-feature: oklch(80% 0.13 150);
+  --color-feature-bg: oklch(27% 0.05 150);
+  --color-feature-line: oklch(38% 0.06 150);
+
+  --color-bug: oklch(80% 0.13 30);
+  --color-bug-bg: oklch(28% 0.06 30);
+  --color-bug-line: oklch(40% 0.08 30);
+
+  --color-idea: oklch(82% 0.12 75);
+  --color-idea-bg: oklch(28% 0.055 75);
+  --color-idea-line: oklch(40% 0.07 75);
+}
+
 html, body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
 
+/* Smooth the theme switch (colors only — never animate layout). */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
 ::selection {
   background: var(--color-accent-soft);
   color: var(--color-accent-ink);
 }
+
+/* Theme toggle icon swap, driven purely by the `dark` class so the right glyph
+   shows on first paint (no JS state, no hydration flash): moon in light, sun in
+   dark. */
+.theme-moon,
+.theme-sun { display: block; }
+.theme-sun { display: none; }
+html.dark .theme-moon { display: none; }
+html.dark .theme-sun { display: block; }
 
 /* Reserve the scrollbar gutter so layouts don't shift when content height crosses
    the viewport — important for the board view, which has its own scroll. */

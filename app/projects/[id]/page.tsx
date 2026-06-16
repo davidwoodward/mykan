@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 import { SignOutButton } from "@/components/SignOutButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Brand } from "@/components/Brand";
 import { Byline } from "@/components/Byline";
 import type { Project } from "@/lib/types";
@@ -26,6 +27,7 @@ export default async function ProjectPage({
           <Brand />
           <div className="flex items-center gap-4">
             <span className="text-[var(--color-faint)]">{session.user.email}</span>
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </div>

@@ -178,7 +178,11 @@ export function tagHue(tag: string): number {
   return h % 360;
 }
 
-/** Chip colours for a tag — light fill, dark ink, soft border — all on one hue. */
+/**
+ * Chip colours for a tag — all on one hue, with lightness pulled from theme
+ * variables (see globals.css) so the chips invert correctly in dark mode:
+ * a light fill + dark ink in the light theme, a dark fill + light ink in dark.
+ */
 export function tagStyle(tag: string): {
   backgroundColor: string;
   color: string;
@@ -186,9 +190,9 @@ export function tagStyle(tag: string): {
 } {
   const h = tagHue(tag);
   return {
-    backgroundColor: `oklch(95% 0.045 ${h})`,
-    color: `oklch(45% 0.13 ${h})`,
-    borderColor: `oklch(88% 0.06 ${h})`,
+    backgroundColor: `oklch(var(--tag-l-bg) 0.05 ${h})`,
+    color: `oklch(var(--tag-l-fg) 0.13 ${h})`,
+    borderColor: `oklch(var(--tag-l-bd) 0.06 ${h})`,
   };
 }
 
