@@ -3,39 +3,40 @@
 The app exposes an MCP server at `/api/mcp` (HTTP transport), gated by a bearer
 key. Claude Code uses it to list projects/items and move items across the board.
 
-## 1. Generate and set the key
+Registration mirrors the `time` app: the server is added at **user scope** with
+the key embedded in your local Claude Code config (`~/.claude.json`). No
+project-scoped `.mcp.json` (so no secret in the repo, no approval prompt) and no
+shell env var on the client side.
+
+## 1. Generate the key (server side)
 
 ```bash
-printf 'mykan_sk_%s\n' "$(openssl rand -base64 32)"
+printf 'mykan_sk_%s\n' "$(openssl rand -base64 32 | tr -d '/+=')"
 ```
 
-Set `MYKAN_SERVICE_API_KEY` to that value in `.env.local` (local) and in the
-Vercel project env (production). Rotate by setting a comma-separated list and
-removing the old value once clients are updated.
+This value is the key the **server** accepts. Set it as `MYKAN_SERVICE_API_KEY`
+in the Vercel project env (production) and, for a local dev server, in
+`.env.local`. It's a comma-separated list, so rotate by adding a new key and
+removing the old once the client is updated.
 
-## 2. Export it in your shell (for `.mcp.json` expansion)
+## 2. Register with Claude Code (client side)
+
+Add the server at user scope with the same key embedded (available in every
+project, no approval, no env var):
 
 ```bash
-export MYKAN_SERVICE_API_KEY=mykan_sk_...
+claude mcp add --transport http --scope user mykan \
+  https://kanban.dbwoodward.com/api/mcp \
+  --header "Authorization: Bearer <the key from step 1>"
 ```
 
-## 3. Register with Claude Code
+To target a local dev server instead, run `npm run dev -- -p 3005` and add a
+second entry pointing at `http://localhost:3005/api/mcp`.
 
-The repo's `.mcp.json` points at the deployed app. To use it elsewhere or to
-target local dev:
-
-```bash
-# deployed
-claude mcp add --transport http mykan https://kanban.dbwoodward.com/api/mcp \
-  --header "Authorization: Bearer ${MYKAN_SERVICE_API_KEY}"
-
-# local dev (run `npm run dev -- -p 3005` first)
-claude mcp add --transport http mykan-local http://localhost:3005/api/mcp \
-  --header "Authorization: Bearer ${MYKAN_SERVICE_API_KEY}"
-```
-
-Verify: `claude mcp list` shows `mykan` connected; in a session `/tools` lists
-`mcp__mykan__list_projects`, `…__update_item_status`, etc.
+Verify: `claude mcp get mykan` shows **✔ Connected**; in a session `/mcp` (or
+`/tools`) lists `mcp__mykan__list_projects`, `…__update_item_status`, etc. The
+key lives only in `~/.claude.json` (your machine) and the Vercel env — never in
+the repo.
 
 ## Tools
 

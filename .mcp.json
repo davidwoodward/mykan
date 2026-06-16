@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "mykan": {
-      "type": "http",
-      "url": "https://kanban.dbwoodward.com/api/mcp",
-      "headers": { "Authorization": "Bearer ${MYKAN_SERVICE_API_KEY}" }
-    }
-  }
-}
