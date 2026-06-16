@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getSupabase, ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
-import { requireSession } from "@/lib/api-auth";
+import { denyItemAccess, requireSession } from "@/lib/api-auth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,6 +23,9 @@ export async function POST(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
+
+  const deny = await denyItemAccess(id, gate.email);
+  if (deny) return deny;
 
   const contentType = (req.headers.get("content-type") ?? "").split(";")[0].trim();
   const ext = EXT_BY_TYPE[contentType];

@@ -6,7 +6,13 @@ import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { Byline } from "@/components/Byline";
 import type { Project } from "@/lib/types";
 
-export function ProjectsView() {
+export function ProjectsView({
+  isOwner,
+  viewerEmail,
+}: {
+  isOwner: boolean;
+  viewerEmail: string;
+}) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -47,6 +53,26 @@ export function ProjectsView() {
       setError(e instanceof Error ? e.message : "Failed to create");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleVisibility(id: string, isPrivate: boolean) {
+    const before = projects;
+    setProjects((prev) =>
+      prev?.map((p) => (p.id === id ? { ...p, is_private: isPrivate } : p)) ?? prev,
+    );
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ isPrivate }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const updated = (await res.json()) as Project;
+      setProjects((prev) => prev?.map((p) => (p.id === id ? updated : p)) ?? prev);
+    } catch (e) {
+      setProjects(before ?? null);
+      setError(e instanceof Error ? e.message : "Failed to update visibility");
     }
   }
 
@@ -142,14 +168,37 @@ export function ProjectsView() {
                     className="mt-1"
                   />
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => deleteProject(p.id)}
-                  className="invisible self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-                  aria-label={`Delete ${p.name}`}
-                >
-                  Delete
-                </button>
+                <div className="flex items-center gap-3 self-center">
+                  {isOwner && p.created_by?.toLowerCase() === viewerEmail.toLowerCase() ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleVisibility(p.id, !p.is_private)}
+                      className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                        p.is_private
+                          ? "border-[var(--color-accent)] text-[var(--color-accent)]"
+                          : "border-[var(--color-line)] text-[var(--color-faint)] hover:text-[var(--color-muted)]"
+                      }`}
+                      aria-label={
+                        p.is_private ? `Make ${p.name} shared` : `Make ${p.name} private`
+                      }
+                      title={
+                        p.is_private
+                          ? "Private — only you can see this. Click to share."
+                          : "Shared with everyone. Click to make private (only you)."
+                      }
+                    >
+                      {p.is_private ? "Private" : "Shared"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => deleteProject(p.id)}
+                    className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
+                    aria-label={`Delete ${p.name}`}
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

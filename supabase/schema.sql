@@ -43,6 +43,12 @@ alter table projects add column if not exists updated_by text;
 alter table items    add column if not exists created_by text;
 alter table items    add column if not exists updated_by text;
 
+-- Project privacy: a private project is visible only to its creator (the owner).
+-- Default public preserves the shared-pool behaviour. Enforced app-side by the
+-- API routes (see lib/api-auth.ts loadProjectForAccess / denyItemAccess).
+alter table projects add column if not exists is_private boolean not null default false;
+create index if not exists projects_is_private_idx on projects (is_private);
+
 -- Rich-text body for items (Tiptap/ProseMirror document JSON). Inline images are
 -- stored in the private "item-images" Storage bucket and referenced by URL, so the
 -- JSON here stays small. Created out-of-band:

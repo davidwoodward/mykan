@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
-import { requireSession } from "@/lib/api-auth";
+import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import {
   isItemStatus,
   isItemType,
@@ -15,6 +15,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
+
+  const deny = await denyItemAccess(id, gate.email);
+  if (deny) return deny;
 
   const body = (await req.json().catch(() => ({}))) as {
     name?: unknown;
@@ -64,6 +67,9 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
+
+  const deny = await denyItemAccess(id, gate.email);
+  if (deny) return deny;
 
   const { error } = await getSupabase().from("items").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

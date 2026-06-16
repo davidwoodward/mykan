@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
-import { requireSession } from "@/lib/api-auth";
+import { loadProjectForAccess, requireSession } from "@/lib/api-auth";
 import {
   isItemType,
   isRichDoc,
@@ -17,6 +17,9 @@ export async function GET(_req: Request, { params }: Ctx) {
   if ("error" in gate) return gate.error;
   const { id } = await params;
 
+  const access = await loadProjectForAccess(id, gate.email);
+  if (access.error) return access.error;
+
   const { data, error } = await getSupabase()
     .from("items")
     .select("*")
@@ -30,6 +33,9 @@ export async function POST(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
+
+  const access = await loadProjectForAccess(id, gate.email);
+  if (access.error) return access.error;
 
   const body = (await req.json().catch(() => ({}))) as {
     name?: unknown;

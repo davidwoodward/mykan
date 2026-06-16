@@ -11,7 +11,12 @@ export async function GET() {
     .select("*")
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  // Hide private projects from everyone but their creator (the owner). Filtered
+  // in JS to avoid interpolating the email into a PostgREST `.or()` filter.
+  const visible = (data ?? []).filter(
+    (p) => !p.is_private || p.created_by === gate.email,
+  );
+  return NextResponse.json(visible);
 }
 
 export async function POST(req: Request) {
