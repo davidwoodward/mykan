@@ -3,10 +3,12 @@
 import {
   DndContext,
   PointerSensor,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -26,6 +28,17 @@ import {
   type Item,
   type ItemStatus,
 } from "@/lib/types";
+
+// Resolve the drop target by POINTER position, not by the dragged card's rect.
+// closestCorners ranks droppables by the wide card's corner distances, so a card
+// straddling the column gutter snaps to the source column's container (status
+// unchanged, appended to the bottom). pointerWithin makes the column/card under
+// the cursor win; rectIntersection is a fallback for the rare gutter drop where
+// the pointer is over no droppable.
+const collisionDetection: CollisionDetection = (args) => {
+  const pointer = pointerWithin(args);
+  return pointer.length > 0 ? pointer : rectIntersection(args);
+};
 
 type PatchFn = (
   id: string,
@@ -98,7 +111,7 @@ export function Board({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={onDragEnd}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {ITEM_STATUSES.map((status) => (
           <Column
