@@ -23,6 +23,15 @@ export function isOwner(email: string | null | undefined): boolean {
   return !!email && email.trim().toLowerCase() === ownerEmail();
 }
 
+/**
+ * The identity the MCP (service) caller acts as. Defaults to the owner so the
+ * agent sees every project (incl. private) and stamps authorship as the owner.
+ * Override with MCP_ACTOR_EMAIL.
+ */
+export function mcpActorEmail(): string {
+  return (process.env.MCP_ACTOR_EMAIL ?? ownerEmail()).trim().toLowerCase();
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Google({
