@@ -66,11 +66,17 @@ AUTH_GOOGLE_SECRET=<from you>
 SUPABASE_URL=<from you>
 SUPABASE_SERVICE_ROLE_KEY=<from you>
 
+# MCP server bearer key (comma-separated to rotate). Generate:
+#   printf 'mykan_sk_%s' "$(openssl rand -base64 32 | tr -d '/+=')"
+MYKAN_SERVICE_API_KEY=<generated>
+# Optional: identity the MCP acts as (defaults to the owner email)
+# MCP_ACTOR_EMAIL=dawoodward@gmail.com
+
 # Optional: override the hardcoded whitelist
 # AUTH_ALLOWED_EMAILS=dawoodward@gmail.com,matthewL@experiencealign.com
 ```
 
-The absence of `NEXT_PUBLIC_*` Supabase vars is intentional: it's how we enforce "frontend never calls Supabase directly." All DB access flows through server-only API routes that hold the service-role key.
+`MYKAN_SERVICE_API_KEY` is the key the MCP server at `/api/mcp` accepts; full registration walkthrough in [docs/mcp-setup.md](./docs/mcp-setup.md). The absence of `NEXT_PUBLIC_*` Supabase vars is intentional: it's how we enforce "frontend never calls Supabase directly." All DB access flows through server-only API routes that hold the service-role key.
 
 ## 7. Architecture (for reference)
 
@@ -81,8 +87,9 @@ API routes (all server-side, all hold the service-role Supabase client):
 - `app/api/projects/[id]/route.ts` — `GET` / `PATCH` / `DELETE`
 - `app/api/projects/[id]/items/route.ts` — `GET` list project items, `POST` create item
 - `app/api/items/[id]/route.ts` — `PATCH` (rename, retype, change status/position), `DELETE`
+- `app/api/mcp/route.ts` — MCP server (HTTP) for Claude Code; bearer-gated via `lib/service-auth.ts`, excluded from the session middleware in `proxy.ts`
 
-Client components use `fetch('/api/...')`. The Supabase client is constructed in a server-only `lib/supabase-server.ts` that throws if imported from a client module. No leak path.
+The browser API routes and the MCP tools both call a shared core (`lib/projects-core.ts`, `lib/items-core.ts`) so logic never drifts. Client components use `fetch('/api/...')`. The Supabase client is constructed in a server-only `lib/supabase-server.ts` that throws if imported from a client module. No leak path.
 
 ## 8. Auto-deploy on merge to main
 

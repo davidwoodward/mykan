@@ -9,25 +9,30 @@ A minimal project + item tracker with a kanban board. Two-user app, Google sign-
 - **List view** — items grouped by status; click the status pill to cycle.
 - **Board view** — kanban with three columns (New / In Progress / Done), drag-and-drop to reorder or change status.
 - **Capture** — the name field is a textarea that grows as you type. Enter is a newline; ⌘/Ctrl+Enter (or the Add button) commits.
+- **Rich item bodies** — Tiptap rich-text with inline images and file attachments; free-form tags with AND-filtering; soft-delete with an Archived view.
+- **Private projects** — the owner can mark a project private (visible only to them); everyone else sees only shared projects. See [`docs/mcp-setup.md`](./docs/mcp-setup.md) and the privacy spec under `docs/superpowers/specs/`.
+- **Dark mode** — light/dark theme with a moon/sun toggle; respects the OS preference, persists the choice.
+- **MCP / agent access** — an HTTP MCP server at `/api/mcp` lets Claude Code list projects/items and move them across the board. See [`docs/mcp-setup.md`](./docs/mcp-setup.md).
 
 ## Architecture in one line
 
-The browser only ever calls `/app/api/**`. Those route handlers run server-side, hold the Supabase **service-role** key, and gate every request on an Auth.js session whose `signIn` callback only permits the whitelisted emails.
+Two callers, one core. The browser calls `/app/api/**` gated by an Auth.js session (whitelisted emails only); Claude Code calls `/api/mcp` gated by a bearer key. Both run through the same shared core (`lib/projects-core.ts`, `lib/items-core.ts`) so validation and visibility rules never drift. Every path holds the Supabase **service-role** key server-side.
 
 ```
-Browser ──fetch──▶ /api/projects, /api/items, /api/auth/[...]
-                          │
-                          ▼
-                   lib/auth.ts (session check)
-                          │
-                          ▼
-                   lib/supabase-server.ts (service-role)
-                          │
-                          ▼
-                   Supabase Postgres
+Browser ──fetch (session)──▶ /api/projects, /api/items, /api/auth/[...]
+                                          │
+Claude Code ──bearer key──▶ /api/mcp ─────┤
+                                          ▼
+                          lib/projects-core.ts / lib/items-core.ts
+                                          │
+                                          ▼
+                          lib/supabase-server.ts (service-role)
+                                          │
+                                          ▼
+                                  Supabase Postgres
 ```
 
-No `NEXT_PUBLIC_SUPABASE_*` vars exist. `lib/supabase-server.ts` carries an `import "server-only"` directive; if a client component imports it, the build fails.
+Session gating for browser routes/pages lives in `lib/auth.ts`; `/api/mcp` is excluded from the session middleware (`proxy.ts`) and self-gates with the constant-time bearer check in `lib/service-auth.ts`. No `NEXT_PUBLIC_SUPABASE_*` vars exist — `lib/supabase-server.ts` carries `import "server-only"`; if a client component imports it, the build fails.
 
 ## Stack
 
@@ -35,6 +40,8 @@ No `NEXT_PUBLIC_SUPABASE_*` vars exist. `lib/supabase-server.ts` carries an `imp
 - Auth.js v5 (Google provider, JWT sessions)
 - `@supabase/supabase-js` v2 (server-side, service-role)
 - `@dnd-kit/core` + `@dnd-kit/sortable` for the board
+- Tiptap v3 (rich-text item bodies)
+- `mcp-handler` + `zod` for the MCP server at `/api/mcp`
 - Deployed on Vercel
 
 ## Local setup
@@ -70,6 +77,7 @@ vercel env add AUTH_GOOGLE_ID production
 vercel env add AUTH_GOOGLE_SECRET production
 vercel env add SUPABASE_URL production
 vercel env add SUPABASE_SERVICE_ROLE_KEY production
+vercel env add MYKAN_SERVICE_API_KEY production   # bearer key the MCP server accepts
 # (repeat with `preview` instead of `production` for PR previews)
 ```
 
@@ -93,27 +101,35 @@ The `.github/workflows/ci.yml` workflow runs typecheck + lint + build on PRs as 
 app/
   api/
     auth/[...nextauth]/route.ts   ← Auth.js handler
+    mcp/route.ts                   ← MCP server (7 tools), bearer-gated
     projects/route.ts              ← GET, POST
     projects/[id]/route.ts         ← GET, PATCH, DELETE
     projects/[id]/items/route.ts   ← GET, POST
     items/[id]/route.ts            ← PATCH, DELETE
+    items/[id]/attachments/**      ← upload/sign/rename/remove/serve
+    items/[id]/images/route.ts     ← inline image upload
+    images/[...path]/route.ts      ← authed image serving
   projects/[id]/page.tsx           ← project detail (list + board)
   signin/page.tsx                  ← sign-in screen
   page.tsx                         ← projects list
 components/
-  AutoGrowTextarea.tsx
   Board.tsx                        ← @dnd-kit kanban
-  ItemList.tsx
-  ProjectsView.tsx
+  ProjectsView.tsx                 ← projects list + privacy toggle
   ProjectDetailView.tsx
-  SignOutButton.tsx
-  TypeBadge.tsx
+  ItemList.tsx · ItemDetailModal.tsx · RichTextEditor.tsx (Tiptap)
+  TagEditor.tsx · InlineTags.tsx · Attachments.tsx · InlineAttachments.tsx
+  ThemeToggle.tsx                  ← light/dark moon-sun toggle
+  AutoGrowTextarea.tsx · TypeBadge.tsx · Byline.tsx · Brand.tsx · SignOutButton.tsx
 lib/
-  auth.ts                          ← Auth.js v5 config + whitelist
-  api-auth.ts                      ← requireSession() for routes
+  auth.ts                          ← Auth.js config + whitelist + ownerEmail/mcpActorEmail
+  api-auth.ts                      ← requireSession() + project/item visibility guards
+  service-auth.ts                  ← constant-time bearer-key check for /api/mcp
+  projects-core.ts · items-core.ts ← shared core (browser + MCP call these)
   supabase-server.ts               ← server-only Supabase client
-  types.ts                         ← shared types and labels
-middleware.ts                      ← session gate for non-API/non-asset routes
+  types.ts                         ← shared types, labels, richDocText/normalizeTags
+proxy.ts                           ← session gate for non-API/non-asset routes (Next 16 middleware)
+.claude/skills/work-item/SKILL.md  ← Claude Code skill: run an item In Progress → Done
+docs/mcp-setup.md                  ← MCP registration walkthrough
 supabase/
   schema.sql                       ← Postgres schema (paste into SQL editor)
 ```
