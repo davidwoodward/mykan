@@ -44,9 +44,9 @@ Quiet, useful, unbranded. The chrome disappears; the items are visible.
 
 1. **Capture is fast.** Adding an item is one keypress on the page. The name field is a textarea that starts at one line and grows; Enter is a newline; Cmd/Ctrl+Enter (or the explicit Save button) commits.
 2. **Two views, one model.** List and kanban are different presentations of the same items.
-3. **Two users, zero ceremony.** Whitelisted Google sign-in via Auth.js v5; no roles, no permissions, no audit trail.
-4. **Light-first.** Sunlit weekday capture, not 2am ops dashboard.
+3. **Two users, zero ceremony.** Whitelisted Google sign-in via Auth.js v5; no roles or audit trail. The one visibility control: the owner can mark a project **private** (only they see it); everything else is shared. No other permissions.
+4. **Light-first, dark-optional.** Light is the default — sunlit weekday capture, not a 2am ops dashboard — with a moon/sun toggle for those who want dark.
 
 ## Stack
 
-Next.js 15 (App Router) + TypeScript + Tailwind v4 + Auth.js v5 (Google) + Supabase Postgres (service-role access, RLS off — auth is enforced in the app layer, not the database). Drag-and-drop via `@dnd-kit`. Deployed on Vercel.
+Next.js 16 (App Router) + TypeScript + Tailwind v4 + Auth.js v5 (Google) + Supabase Postgres (service-role access, RLS off — auth is enforced in the app layer, not the database). Drag-and-drop via `@dnd-kit`; rich-text item bodies via Tiptap; light/dark theme. An MCP server at `/api/mcp` (bearer-gated) lets Claude Code work items. Deployed on Vercel.
