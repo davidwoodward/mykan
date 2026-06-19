@@ -7,7 +7,8 @@ A minimal project + item tracker with a kanban board. Two-user app, Google sign-
 - **Projects** — a name and an optional description.
 - **Items** — a name and a type (`feature` / `bug` / `idea`), belonging to one project.
 - **List view** — items grouped by status; click the status pill to cycle.
-- **Board view** — kanban with three columns (New / In Progress / Done), drag-and-drop to reorder or change status.
+- **Board view** — kanban with three columns (New / In Progress / Done), drag-and-drop to reorder or change status; a refresh button reloads items in place without a full page reload.
+- **Project page chrome** — a sticky top nav (back-to-projects arrow, project title + byline) over the board/list, which scrolls in its own region under a static toolbar while the page itself still scrolls. Long Done descriptions clamp to ~5 lines with a Show more/less toggle.
 - **Capture** — the name field is a textarea that grows as you type. Enter is a newline; ⌘/Ctrl+Enter (or the Add button) commits.
 - **Rich item bodies** — Tiptap rich-text with inline images and file attachments; free-form tags with AND-filtering; soft-delete with an Archived view.
 - **Private projects** — the owner can mark a project private (visible only to them); everyone else sees only shared projects. See [`docs/mcp-setup.md`](./docs/mcp-setup.md) and the privacy spec under `docs/superpowers/specs/`.

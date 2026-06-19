@@ -22,6 +22,18 @@ Three layers, and getting this exactly right matters:
   everything above) static**. Scrolling *outside* it scrolls the whole page. Mobile stays
   plain full-page scroll.
 
+## Header & nav
+
+- **One sticky top nav, consistent width.** The project picker and the project page share
+  the same `max-w-5xl` container so the bar doesn't shift width when navigating between them.
+- **Project identity lives in the nav.** Wordmark on the left, then a back-to-projects `←`
+  arrow *beside the project name* (not left of the wordmark), the project title, and the
+  byline (creator · age); the description is the title's hover tooltip. Account controls
+  (email, theme toggle, sign out) sit on the right.
+- **Alignment rule (this bit twice):** keep icon affordances (back arrow, brand mark) in the
+  `items-center` row; reserve baseline alignment for the *text* cluster (title + byline) only.
+  Don't put an icon inside a baseline-aligned cluster — it ends up vertically off.
+
 ## Autosave & dismiss (item editing)
 
 Editing in mykan is **implicit and forgiving** — you never hunt for a Save button, and
