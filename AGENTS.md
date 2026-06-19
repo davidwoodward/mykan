@@ -4,6 +4,13 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Design & UX
+
+Before building or changing any UI, read **`docs/DESIGN.md`** and follow it — it captures
+mykan's deliberate interaction patterns (implicit autosave + Esc/click-off dismiss, inline
+keyboard-first tags, token-based light/dark theming, labeled inline-SVG icons). These are
+app-specific choices and override the cross-project UI defaults where they differ.
+
 # Commits & shipping
 
 When a change is complete and verified, **ship it end to end without being asked** — do not stop at a local commit:
