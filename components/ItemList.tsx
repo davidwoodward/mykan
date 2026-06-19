@@ -5,6 +5,7 @@ import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
+import { ClampedText } from "@/components/ClampedText";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -134,16 +135,12 @@ function ItemRow({
         onCycle={() => void onPatch(item.id, { status: nextStatus(item.status) })}
       />
       <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={() => onOpen(item)}
-          title="Open"
+        <ClampedText
+          text={text}
+          onOpen={() => onOpen(item)}
+          clamp={item.status === "done"}
           className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6 transition-colors hover:text-[var(--color-accent)]"
-        >
-          {text || (
-            <span className="italic text-[var(--color-accent)]">View content</span>
-          )}
-        </button>
+        />
         <InlineTags
           tags={item.tags}
           suggestions={tagSuggestions ?? []}
