@@ -21,6 +21,7 @@ import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
+import { ClampedText } from "@/components/ClampedText";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -255,17 +256,13 @@ function Card({
     >
       {/* Drag handle doubles as the open trigger: a stationary click opens the
           editor, movement past the activation distance starts a drag. */}
-      <div
-        {...attributes}
-        {...listeners}
-        onClick={() => onOpen(item)}
-        title="Open"
+      <ClampedText
+        text={text}
+        onOpen={() => onOpen(item)}
+        clamp={item.status === "done"}
+        dragProps={{ ...attributes, ...listeners }}
         className="cursor-pointer whitespace-pre-wrap break-words leading-5 transition-colors hover:text-[var(--color-accent)] active:cursor-grabbing"
-      >
-        {text || (
-          <span className="italic text-[var(--color-accent)]">View content</span>
-        )}
-      </div>
+      />
       <InlineTags
         tags={item.tags}
         suggestions={tagSuggestions ?? []}
