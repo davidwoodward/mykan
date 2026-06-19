@@ -28,28 +28,28 @@ export default async function ProjectPage({
     <div className="flex min-h-screen flex-col sm:h-screen sm:min-h-0">
       <header className="sticky top-0 z-20 shrink-0 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-2 text-sm">
-          <div className="flex min-w-0 items-center gap-6">
+          <div className="flex min-w-0 items-center gap-3">
             <Brand />
-            <div className="flex min-w-0 items-baseline gap-2">
-              <Link
-                href="/"
-                aria-label="Back to projects"
-                title="Back to projects"
-                className="grid h-8 w-8 shrink-0 -translate-x-1 self-center place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
+            <Link
+              href="/"
+              aria-label="Back to projects"
+              title="Back to projects"
+              className="ml-3 grid h-8 w-8 shrink-0 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
+            >
+              <svg
+                className="h-[18px] w-[18px]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                <svg
-                  className="h-[18px] w-[18px]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-              </Link>
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </Link>
+            <div className="flex min-w-0 items-baseline gap-2">
               <h1
                 className="truncate text-base font-semibold tracking-tight"
                 title={project.description ?? undefined}
