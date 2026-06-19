@@ -366,7 +366,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   return (
     <>
       {!showArchived ? (
-      <section className="shrink-0 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
+      <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
         <AutoGrowTextarea
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -453,10 +453,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       ) : null}
 
       {error ? (
-        <p className="mt-3 shrink-0 text-sm text-[var(--color-bug)]">{error}</p>
+        <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
-      <div className="mt-4 mb-3 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
             <ViewTab active={view === "list"} onClick={() => setView("list")}>
@@ -520,7 +520,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         ) : null}
       </div>
 
-      <div className="sm:min-h-0 sm:flex-1 sm:overflow-y-auto sm:pb-4">
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
@@ -558,7 +557,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           onItemChange={replaceItem}
         />
       )}
-      </div>
 
       {openItem ? (
         <ItemDetailModal

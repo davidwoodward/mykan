@@ -22,11 +22,10 @@ export default async function ProjectPage({
   if (!project) notFound();
 
   return (
-    // On ≥sm the viewport is pinned (h-screen) and the items area scrolls on
-    // its own, so the nav + add form + toolbar stay static. On mobile we fall
-    // back to ordinary full-page scroll.
-    <div className="flex min-h-screen flex-col sm:h-screen sm:min-h-0">
-      <header className="sticky top-0 z-20 shrink-0 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
+    // The whole page scrolls normally; only the header is pinned (sticky) so it
+    // stays put while the board/list scrolls under it.
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-2 text-sm">
           <div className="flex min-w-0 items-center gap-3">
             <Brand />
@@ -74,7 +73,7 @@ export default async function ProjectPage({
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 pt-4 pb-12 sm:min-h-0 sm:overflow-hidden sm:pb-4">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
         <ProjectDetailView projectId={project.id} />
       </main>
     </div>
