@@ -42,6 +42,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const addFileRef = useRef<HTMLInputElement>(null);
   const tagEditorRef = useRef<TagEditorHandle>(null);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +54,23 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     return () => {
       cancelled = true;
     };
+  }, [projectId]);
+
+  // Pull the latest items on demand (the Refresh button) so the board reflects
+  // edits made elsewhere — e.g. by the other whitelisted user or the MCP server
+  // — without a full browser reload and renavigation.
+  const refetch = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/items`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setItems((await r.json()) as Item[]);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
   }, [projectId]);
 
   const createItem = useCallback(async () => {
@@ -448,6 +466,28 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               Board
             </ViewTab>
           </div>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={refreshing}
+            aria-label="Refresh"
+            title="Refresh"
+            className="grid h-8 w-8 place-items-center rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-60"
+          >
+            <svg
+              className={`h-[15px] w-[15px] ${refreshing ? "animate-spin" : ""}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
           {showArchived || archivedCount > 0 ? (
             <button
               type="button"
