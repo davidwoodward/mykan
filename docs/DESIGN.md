@@ -8,6 +8,20 @@ for mykan** — see Autosave below.)
 
 Verify any UI change by looking at the running app (screenshot), not just passing tests.
 
+## Project page scroll model
+
+Three layers, and getting this exactly right matters:
+
+- **The whole page scrolls normally.** Never lock the viewport (`overflow-hidden` /
+  forced `h-screen`) — a tall add form must be able to scroll so its **Add button stays
+  reachable**. (This bit us once.)
+- **The header (top nav) is pinned** — `sticky top-0` — so it stays put over everything.
+- **The List/Board is its own scroll region** (≥sm): a container capped to roughly the
+  viewport (`sm:max-h-[calc(100svh-…)] sm:overflow-y-auto sm:overscroll-contain`). Scrolling
+  *inside* it scrolls only the items, leaving the **add form + List/Board picker line (and
+  everything above) static**. Scrolling *outside* it scrolls the whole page. Mobile stays
+  plain full-page scroll.
+
 ## Autosave & dismiss (item editing)
 
 Editing in mykan is **implicit and forgiving** — you never hunt for a Save button, and

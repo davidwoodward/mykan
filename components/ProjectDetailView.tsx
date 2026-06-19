@@ -520,6 +520,11 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         ) : null}
       </div>
 
+      {/* The board/list gets its own scroll region (capped to the viewport) so
+          its contents scroll under a static toolbar, while the page itself
+          still scrolls normally for everything above (e.g. a tall add form).
+          Mobile keeps plain full-page scroll. */}
+      <div className="sm:max-h-[calc(100svh-13rem)] sm:overflow-y-auto sm:overscroll-contain">
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
@@ -557,6 +562,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           onItemChange={replaceItem}
         />
       )}
+      </div>
 
       {openItem ? (
         <ItemDetailModal
