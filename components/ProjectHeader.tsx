@@ -39,6 +39,9 @@ export function ProjectHeader({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLTextAreaElement>(null);
+  // Always points at the latest commit() so the click-off listener (registered
+  // once when the editor opens) sees current draft values, not stale ones.
+  const commitRef = useRef<() => void>(() => {});
 
   const canToggleVisibility =
     isOwner && project.created_by?.toLowerCase() === viewerEmail.toLowerCase();
@@ -85,6 +88,11 @@ export function ProjectHeader({
     }
   }
 
+  // Keep the ref pointed at the latest commit (every render).
+  useEffect(() => {
+    commitRef.current = commit;
+  });
+
   // Esc commits + closes (mykan "I'm done" semantics); click-off does too.
   useEffect(() => {
     if (!editing) return;
@@ -93,12 +101,11 @@ export function ProjectHeader({
 
     function onPointerDown(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        void commit();
+        commitRef.current();
       }
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
   function onFieldKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
