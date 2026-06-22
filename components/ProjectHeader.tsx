@@ -54,7 +54,9 @@ export function ProjectHeader({
     setEditing(true);
   }
 
-  async function commit() {
+  // The set of fields that actually differ from the saved project. Drives both
+  // the save (what to PATCH) and whether the ✓ button is enabled.
+  function buildPatch(): Record<string, unknown> {
     const trimmedName = name.trim();
     const nextDescription = description.trim() || null;
     const patch: Record<string, unknown> = {};
@@ -63,7 +65,11 @@ export function ProjectHeader({
     if (canToggleVisibility && isPrivate !== project.is_private) {
       patch.isPrivate = isPrivate;
     }
+    return patch;
+  }
 
+  async function commit() {
+    const patch = buildPatch();
     if (Object.keys(patch).length === 0) {
       setEditing(false);
       return;
@@ -117,6 +123,8 @@ export function ProjectHeader({
       void commit();
     }
   }
+
+  const dirty = editing && Object.keys(buildPatch()).length > 0;
 
   return (
     <div ref={wrapRef} className="relative flex min-w-0 items-center gap-1.5">
@@ -211,21 +219,14 @@ export function ProjectHeader({
             </div>
           ) : null}
 
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <span className="text-[10px] text-[var(--color-faint)]">
-              {status === "saving"
-                ? "Saving…"
-                : status === "error"
-                  ? "Save failed — retry"
-                  : "Esc or click away to save"}
-            </span>
+          <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
               onClick={() => void commit()}
-              disabled={status === "saving"}
+              disabled={status === "saving" || !dirty}
               aria-label="Save project"
-              title="Save"
-              className="grid h-7 w-7 place-items-center rounded-md bg-[var(--color-accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              title={dirty ? "Save" : "No changes to save"}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[var(--color-accent)] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg
                 className="h-[18px] w-[18px]"
@@ -240,6 +241,15 @@ export function ProjectHeader({
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </button>
+            <span className="text-[10px] text-[var(--color-faint)]">
+              {status === "saving"
+                ? "Saving…"
+                : status === "error"
+                  ? "Save failed — retry"
+                  : dirty
+                    ? "Esc or click away to save"
+                    : "No changes"}
+            </span>
           </div>
         </div>
       ) : null}
