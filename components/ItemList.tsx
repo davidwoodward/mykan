@@ -6,6 +6,7 @@ import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
+import { RefBadge } from "@/components/RefBadge";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -134,6 +135,7 @@ function ItemRow({
         status={item.status}
         onCycle={() => void onPatch(item.id, { status: nextStatus(item.status) })}
       />
+      <RefBadge number={item.number} className="mt-1.5" />
       <div className="min-w-0 flex-1">
         <ClampedText
           text={text}

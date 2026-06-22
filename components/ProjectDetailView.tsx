@@ -13,6 +13,7 @@ import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
+import { ProjectKeyProvider } from "@/components/RefBadge";
 import { Tag } from "@/components/Tag";
 import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { uploadAttachment } from "@/lib/client-attachments";
@@ -28,7 +29,13 @@ import {
 
 type View = "list" | "board";
 
-export function ProjectDetailView({ projectId }: { projectId: string }) {
+export function ProjectDetailView({
+  projectId,
+  projectKey,
+}: {
+  projectId: string;
+  projectKey: string | null;
+}) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("list");
@@ -364,7 +371,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   );
 
   return (
-    <>
+    <ProjectKeyProvider value={projectKey}>
       {!showArchived ? (
       <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
         <AutoGrowTextarea
@@ -574,7 +581,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           onItemChange={replaceItem}
         />
       ) : null}
-    </>
+    </ProjectKeyProvider>
   );
 }
 

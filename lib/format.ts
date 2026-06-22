@@ -1,3 +1,16 @@
+/**
+ * A user-facing item reference: "AMOS-12" when the project has a key, else
+ * "#12". Null when the item has no number yet (shouldn't happen post-migration).
+ */
+export function itemRef(
+  key: string | null | undefined,
+  number: number | null | undefined,
+): string | null {
+  if (number == null) return null;
+  const k = (key ?? "").trim();
+  return k ? `${k}-${number}` : `#${number}`;
+}
+
 export function localPart(email: string | null | undefined): string {
   if (!email) return "—";
   const at = email.indexOf("@");

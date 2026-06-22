@@ -73,6 +73,31 @@ create index if not exists items_archived_idx on items (project_id, archived_at)
 -- by the /api/items/[id]/attachments routes.
 alter table items add column if not exists attachments jsonb not null default '[]';
 
+-- Stable per-project item reference (KEY-number, e.g. AMOS-12). The project
+-- "key" is the short prefix; the item "number" is immutable, per-project, and
+-- stamped on insert by the items_set_number trigger (every creation path gets
+-- one). Full migration incl. backfill:
+--   supabase/migrations/2026-06-22-item-reference.sql
+alter table projects add column if not exists key text;
+alter table items    add column if not exists number integer;
+create unique index if not exists items_project_number_idx on items (project_id, number);
+
+create or replace function set_item_number() returns trigger as $$
+begin
+  if new.number is null then
+    perform pg_advisory_xact_lock(hashtext('item_number:' || new.project_id::text));
+    select coalesce(max(number), 0) + 1 into new.number
+    from items where project_id = new.project_id;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists items_set_number on items;
+create trigger items_set_number
+  before insert on items
+  for each row execute function set_item_number();
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

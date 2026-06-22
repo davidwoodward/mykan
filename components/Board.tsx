@@ -22,6 +22,7 @@ import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
+import { RefBadge } from "@/components/RefBadge";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -280,6 +281,7 @@ function Card({
       />
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
+          <RefBadge number={item.number} />
           <TypeBadge type={item.type} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
         </div>
