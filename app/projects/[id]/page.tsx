@@ -65,7 +65,7 @@ export default async function ProjectPage({
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
-        <ProjectDetailView projectId={project.id} />
+        <ProjectDetailView projectId={project.id} projectKey={project.key} />
       </main>
     </div>
   );

@@ -5,6 +5,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { TagEditor } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
 import { TypeBadge } from "@/components/TypeBadge";
+import { RefBadge } from "@/components/RefBadge";
 import { STATUS_LABEL, type Item, type RichDoc } from "@/lib/types";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -92,6 +93,7 @@ export function ItemDetailModal({
       >
         <header className="flex items-center justify-between gap-4 border-b border-[var(--color-line)] px-4 py-2.5">
           <div className="flex items-center gap-2">
+            <RefBadge number={item.number} />
             <TypeBadge type={item.type} />
             <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
               {STATUS_LABEL[item.status]}

@@ -102,6 +102,8 @@ export interface Project {
   id: string;
   name: string;
   description: string | null;
+  /** Short uppercase key prefixing item references, e.g. "AMOS" → AMOS-12. */
+  key: string | null;
   /** When true, visible only to its creator (the owner). Defaults to public. */
   is_private: boolean;
   created_at: string;
@@ -121,6 +123,8 @@ export interface Attachment {
 export interface Item {
   id: string;
   project_id: string;
+  /** Immutable, per-project reference number. Displayed as {project.key}-{number}. */
+  number: number;
   name: string;
   type: ItemType;
   status: ItemStatus;

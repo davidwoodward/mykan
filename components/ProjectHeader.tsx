@@ -34,6 +34,7 @@ export function ProjectHeader({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? "");
+  const [key, setKey] = useState(initial.key ?? "");
   const [isPrivate, setIsPrivate] = useState(initial.is_private);
   const [status, setStatus] = useState<Status>("idle");
 
@@ -49,6 +50,7 @@ export function ProjectHeader({
   function open() {
     setName(project.name);
     setDescription(project.description ?? "");
+    setKey(project.key ?? "");
     setIsPrivate(project.is_private);
     setStatus("idle");
     setEditing(true);
@@ -59,9 +61,11 @@ export function ProjectHeader({
   function buildPatch(): Record<string, unknown> {
     const trimmedName = name.trim();
     const nextDescription = description.trim() || null;
+    const nextKey = key.trim().toUpperCase() || null;
     const patch: Record<string, unknown> = {};
     if (trimmedName && trimmedName !== project.name) patch.name = trimmedName;
     if (nextDescription !== project.description) patch.description = nextDescription;
+    if (nextKey !== project.key) patch.key = nextKey;
     if (canToggleVisibility && isPrivate !== project.is_private) {
       patch.isPrivate = isPrivate;
     }
@@ -124,7 +128,19 @@ export function ProjectHeader({
     }
   }
 
+  // Key is a single-line input, so plain Enter (not ⌘/Ctrl+Enter) commits.
+  function onKeyInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape" || e.key === "Enter") {
+      e.preventDefault();
+      void commit();
+    }
+  }
+
   const dirty = editing && Object.keys(buildPatch()).length > 0;
+  const suggestedKey = (project.name.match(/[A-Za-z0-9]/g) ?? [])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
 
   return (
     <div ref={wrapRef} className="relative flex min-w-0 items-center gap-1.5">
@@ -194,6 +210,26 @@ export function ProjectHeader({
             className="mt-1 text-sm text-[var(--color-muted)] placeholder:text-[var(--color-faint)]"
             aria-label="Project description"
           />
+
+          <label className="mt-3 block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
+            Key
+          </label>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              value={key}
+              onChange={(e) =>
+                setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))
+              }
+              onKeyDown={onKeyInputKeyDown}
+              placeholder={suggestedKey || "KEY"}
+              maxLength={6}
+              aria-label="Project key"
+              className="w-24 rounded border border-[var(--color-line)] bg-transparent px-2 py-1 font-mono text-sm uppercase tracking-wide outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
+            />
+            <span className="font-mono text-xs text-[var(--color-faint)]">
+              {(key.trim() || suggestedKey || "KEY")}-12 · prefixes item refs
+            </span>
+          </div>
 
           {canToggleVisibility ? (
             <div className="mt-3 flex items-center justify-between gap-2">

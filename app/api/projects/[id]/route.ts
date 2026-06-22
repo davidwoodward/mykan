@@ -26,12 +26,20 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const body = (await req.json().catch(() => ({}))) as {
     name?: unknown;
     description?: unknown;
+    key?: unknown;
     isPrivate?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (typeof body.name === "string") patch.name = body.name.trim();
   if (typeof body.description === "string" || body.description === null) {
     patch.description = body.description;
+  }
+  // Short uppercase reference key (e.g. AMOS). Empty clears it back to null.
+  if (typeof body.key === "string" || body.key === null) {
+    patch.key =
+      typeof body.key === "string"
+        ? body.key.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null
+        : null;
   }
   // Visibility may be changed only by the owner, and only on a project they
   // created (Matthew has no toggle; this is the server-side enforcement).
