@@ -1,12 +1,12 @@
-import { auth } from "@/lib/auth";
+import { auth, isOwner } from "@/lib/auth";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
+import { ProjectHeader } from "@/components/ProjectHeader";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Brand } from "@/components/Brand";
-import { Byline } from "@/components/Byline";
 import type { Project } from "@/lib/types";
 
 export default async function ProjectPage({
@@ -48,20 +48,11 @@ export default async function ProjectPage({
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </Link>
-            <div className="flex min-w-0 items-baseline gap-2">
-              <h1
-                className="truncate text-base font-semibold tracking-tight"
-                title={project.description ?? undefined}
-              >
-                {project.name}
-              </h1>
-              <Byline
-                createdBy={project.created_by}
-                updatedBy={project.updated_by}
-                updatedAt={project.updated_at}
-                className="hidden shrink-0 sm:inline"
-              />
-            </div>
+            <ProjectHeader
+              project={project}
+              isOwner={isOwner(session.user.email)}
+              viewerEmail={session.user.email}
+            />
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <span className="hidden text-[var(--color-faint)] sm:inline">
