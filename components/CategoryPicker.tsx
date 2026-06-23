@@ -31,6 +31,15 @@ export function useCategories(): CategoriesValue | null {
   return useContext(CategoryContext);
 }
 
+/**
+ * Normalise a path for matching: lowercase and collapse spacing around slashes,
+ * so a typed "coach/" matches the displayed "coach / home". Spaces *within* a
+ * segment (e.g. "session complete") are preserved.
+ */
+function normPath(s: string): string {
+  return s.toLowerCase().replace(/\s*\/\s*/g, "/").trim();
+}
+
 /** Build "A / B / C" for a node id from a flat list (cycle-safe). */
 export function buildPathOf(cats: Category[]): (id: string | null) => string {
   const byId = new Map(cats.map((c) => [c.id, c]));
@@ -115,12 +124,15 @@ export function PathInput({
   const [hi, setHi] = useState(0);
 
   const matches = useMemo(() => {
-    const q = draft.trim().toLowerCase();
-    const list = q
-      ? paths.filter((p) => p.path.toLowerCase().includes(q))
-      : paths;
+    const q = normPath(draft);
+    const list = q ? paths.filter((p) => normPath(p.path).includes(q)) : paths;
     return list.slice(0, 8);
   }, [draft, paths]);
+
+  // Builder mode: only suggest once something's typed (an empty Add field
+  // showing every path was just noise). Picker mode drops down on focus.
+  const showSuggestions =
+    matches.length > 0 && (keepOpen ? draft.trim().length > 0 : true);
 
   function commit(path: string) {
     const p = path.trim();
@@ -174,19 +186,23 @@ export function PathInput({
         aria-label="Category path"
         className="w-44 rounded border border-[var(--color-line)] bg-transparent px-1.5 py-0.5 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
       />
-      {/* Suggestions help the item picker choose an existing area. In the
-          builder (keepOpen) the whole tree is already shown above, so the
-          dropdown would be redundant noise — skip it there. */}
-      {!keepOpen && matches.length > 0 ? (
+      {showSuggestions ? (
         <div className="absolute left-0 top-full z-30 mt-1 max-h-56 min-w-44 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg">
           {matches.map((m, i) => (
             <button
               key={m.id}
               type="button"
               // onMouseDown (not onClick) so it fires before the input blur.
+              // Builder: filling lets you extend an existing branch (… / child).
+              // Picker: clicking selects that area for the item.
               onMouseDown={(e) => {
                 e.preventDefault();
-                commit(m.path);
+                if (keepOpen) {
+                  setDraft(`${m.path} / `);
+                  setHi(0);
+                } else {
+                  commit(m.path);
+                }
               }}
               onMouseEnter={() => setHi(i)}
               className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs ${
@@ -198,9 +214,7 @@ export function PathInput({
             </button>
           ))}
           {draft.trim() &&
-          !matches.some(
-            (m) => m.path.toLowerCase() === draft.trim().toLowerCase(),
-          ) ? (
+          !matches.some((m) => normPath(m.path) === normPath(draft)) ? (
             <div className="px-2 pt-1 text-[10px] text-[var(--color-faint)]">
               Enter to create “{draft.trim()}”
             </div>
