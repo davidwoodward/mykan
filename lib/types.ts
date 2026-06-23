@@ -112,6 +112,18 @@ export interface Project {
   updated_by: string | null;
 }
 
+/** A node in a project's Area tree. Items reference one by id. */
+export interface Category {
+  id: string;
+  project_id: string;
+  parent_id: string | null;
+  name: string;
+  position: number;
+}
+
+/** Max nesting depth for the category tree (root = depth 1). */
+export const MAX_CATEGORY_DEPTH = 5;
+
 export interface Attachment {
   id: string;
   name: string;
@@ -133,6 +145,8 @@ export interface Item {
   tags: string[];
   /** Member emails assigned to this item (shared projects only). */
   assignees: string[];
+  /** The category (Area) node this item is filed under, if any. */
+  category_id: string | null;
   attachments: Attachment[];
   archived_at: string | null;
   created_at: string;

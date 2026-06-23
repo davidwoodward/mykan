@@ -24,6 +24,7 @@ import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
+import { ItemCategory } from "@/components/CategoryPicker";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -274,6 +275,7 @@ function Card({
           activeTags={activeTags}
         />
         <ItemAssignees item={item} />
+        <ItemCategory item={item} />
       </div>
       <Byline
         createdBy={item.created_by}

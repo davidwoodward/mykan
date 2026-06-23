@@ -8,6 +8,7 @@ import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
+import { ItemCategory } from "@/components/CategoryPicker";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -38,6 +39,7 @@ export function ItemList({
   tagSuggestions,
   onTagsChange,
   onItemChange,
+  areaGroups,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -53,24 +55,31 @@ export function ItemList({
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
   onItemChange: (item: Item) => void;
+  /** When set, render these Area groups instead of the status sections. */
+  areaGroups?: { key: string; items: Item[] }[];
 }) {
+  // Either the status sections (default) or the Area groups.
+  const sections = areaGroups
+    ? areaGroups.map((g) => ({ title: g.key, items: g.items }))
+    : ITEM_STATUSES.map((s) => ({ title: STATUS_LABEL[s], items: grouped[s] }));
+
   return (
     <div className="space-y-8">
-      {ITEM_STATUSES.map((status) => (
-        <section key={status}>
+      {sections.map((section) => (
+        <section key={section.title}>
           <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">
-            {STATUS_LABEL[status]}{" "}
+            {section.title}{" "}
             <span className="ml-1 text-[var(--color-faint)]">
-              {grouped[status].length}
+              {section.items.length}
             </span>
           </h2>
-          {grouped[status].length === 0 ? (
+          {section.items.length === 0 ? (
             <p className="rounded-md border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-faint)]">
               Nothing here.
             </p>
           ) : (
             <ul className="divide-y divide-[var(--color-line)] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]">
-              {grouped[status].map((it) => (
+              {section.items.map((it) => (
                 <ItemRow
                   key={it.id}
                   item={it}
@@ -153,6 +162,7 @@ function ItemRow({
             activeTags={activeTags}
           />
           <ItemAssignees item={item} />
+          <ItemCategory item={item} />
         </div>
         <Byline
           createdBy={item.created_by}

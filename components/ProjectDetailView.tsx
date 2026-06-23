@@ -23,11 +23,19 @@ import {
   ITEM_STATUSES,
   ITEM_TYPES,
   TYPE_LABEL,
+  type Category,
   type Item,
   type ItemStatus,
   type ItemType,
   type RichDoc,
 } from "@/lib/types";
+import {
+  CategoryProvider,
+  DraftCategory,
+  buildPathOf,
+  subtreeIdSet,
+} from "@/components/CategoryPicker";
+import { CategoryManager } from "@/components/CategoryManager";
 
 type View = "list" | "board";
 
@@ -57,6 +65,11 @@ export function ProjectDetailView({
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [areaFilter, setAreaFilter] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<"status" | "area">("status");
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +77,10 @@ export function ProjectDetailView({
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: Item[]) => !cancelled && setItems(d))
       .catch((e: Error) => !cancelled && setError(e.message));
+    fetch(`/api/projects/${projectId}/categories`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: Category[]) => !cancelled && setCategories(d))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -97,7 +114,7 @@ export function ProjectDetailView({
       const res = await fetch(`/api/projects/${projectId}/items`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: trimmed, type, tags }),
+        body: JSON.stringify({ name: trimmed, type, tags, category_id: newCategoryId }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const created = (await res.json()) as Item;
@@ -108,12 +125,13 @@ export function ProjectDetailView({
       setName("");
       setNewTags([]);
       setNewFiles([]);
+      setNewCategoryId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create");
     } finally {
       setBusy(false);
     }
-  }, [name, type, newTags, newFiles, busy, projectId]);
+  }, [name, type, newTags, newFiles, newCategoryId, busy, projectId]);
 
   const patchItem = useCallback(
     async (
@@ -205,6 +223,99 @@ export function ProjectDetailView({
       }
     })();
   }, []);
+
+  // Assign (or clear with null) an item's category. Optimistic + PATCH.
+  const changeItemCategory = useCallback(
+    (id: string, categoryId: string | null) => {
+      setItems((prev) =>
+        prev
+          ? prev.map((it) =>
+              it.id === id ? { ...it, category_id: categoryId } : it,
+            )
+          : prev,
+      );
+      void (async () => {
+        try {
+          const res = await fetch(`/api/items/${id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ category_id: categoryId }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const updated = (await res.json()) as Item;
+          setItems((prev) =>
+            prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+          );
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Failed to set area");
+        }
+      })();
+    },
+    [],
+  );
+
+  // Find-or-create the node at a "/"-path, adding any new nodes to local state.
+  const ensureCategory = useCallback(
+    async (path: string): Promise<Category | null> => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/categories`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const leaf = (await res.json()) as Category;
+        // The POST may have created ancestors too — re-pull the list to stay exact.
+        const list = await fetch(`/api/projects/${projectId}/categories`).then(
+          (r) => (r.ok ? (r.json() as Promise<Category[]>) : []),
+        );
+        setCategories(list);
+        return leaf;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to create area");
+        return null;
+      }
+    },
+    [projectId],
+  );
+
+  const renameCategory = useCallback((id: string, name: string) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, name } : c)),
+    );
+    void fetch(`/api/categories/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    }).catch((e) =>
+      setError(e instanceof Error ? e.message : "Failed to rename area"),
+    );
+  }, []);
+
+  const removeCategory = useCallback(
+    (id: string) => {
+      // Optimistic: reparent children up, un-file items, drop the node.
+      setCategories((prev) => {
+        const node = prev.find((c) => c.id === id);
+        const parentId = node?.parent_id ?? null;
+        return prev
+          .filter((c) => c.id !== id)
+          .map((c) => (c.parent_id === id ? { ...c, parent_id: parentId } : c));
+      });
+      setItems((prev) =>
+        prev
+          ? prev.map((it) =>
+              it.category_id === id ? { ...it, category_id: null } : it,
+            )
+          : prev,
+      );
+      if (areaFilter === id) setAreaFilter(null);
+      void fetch(`/api/categories/${id}`, { method: "DELETE" }).catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to delete area"),
+      );
+    },
+    [areaFilter],
+  );
 
   const toggleTag = useCallback((tag: string) => {
     setTagFilter((cur) =>
@@ -382,6 +493,38 @@ export function ProjectDetailView({
     return Array.from(set).sort();
   }, [pool]);
 
+  const pathOf = useMemo(() => buildPathOf(categories), [categories]);
+
+  // All nodes as full-path strings, for the typeahead.
+  const categoryPaths = useMemo(
+    () =>
+      categories
+        .map((c) => ({ id: c.id, path: pathOf(c.id) }))
+        .sort((a, b) => a.path.localeCompare(b.path)),
+    [categories, pathOf],
+  );
+
+  const categoryCtx = useMemo(
+    () => ({
+      categories,
+      pathOf,
+      paths: categoryPaths,
+      assign: changeItemCategory,
+      ensure: ensureCategory,
+      rename: renameCategory,
+      remove: removeCategory,
+    }),
+    [
+      categories,
+      pathOf,
+      categoryPaths,
+      changeItemCategory,
+      ensureCategory,
+      renameCategory,
+      removeCategory,
+    ],
+  );
+
   const visibleItems = useMemo(() => {
     let list = pool;
     if (creatorFilter) list = list.filter((it) => it.created_by === creatorFilter);
@@ -389,10 +532,36 @@ export function ProjectDetailView({
     if (tagFilter.length) {
       list = list.filter((it) => tagFilter.every((t) => it.tags?.includes(t)));
     }
+    // Area filter: the selected node and its whole subtree.
+    if (areaFilter) {
+      const ids = subtreeIdSet(categories, areaFilter);
+      list = list.filter((it) => it.category_id && ids.has(it.category_id));
+    }
     return list;
-  }, [pool, creatorFilter, tagFilter]);
+  }, [pool, creatorFilter, tagFilter, areaFilter, categories]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
+
+  // Items grouped by Area path (with an "Uncategorized" bucket), for the
+  // group-by-area list view. Sorted so parent paths read before their children.
+  const groupedByArea = useMemo(() => {
+    const map = new Map<string, Item[]>();
+    for (const it of visibleItems) {
+      const key = it.category_id ? pathOf(it.category_id) : "";
+      const list = map.get(key) ?? [];
+      list.push(it);
+      map.set(key, list);
+    }
+    const keys = Array.from(map.keys()).sort((a, b) => {
+      if (a === "") return 1;
+      if (b === "") return -1;
+      return a.localeCompare(b);
+    });
+    return keys.map((k) => ({
+      key: k || "Uncategorized",
+      items: (map.get(k) ?? []).sort((a, b) => a.position - b.position),
+    }));
+  }, [visibleItems, pathOf]);
 
   const openItem = useMemo(
     () => (openItemId ? (items?.find((it) => it.id === openItemId) ?? null) : null),
@@ -404,6 +573,7 @@ export function ProjectDetailView({
       <AssigneeProvider
         value={{ members, enabled: !isPrivate, onChange: changeItemAssignees }}
       >
+      <CategoryProvider value={categoryCtx}>
       {!showArchived ? (
       <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
         <AutoGrowTextarea
@@ -441,8 +611,9 @@ export function ProjectDetailView({
         ) : null}
 
         <div className="mt-2 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <TypeSegmented value={type} onChange={setType} />
+            <DraftCategory categoryId={newCategoryId} onChange={setNewCategoryId} />
             <button
               type="button"
               onClick={() => addFileRef.current?.click()}
@@ -549,6 +720,51 @@ export function ProjectDetailView({
               onClear={() => setTagFilter([])}
             />
           ) : null}
+          {!showArchived && categoryPaths.length > 0 ? (
+            <select
+              value={areaFilter ?? ""}
+              onChange={(e) => setAreaFilter(e.target.value || null)}
+              aria-label="Filter by area"
+              title="Filter by area (includes sub-areas)"
+              className="max-w-[12rem] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-sm text-[var(--color-muted)] outline-none focus:border-[var(--color-accent)]"
+            >
+              <option value="">All areas</option>
+              {categoryPaths.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.path}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {!showArchived && view === "list" ? (
+            <div className="inline-flex items-center gap-1.5 text-xs text-[var(--color-faint)]">
+              <span>Group</span>
+              <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5">
+                <ViewTab
+                  active={groupBy === "status"}
+                  onClick={() => setGroupBy("status")}
+                >
+                  Status
+                </ViewTab>
+                <ViewTab
+                  active={groupBy === "area"}
+                  onClick={() => setGroupBy("area")}
+                >
+                  Area
+                </ViewTab>
+              </div>
+            </div>
+          ) : null}
+          {!showArchived ? (
+            <button
+              type="button"
+              onClick={() => setShowCategoryManager(true)}
+              title="Manage areas"
+              className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1 text-sm text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              Areas
+            </button>
+          ) : null}
         </div>
         {creators.length > 0 ? (
           <CreatorFilter
@@ -582,6 +798,9 @@ export function ProjectDetailView({
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
           onItemChange={replaceItem}
+          areaGroups={
+            groupBy === "area" && !showArchived ? groupedByArea : undefined
+          }
         />
       ) : (
         <Board
@@ -613,6 +832,10 @@ export function ProjectDetailView({
           onItemChange={replaceItem}
         />
       ) : null}
+      {showCategoryManager ? (
+        <CategoryManager onClose={() => setShowCategoryManager(false)} />
+      ) : null}
+      </CategoryProvider>
       </AssigneeProvider>
     </ProjectKeyProvider>
   );

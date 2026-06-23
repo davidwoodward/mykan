@@ -141,6 +141,7 @@ export type CreateItemInput = {
   type?: unknown;
   body?: unknown;
   tags?: unknown;
+  category_id?: unknown;
 };
 
 /** Create an item in a project (mirrors POST /api/projects/[id]/items). */
@@ -180,6 +181,8 @@ export async function createItem(
       position,
       created_by: actor,
       updated_by: actor,
+      category_id:
+        typeof input.category_id === "string" ? input.category_id : null,
     })
     .select()
     .single();
