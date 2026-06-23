@@ -24,10 +24,11 @@ Three layers, and getting this exactly right matters:
 
 ## Header & nav
 
-- **Container width.** The project picker (home) uses `max-w-5xl`. The **project page is
-  intentionally wide** — header *and* content share a `sm:w-[95%]` container (narrow `px-3`
-  margins on mobile) so the multi-column Board uses the horizontal real estate. Keep the
-  header and main on the *same* width class so the nav doesn't shift relative to content.
+- **One app-shell width, every page.** This is an **app layout, not per-page** — every page's
+  header *and* content use the **same** `mx-auto w-full px-3 sm:w-[95%] sm:px-4` container
+  (wide so the multi-column Board has room; narrow margins on mobile). The home/projects page
+  and the project page must match exactly, so the wordmark/nav never shifts when you navigate.
+  When adding a page, reuse that same container — do not invent a per-page width.
 - **Toolbar is organised by function**, left→right: **View** (List/Board + Group Status/Area)
   · **Filter** (area, tags, creator) · **Actions** (refresh, Areas manager, archived), with a
   thin divider between the view and filter clusters. Actions sit on the right; the **Areas**
