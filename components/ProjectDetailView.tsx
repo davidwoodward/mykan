@@ -255,26 +255,35 @@ export function ProjectDetailView({
   );
 
   // Find-or-create the node at a "/"-path, adding any new nodes to local state.
+  // Calls are SERIALISED (chained) so rattling off siblings fast can't race —
+  // each create waits for the previous to commit, so a shared parent is reused
+  // (not duplicated) the moment the next path is submitted.
+  const ensureChain = useRef<Promise<unknown>>(Promise.resolve());
   const ensureCategory = useCallback(
-    async (path: string): Promise<Category | null> => {
-      try {
-        const res = await fetch(`/api/projects/${projectId}/categories`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const leaf = (await res.json()) as Category;
-        // The POST may have created ancestors too — re-pull the list to stay exact.
-        const list = await fetch(`/api/projects/${projectId}/categories`).then(
-          (r) => (r.ok ? (r.json() as Promise<Category[]>) : []),
-        );
-        setCategories(list);
-        return leaf;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to create area");
-        return null;
-      }
+    (path: string): Promise<Category | null> => {
+      const run = ensureChain.current.then(async (): Promise<Category | null> => {
+        try {
+          const res = await fetch(`/api/projects/${projectId}/categories`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ path }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const leaf = (await res.json()) as Category;
+          // The POST may have created ancestors too — re-pull to stay exact.
+          const list = await fetch(`/api/projects/${projectId}/categories`).then(
+            (r) => (r.ok ? (r.json() as Promise<Category[]>) : []),
+          );
+          setCategories(list);
+          return leaf;
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Failed to create area");
+          return null;
+        }
+      });
+      // Keep the chain alive even if a link rejects.
+      ensureChain.current = run.catch(() => {});
+      return run;
     },
     [projectId],
   );
@@ -666,16 +675,89 @@ export function ProjectDetailView({
         <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
-      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
-            <ViewTab active={view === "list"} onClick={() => setView("list")}>
-              List
-            </ViewTab>
-            <ViewTab active={view === "board"} onClick={() => setView("board")}>
-              Board
-            </ViewTab>
+      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {/* LEFT — how you look at items: view, then filters. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {/* View cluster */}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
+              <ViewTab active={view === "list"} onClick={() => setView("list")}>
+                List
+              </ViewTab>
+              <ViewTab active={view === "board"} onClick={() => setView("board")}>
+                Board
+              </ViewTab>
+            </div>
+            {!showArchived && view === "list" ? (
+              <div className="inline-flex items-center gap-1.5 text-xs text-[var(--color-faint)]">
+                <span>Group</span>
+                <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5">
+                  <ViewTab
+                    active={groupBy === "status"}
+                    onClick={() => setGroupBy("status")}
+                  >
+                    Status
+                  </ViewTab>
+                  <ViewTab
+                    active={groupBy === "area"}
+                    onClick={() => setGroupBy("area")}
+                  >
+                    Area
+                  </ViewTab>
+                </div>
+              </div>
+            ) : null}
           </div>
+
+          {/* Filter cluster */}
+          {allTags.length > 0 ||
+          creators.length > 0 ||
+          (!showArchived && categoryPaths.length > 0) ? (
+            <>
+              <span
+                className="hidden h-5 w-px self-center bg-[var(--color-line)] sm:block"
+                aria-hidden="true"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-[var(--color-faint)]">Filter</span>
+                {!showArchived && categoryPaths.length > 0 ? (
+                  <select
+                    value={areaFilter ?? ""}
+                    onChange={(e) => setAreaFilter(e.target.value || null)}
+                    aria-label="Filter by area"
+                    title="Filter by area (includes sub-areas)"
+                    className="max-w-[12rem] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-sm text-[var(--color-muted)] outline-none focus:border-[var(--color-accent)]"
+                  >
+                    <option value="">All areas</option>
+                    {categoryPaths.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.path}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {allTags.length > 0 ? (
+                  <TagFilterBar
+                    tags={allTags}
+                    active={tagFilter}
+                    onToggle={toggleTag}
+                    onClear={() => setTagFilter([])}
+                  />
+                ) : null}
+                {creators.length > 0 ? (
+                  <CreatorFilter
+                    creators={creators}
+                    value={creatorFilter}
+                    onChange={setCreatorFilter}
+                  />
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {/* RIGHT — actions you take: refresh, manage areas, archived. */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => void refetch()}
@@ -698,6 +780,32 @@ export function ProjectDetailView({
               <path d="M21 3v6h-6" />
             </svg>
           </button>
+          {!showArchived ? (
+            <button
+              type="button"
+              onClick={() => setShowCategoryManager(true)}
+              title="Manage areas"
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm transition-colors ${
+                showCategoryManager
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                  : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-ink)]"
+              }`}
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              </svg>
+              Areas
+            </button>
+          ) : null}
           {showArchived || archivedCount > 0 ? (
             <button
               type="button"
@@ -712,67 +820,7 @@ export function ProjectDetailView({
               {showArchived ? "← Active" : `Archived${archivedCount ? ` (${archivedCount})` : ""}`}
             </button>
           ) : null}
-          {allTags.length > 0 ? (
-            <TagFilterBar
-              tags={allTags}
-              active={tagFilter}
-              onToggle={toggleTag}
-              onClear={() => setTagFilter([])}
-            />
-          ) : null}
-          {!showArchived && categoryPaths.length > 0 ? (
-            <select
-              value={areaFilter ?? ""}
-              onChange={(e) => setAreaFilter(e.target.value || null)}
-              aria-label="Filter by area"
-              title="Filter by area (includes sub-areas)"
-              className="max-w-[12rem] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-sm text-[var(--color-muted)] outline-none focus:border-[var(--color-accent)]"
-            >
-              <option value="">All areas</option>
-              {categoryPaths.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.path}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          {!showArchived && view === "list" ? (
-            <div className="inline-flex items-center gap-1.5 text-xs text-[var(--color-faint)]">
-              <span>Group</span>
-              <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5">
-                <ViewTab
-                  active={groupBy === "status"}
-                  onClick={() => setGroupBy("status")}
-                >
-                  Status
-                </ViewTab>
-                <ViewTab
-                  active={groupBy === "area"}
-                  onClick={() => setGroupBy("area")}
-                >
-                  Area
-                </ViewTab>
-              </div>
-            </div>
-          ) : null}
-          {!showArchived ? (
-            <button
-              type="button"
-              onClick={() => setShowCategoryManager(true)}
-              title="Manage areas"
-              className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1 text-sm text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)]"
-            >
-              Areas
-            </button>
-          ) : null}
         </div>
-        {creators.length > 0 ? (
-          <CreatorFilter
-            creators={creators}
-            value={creatorFilter}
-            onChange={setCreatorFilter}
-          />
-        ) : null}
       </div>
 
       {/* The board/list gets its own scroll region (capped to the viewport) so
