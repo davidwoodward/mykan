@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
@@ -108,6 +109,7 @@ export function PathInput({
   onCancel,
   autoFocus = true,
   keepOpen = false,
+  initial = "",
 }: {
   paths: { id: string; path: string }[];
   onCommit: (path: string) => void;
@@ -119,20 +121,28 @@ export function PathInput({
    * can type the next sibling. Stays open; blur does not auto-create.
    */
   keepOpen?: boolean;
+  /** Seed the field (e.g. the item's current area, despaced) for editing. */
+  initial?: string;
 }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initial);
   const [hi, setHi] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const matches = useMemo(() => {
     const q = normPath(draft);
-    const list = q ? paths.filter((p) => normPath(p.path).includes(q)) : paths;
-    return list.slice(0, 8);
+    return q ? paths.filter((p) => normPath(p.path).includes(q)) : paths;
   }, [draft, paths]);
 
   // Builder mode: only suggest once something's typed (an empty Add field
   // showing every path was just noise). Picker mode drops down on focus.
   const showSuggestions =
     matches.length > 0 && (keepOpen ? draft.trim().length > 0 : true);
+
+  function scrollHiIntoView(n: number) {
+    (listRef.current?.children?.[n] as HTMLElement | undefined)?.scrollIntoView({
+      block: "nearest",
+    });
+  }
 
   function commit(path: string) {
     const p = path.trim();
@@ -157,10 +167,14 @@ export function PathInput({
       else onCancel();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHi((h) => Math.min(matches.length - 1, h + 1));
+      const n = Math.min(matches.length - 1, hi + 1);
+      setHi(n);
+      scrollHiIntoView(n);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHi((h) => Math.max(0, h - 1));
+      const n = Math.max(0, hi - 1);
+      setHi(n);
+      scrollHiIntoView(n);
     } else if (e.key === "Enter") {
       e.preventDefault();
       // Builder mode commits exactly what's typed; picker mode takes the
@@ -187,7 +201,10 @@ export function PathInput({
         className="w-44 rounded border border-[var(--color-line)] bg-transparent px-1.5 py-0.5 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
       />
       {showSuggestions ? (
-        <div className="absolute left-0 top-full z-30 mt-1 max-h-56 min-w-44 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg">
+        <div
+          ref={listRef}
+          className="absolute left-0 top-full z-30 mt-1 max-h-56 min-w-44 overflow-y-auto overscroll-contain rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg"
+        >
           {matches.map((m, i) => (
             <button
               key={m.id}
@@ -248,6 +265,7 @@ export function DraftCategory({
     return (
       <PathInput
         paths={ctx.paths}
+        initial={path.replace(/\s*\/\s*/g, "/")}
         onCommit={(p) => void commitPath(p)}
         onCancel={() => setEditing(false)}
       />
@@ -314,6 +332,7 @@ export function ItemCategory({
       <span className={className}>
         <PathInput
           paths={paths}
+          initial={path.replace(/\s*\/\s*/g, "/")}
           onCommit={(p) => void commitPath(p)}
           onCancel={() => setEditing(false)}
         />
