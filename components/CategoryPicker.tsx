@@ -174,7 +174,10 @@ export function PathInput({
         aria-label="Category path"
         className="w-44 rounded border border-[var(--color-line)] bg-transparent px-1.5 py-0.5 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
       />
-      {matches.length > 0 ? (
+      {/* Suggestions help the item picker choose an existing area. In the
+          builder (keepOpen) the whole tree is already shown above, so the
+          dropdown would be redundant noise — skip it there. */}
+      {!keepOpen && matches.length > 0 ? (
         <div className="absolute left-0 top-full z-30 mt-1 max-h-56 min-w-44 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg">
           {matches.map((m, i) => (
             <button
