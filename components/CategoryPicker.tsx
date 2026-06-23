@@ -386,7 +386,7 @@ export function ItemCategory({
           onClick={() => setEditing(true)}
           title="Change area"
           aria-label={`Area: ${path}. Click to change.`}
-          className="inline-flex max-w-[16rem] items-center gap-1 rounded bg-[var(--color-canvas)] px-1.5 py-0.5 text-[11px] text-[var(--color-muted)] ring-1 ring-inset ring-[var(--color-line)] transition-colors hover:text-[var(--color-ink)]"
+          className="inline-flex max-w-full items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent-ink)] transition-opacity hover:opacity-90"
         >
           <FolderIcon />
           <span className="truncate">{path}</span>
