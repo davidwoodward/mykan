@@ -120,10 +120,12 @@ export function ItemList({
   // Flat, draggable single list (the "Flat" grouping) — drag reorders the
   // global position shared with the board.
   if (flatItems) {
-    return <FlatList items={flatItems} {...rowProps} />;
+    return <DraggableRows items={flatItems} {...rowProps} />;
   }
 
-  // Either the status sections (default) or the Area groups.
+  // Either the status sections (default) or the Area groups. Each section is
+  // independently sortable (drag reorders within the group), except in the
+  // archived view.
   const sections = areaGroups
     ? areaGroups.map((g) => ({ title: g.key, items: g.items }))
     : ITEM_STATUSES.map((s) => ({ title: STATUS_LABEL[s], items: grouped[s] }));
@@ -138,41 +140,27 @@ export function ItemList({
               {section.items.length}
             </span>
           </h2>
-          {section.items.length === 0 ? (
-            <p className="rounded-md border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-faint)]">
-              Nothing here.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[var(--color-line)] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]">
-              {section.items.map((it) => (
-                <ItemRow
-                  key={it.id}
-                  item={it}
-                  onPatch={onPatch}
-                  archivedView={archivedView}
-                  onArchive={onArchive}
-                  onRestore={onRestore}
-                  onPurge={onPurge}
-                  onOpen={onOpen}
-                  onCreatorClick={onCreatorClick}
-                  activeCreator={activeCreator}
-                  onTagClick={onTagClick}
-                  activeTags={activeTags}
-                  tagSuggestions={tagSuggestions}
-                  onTagsChange={onTagsChange}
-                  onItemChange={onItemChange}
-                />
-              ))}
-            </ul>
-          )}
+          <DraggableRows
+            items={section.items}
+            sortable={!archivedView}
+            {...rowProps}
+          />
         </section>
       ))}
     </div>
   );
 }
 
-/** One draggable, position-ordered list of all (filtered) items. */
-function FlatList({ items, ...rowProps }: { items: Item[] } & RowProps) {
+/**
+ * A position-ordered list of rows. Sortable by default (drag a grip to reorder,
+ * editing the global position via computePosition); pass sortable={false} for a
+ * plain, non-draggable list (e.g. the archived view).
+ */
+function DraggableRows({
+  items,
+  sortable = true,
+  ...rowProps
+}: { items: Item[]; sortable?: boolean } & RowProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -197,6 +185,16 @@ function FlatList({ items, ...rowProps }: { items: Item[] } & RowProps) {
       <p className="rounded-md border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-faint)]">
         Nothing here.
       </p>
+    );
+  }
+
+  if (!sortable) {
+    return (
+      <ul className="divide-y divide-[var(--color-line)] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]">
+        {items.map((it) => (
+          <ItemRow key={it.id} item={it} {...rowProps} />
+        ))}
+      </ul>
     );
   }
 
