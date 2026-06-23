@@ -32,6 +32,12 @@ Three layers, and getting this exactly right matters:
   · **Filter** (area, tags, creator) · **Actions** (refresh, Areas manager, archived), with a
   thin divider between the view and filter clusters. Actions sit on the right; the **Areas**
   button is an action (folder icon, accent hover), not a filter.
+- **One global order; three lenses.** `items.position` is a single per-project order (not
+  per-status). The List groups it by **Status** or **Area**, or shows it **Flat** (one
+  draggable list, status as a pill); the **Board** groups the same order into status columns.
+  Dragging anywhere (a board card, a flat row) edits the one `position` via `computePosition`
+  (`lib/position.ts`), so all lenses stay in sync. Status is also a **filter** (multi-select),
+  independent of grouping. New items append to the global end.
 - **Project identity lives in the nav.** Wordmark on the left, then a back-to-projects `←`
   arrow *beside the project name* (not left of the wordmark), the project title, and the
   byline (creator · age); the description is the title's hover tooltip. Account controls
