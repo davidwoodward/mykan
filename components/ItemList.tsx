@@ -280,11 +280,19 @@ function ItemRow({
           </svg>
         </button>
       ) : null}
-      <StatusPill
-        status={item.status}
-        onCycle={() => void onPatch(item.id, { status: nextStatus(item.status) })}
-      />
-      <RefBadge number={item.number} className="mt-1.5" />
+      {/* Fixed-width columns so the ref and content line up across every row,
+          regardless of the status label's width. */}
+      <div className="w-[5.5rem] shrink-0">
+        <StatusPill
+          status={item.status}
+          onCycle={() =>
+            void onPatch(item.id, { status: nextStatus(item.status) })
+          }
+        />
+      </div>
+      <div className="w-16 shrink-0">
+        <RefBadge number={item.number} className="mt-1.5" />
+      </div>
       <div className="min-w-0 flex-1">
         <ClampedText
           text={text}

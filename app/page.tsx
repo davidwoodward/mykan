@@ -12,7 +12,7 @@ export default async function Home() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-2 text-sm">
+        <div className="mx-auto flex w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <Brand />
           <div className="flex items-center gap-4">
             <span className="text-[var(--color-faint)]">{session.user.email}</span>
@@ -22,7 +22,7 @@ export default async function Home() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
+      <main className="mx-auto w-full flex-1 px-3 pt-4 pb-12 sm:w-[95%] sm:px-4">
         <ProjectsView isOwner={isOwner(session.user.email)} viewerEmail={session.user.email} />
       </main>
     </div>
