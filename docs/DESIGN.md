@@ -24,8 +24,14 @@ Three layers, and getting this exactly right matters:
 
 ## Header & nav
 
-- **One sticky top nav, consistent width.** The project picker and the project page share
-  the same `max-w-5xl` container so the bar doesn't shift width when navigating between them.
+- **Container width.** The project picker (home) uses `max-w-5xl`. The **project page is
+  intentionally wide** — header *and* content share a `sm:w-[95%]` container (narrow `px-3`
+  margins on mobile) so the multi-column Board uses the horizontal real estate. Keep the
+  header and main on the *same* width class so the nav doesn't shift relative to content.
+- **Toolbar is organised by function**, left→right: **View** (List/Board + Group Status/Area)
+  · **Filter** (area, tags, creator) · **Actions** (refresh, Areas manager, archived), with a
+  thin divider between the view and filter clusters. Actions sit on the right; the **Areas**
+  button is an action (folder icon, accent hover), not a filter.
 - **Project identity lives in the nav.** Wordmark on the left, then a back-to-projects `←`
   arrow *beside the project name* (not left of the wordmark), the project title, and the
   byline (creator · age); the description is the title's hover tooltip. Account controls

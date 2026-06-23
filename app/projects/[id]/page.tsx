@@ -26,7 +26,7 @@ export default async function ProjectPage({
     // stays put while the board/list scrolls under it.
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-2 text-sm">
+        <div className="mx-auto flex w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <Brand />
             <Link
@@ -64,7 +64,7 @@ export default async function ProjectPage({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
+      <main className="mx-auto w-full flex-1 px-3 pt-4 pb-12 sm:w-[95%] sm:px-4">
         <ProjectDetailView
           projectId={project.id}
           projectKey={project.key}

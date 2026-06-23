@@ -98,11 +98,18 @@ export function PathInput({
   onCommit,
   onCancel,
   autoFocus = true,
+  keepOpen = false,
 }: {
   paths: { id: string; path: string }[];
   onCommit: (path: string) => void;
   onCancel: () => void;
   autoFocus?: boolean;
+  /**
+   * Builder mode (the Areas manager): Enter commits the *typed* path and, before
+   * the insert returns, immediately trims the field back to the last "/" so you
+   * can type the next sibling. Stays open; blur does not auto-create.
+   */
+  keepOpen?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [hi, setHi] = useState(0);
@@ -117,14 +124,25 @@ export function PathInput({
 
   function commit(path: string) {
     const p = path.trim();
-    if (p) onCommit(p);
-    else onCancel();
+    if (!p) {
+      if (!keepOpen) onCancel();
+      return;
+    }
+    onCommit(p);
+    if (keepOpen) {
+      // Trim back to (and including) the last "/" — synchronously, so the field
+      // is ready for the next sibling instantly, not after the insert round-trip.
+      const cut = p.lastIndexOf("/");
+      setDraft(cut >= 0 ? `${p.slice(0, cut + 1)} ` : "");
+      setHi(0);
+    }
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") {
       e.preventDefault();
-      onCancel();
+      if (keepOpen) setDraft("");
+      else onCancel();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setHi((h) => Math.min(matches.length - 1, h + 1));
@@ -133,7 +151,9 @@ export function PathInput({
       setHi((h) => Math.max(0, h - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      commit(matches[hi]?.path ?? draft);
+      // Builder mode commits exactly what's typed; picker mode takes the
+      // highlighted suggestion when there is one.
+      commit(keepOpen ? draft : (matches[hi]?.path ?? draft));
     }
   }
 
@@ -147,7 +167,9 @@ export function PathInput({
           setHi(0);
         }}
         onKeyDown={onKeyDown}
-        onBlur={() => commit(draft)}
+        onBlur={() => {
+          if (!keepOpen) commit(draft);
+        }}
         placeholder="Area / Sub-area…"
         aria-label="Category path"
         className="w-44 rounded border border-[var(--color-line)] bg-transparent px-1.5 py-0.5 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"

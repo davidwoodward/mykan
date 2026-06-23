@@ -103,6 +103,7 @@ export function CategoryManager({ onClose }: { onClose: () => void }) {
             <PathInput
               paths={ctx.paths}
               autoFocus={false}
+              keepOpen
               onCommit={(p) => void ctx.ensure(p)}
               onCancel={() => {}}
             />
