@@ -191,6 +191,24 @@ export function normalizeTags(input: unknown): string[] {
   return out;
 }
 
+/**
+ * Normalises an assignee list against the set of `allowed` member emails:
+ * trimmed, lowercased, deduped, and filtered to known members. Pure — callers
+ * pass `allowed` (e.g. `whitelist()`) so this stays usable from client code.
+ */
+export function normalizeAssignees(input: unknown, allowed: string[]): string[] {
+  if (!Array.isArray(input)) return [];
+  const ok = new Set(allowed.map((e) => e.trim().toLowerCase()));
+  const out: string[] = [];
+  for (const raw of input) {
+    if (typeof raw !== "string") continue;
+    const v = raw.trim().toLowerCase();
+    if (!v || !ok.has(v) || out.includes(v)) continue;
+    out.push(v);
+  }
+  return out;
+}
+
 /** Stable hue (0–359) derived from a tag's text, for consistent auto-colouring. */
 export function tagHue(tag: string): number {
   let h = 0;

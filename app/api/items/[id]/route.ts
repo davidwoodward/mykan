@@ -7,6 +7,7 @@ import {
   isItemStatus,
   isItemType,
   isRichDoc,
+  normalizeAssignees,
   normalizeTags,
   richDocText,
 } from "@/lib/types";
@@ -41,15 +42,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (Array.isArray(body.tags)) patch.tags = normalizeTags(body.tags);
   // Assignees: keep only known members (the whitelist), lowercased and deduped.
   if (Array.isArray(body.assignees)) {
-    const allowed = new Set(whitelist());
-    patch.assignees = [
-      ...new Set(
-        body.assignees
-          .filter((e): e is string => typeof e === "string")
-          .map((e) => e.trim().toLowerCase())
-          .filter((e) => allowed.has(e)),
-      ),
-    ];
+    patch.assignees = normalizeAssignees(body.assignees, whitelist());
   }
   // Category: must belong to this item's project (or null to un-file).
   if (typeof body.category_id === "string" || body.category_id === null) {

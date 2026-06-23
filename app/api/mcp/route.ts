@@ -9,6 +9,8 @@ import {
   createItem,
   getItem,
   listItems,
+  setItemArea,
+  setItemAssignees,
   setItemStatus,
   setItemTags,
 } from "@/lib/items-core";
@@ -20,7 +22,7 @@ function out<T>(r: CoreResult<T>) {
   return json(r.ok ? r.data : { error: r.error });
 }
 const actor = () => mcpActorEmail();
-const status = z.enum(["new", "in_progress", "done"]);
+const status = z.enum(["new", "in_progress", "blocked", "done"]);
 
 const handler = createMcpHandler(
   (server) => {
@@ -33,37 +35,45 @@ const handler = createMcpHandler(
 
     server.tool(
       "list_items",
-      "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column.",
+      "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees.",
       {
         project: z.string().describe("project name or id"),
-        status: status.optional().describe("new | in_progress | done"),
+        status: status.optional().describe("new | in_progress | blocked | done"),
       },
       async (a) => out(await listItems(getSupabase(), actor(), a.project, a.status)),
     );
 
     server.tool(
       "get_item",
-      "Get full detail for an item, including its body flattened to plain text (the task description).",
-      { item_id: z.string() },
-      async (a) => out(await getItem(getSupabase(), actor(), a.item_id)),
+      "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12).",
+      { item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12") },
+      async (a) => out(await getItem(getSupabase(), actor(), a.item)),
     );
 
     server.tool(
       "update_item_status",
-      "Move an item to a kanban column: new, in_progress, or done.",
-      { item_id: z.string(), status },
-      async (a) => out(await setItemStatus(getSupabase(), actor(), a.item_id, a.status)),
+      "Move an item to a kanban column: new, in_progress, blocked, or done. `item` is an id or KEY-N reference.",
+      { item: z.string().describe("item id or KEY-N reference"), status },
+      async (a) => out(await setItemStatus(getSupabase(), actor(), a.item, a.status)),
     );
 
     server.tool(
       "create_item",
-      "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. A longer `body` is appended as the first note.",
+      "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. A longer `body` is appended as the first note. Optionally file it under an `area` path (created if missing) and `assignees` (member emails).",
       {
         project: z.string().describe("project name or id"),
         name: z.string(),
         type: z.enum(["feature", "bug", "idea"]).optional(),
         body: z.string().optional().describe("longer description; appended as a note"),
         tags: z.array(z.string()).optional(),
+        area: z
+          .string()
+          .optional()
+          .describe("Area path, e.g. 'coach / home' (created if missing)"),
+        assignees: z
+          .array(z.string())
+          .optional()
+          .describe("member emails to assign"),
       },
       async (a) => {
         const sb = getSupabase();
@@ -71,26 +81,51 @@ const handler = createMcpHandler(
           name: a.name,
           type: a.type,
           tags: a.tags,
+          area: a.area,
+          assignees: a.assignees,
         });
-        if (created.ok && a.body && a.body.trim()) {
-          return out(await appendItemNote(sb, actor(), created.data.id, a.body.trim()));
+        if (!created.ok) return out(created);
+        if (a.body && a.body.trim()) {
+          const noted = await appendItemNote(sb, actor(), created.data.id, a.body.trim());
+          if (!noted.ok) return out(noted);
         }
-        return out(created);
+        // Return the full detail (ref, area, assignees) of the created item.
+        return out(await getItem(sb, actor(), created.data.id));
       },
     );
 
     server.tool(
       "append_item_note",
-      "Append a progress note paragraph to an item's body (e.g. 'Fixed in PR #7').",
-      { item_id: z.string(), note: z.string() },
-      async (a) => out(await appendItemNote(getSupabase(), actor(), a.item_id, a.note)),
+      "Append a progress note paragraph to an item's body (e.g. 'Fixed in PR #7'). `item` is an id or KEY-N reference.",
+      { item: z.string().describe("item id or KEY-N reference"), note: z.string() },
+      async (a) => out(await appendItemNote(getSupabase(), actor(), a.item, a.note)),
     );
 
     server.tool(
       "set_item_tags",
-      "Replace an item's tags with the given list (normalized lowercase).",
-      { item_id: z.string(), tags: z.array(z.string()) },
-      async (a) => out(await setItemTags(getSupabase(), actor(), a.item_id, a.tags)),
+      "Replace an item's tags with the given list (normalized lowercase). `item` is an id or KEY-N reference.",
+      { item: z.string().describe("item id or KEY-N reference"), tags: z.array(z.string()) },
+      async (a) => out(await setItemTags(getSupabase(), actor(), a.item, a.tags)),
+    );
+
+    server.tool(
+      "set_item_area",
+      "File an item under an Area. `area` is a '/'-separated path (e.g. 'coach / home', created if missing), or empty to un-file. `item` is an id or KEY-N reference.",
+      {
+        item: z.string().describe("item id or KEY-N reference"),
+        area: z.string().describe("Area path, e.g. 'coach / home'; empty to un-file"),
+      },
+      async (a) => out(await setItemArea(getSupabase(), actor(), a.item, a.area)),
+    );
+
+    server.tool(
+      "set_item_assignees",
+      "Replace an item's assignees with the given member emails (non-members are dropped). `item` is an id or KEY-N reference.",
+      {
+        item: z.string().describe("item id or KEY-N reference"),
+        assignees: z.array(z.string()).describe("member emails to assign"),
+      },
+      async (a) => out(await setItemAssignees(getSupabase(), actor(), a.item, a.assignees)),
     );
   },
   undefined,
