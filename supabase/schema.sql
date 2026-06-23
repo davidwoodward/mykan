@@ -105,6 +105,28 @@ create trigger items_set_number
   before insert on items
   for each row execute function set_item_number();
 
+-- Per-project hierarchical categories (Areas). A node references its parent
+-- (depth capped app-side at 5); an item is filed at one node. Renaming ripples
+-- via the id reference; filtering can include a node's whole subtree.
+-- Migration: supabase/migrations/2026-06-22-categories.sql
+create table if not exists categories (
+  id uuid primary key default uuid_generate_v4(),
+  project_id uuid not null references projects(id) on delete cascade,
+  parent_id uuid references categories(id) on delete cascade,
+  name text not null,
+  position double precision not null default 1024,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by text,
+  updated_by text
+);
+create index if not exists categories_project_idx on categories (project_id);
+create index if not exists categories_parent_idx on categories (parent_id);
+
+alter table items add column if not exists category_id uuid
+  references categories(id) on delete set null;
+create index if not exists items_category_idx on items (category_id);
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
+import { categoryInProject } from "@/lib/categories-core";
 import {
   isItemStatus,
   isItemType,
@@ -29,6 +30,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     tags?: unknown;
     assignees?: unknown;
     archived?: unknown;
+    category_id?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (isItemType(body.type)) patch.type = body.type;
@@ -48,6 +50,21 @@ export async function PATCH(req: Request, { params }: Ctx) {
           .filter((e) => allowed.has(e)),
       ),
     ];
+  }
+  // Category: must belong to this item's project (or null to un-file).
+  if (typeof body.category_id === "string" || body.category_id === null) {
+    const { data: itemRow } = await getSupabase()
+      .from("items")
+      .select("project_id")
+      .eq("id", id)
+      .maybeSingle();
+    const projectId = (itemRow as { project_id: string } | null)?.project_id;
+    if (
+      projectId &&
+      (await categoryInProject(getSupabase(), projectId, body.category_id))
+    ) {
+      patch.category_id = body.category_id;
+    }
   }
   // Soft delete / restore.
   if (typeof body.archived === "boolean") {
