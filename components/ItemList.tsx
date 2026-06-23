@@ -1,6 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { computePosition } from "@/lib/position";
 import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
@@ -24,6 +40,30 @@ type PatchFn = (
   patch: Partial<Pick<Item, "name" | "type" | "status" | "position">>,
 ) => Promise<void>;
 
+type RowProps = {
+  onPatch: PatchFn;
+  archivedView?: boolean;
+  onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
+  onOpen: (item: Item) => void;
+  onCreatorClick?: (email: string) => void;
+  activeCreator?: string | null;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
+  tagSuggestions?: string[];
+  onTagsChange?: (id: string, tags: string[]) => void;
+  onItemChange: (item: Item) => void;
+};
+
+/** The drag bits passed to a row when it lives in the flat sortable list. */
+type SortableBits = {
+  setNodeRef: (el: HTMLElement | null) => void;
+  style: CSSProperties;
+  handleProps: Record<string, unknown>;
+  isDragging: boolean;
+};
+
 export function ItemList({
   grouped,
   onPatch,
@@ -40,6 +80,7 @@ export function ItemList({
   onTagsChange,
   onItemChange,
   areaGroups,
+  flatItems,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -57,7 +98,31 @@ export function ItemList({
   onItemChange: (item: Item) => void;
   /** When set, render these Area groups instead of the status sections. */
   areaGroups?: { key: string; items: Item[] }[];
+  /** When set, render one flat, draggable list (ordered by position). */
+  flatItems?: Item[];
 }) {
+  const rowProps = {
+    onPatch,
+    archivedView,
+    onArchive,
+    onRestore,
+    onPurge,
+    onOpen,
+    onCreatorClick,
+    activeCreator,
+    onTagClick,
+    activeTags,
+    tagSuggestions,
+    onTagsChange,
+    onItemChange,
+  };
+
+  // Flat, draggable single list (the "Flat" grouping) — drag reorders the
+  // global position shared with the board.
+  if (flatItems) {
+    return <FlatList items={flatItems} {...rowProps} />;
+  }
+
   // Either the status sections (default) or the Area groups.
   const sections = areaGroups
     ? areaGroups.map((g) => ({ title: g.key, items: g.items }))
@@ -106,8 +171,75 @@ export function ItemList({
   );
 }
 
+/** One draggable, position-ordered list of all (filtered) items. */
+function FlatList({ items, ...rowProps }: { items: Item[] } & RowProps) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((it) => it.id === active.id);
+    const newIndex = items.findIndex((it) => it.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    const pos = reordered.findIndex((it) => it.id === active.id);
+    const position = computePosition(
+      reordered[pos - 1]?.position,
+      reordered[pos + 1]?.position,
+    );
+    void rowProps.onPatch(String(active.id), { position });
+  }
+
+  if (items.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-[var(--color-line)] px-3 py-4 text-sm text-[var(--color-faint)]">
+        Nothing here.
+      </p>
+    );
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={onDragEnd}
+    >
+      <SortableContext
+        items={items.map((it) => it.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <ul className="divide-y divide-[var(--color-line)] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]">
+          {items.map((it) => (
+            <SortableItemRow key={it.id} item={it} {...rowProps} />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableItemRow({ item, ...rowProps }: { item: Item } & RowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id });
+  return (
+    <ItemRow
+      item={item}
+      {...rowProps}
+      sortable={{
+        setNodeRef,
+        style: { transform: CSS.Transform.toString(transform), transition },
+        handleProps: { ...attributes, ...listeners },
+        isDragging,
+      }}
+    />
+  );
+}
+
 function ItemRow({
   item,
+  sortable,
   onPatch,
   archivedView,
   onArchive,
@@ -121,26 +253,35 @@ function ItemRow({
   tagSuggestions,
   onTagsChange,
   onItemChange,
-}: {
-  item: Item;
-  onPatch: PatchFn;
-  archivedView?: boolean;
-  onArchive: (id: string) => void;
-  onRestore: (id: string) => void;
-  onPurge: (id: string) => void;
-  onOpen: (item: Item) => void;
-  onCreatorClick?: (email: string) => void;
-  activeCreator?: string | null;
-  onTagClick?: (tag: string) => void;
-  activeTags?: string[];
-  tagSuggestions?: string[];
-  onTagsChange?: (id: string, tags: string[]) => void;
-  onItemChange: (item: Item) => void;
-}) {
+}: { item: Item; sortable?: SortableBits } & RowProps) {
   const text = richDocText(item.body);
 
   return (
-    <li className="group flex items-start gap-3 px-3 py-2.5">
+    <li
+      ref={sortable?.setNodeRef}
+      style={sortable?.style}
+      className={`group flex items-start gap-3 px-3 py-2.5 ${
+        sortable?.isDragging ? "opacity-50" : ""
+      }`}
+    >
+      {sortable ? (
+        <button
+          type="button"
+          {...sortable.handleProps}
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+          className="mt-1 shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="9" cy="6" r="1.4" />
+            <circle cx="15" cy="6" r="1.4" />
+            <circle cx="9" cy="12" r="1.4" />
+            <circle cx="15" cy="12" r="1.4" />
+            <circle cx="9" cy="18" r="1.4" />
+            <circle cx="15" cy="18" r="1.4" />
+          </svg>
+        </button>
+      ) : null}
       <StatusPill
         status={item.status}
         onCycle={() => void onPatch(item.id, { status: nextStatus(item.status) })}

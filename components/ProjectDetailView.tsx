@@ -22,6 +22,7 @@ import { localPart } from "@/lib/format";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
+  STATUS_LABEL,
   TYPE_LABEL,
   type Category,
   type Item,
@@ -68,7 +69,8 @@ export function ProjectDetailView({
   const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [areaFilter, setAreaFilter] = useState<string | null>(null);
-  const [groupBy, setGroupBy] = useState<"status" | "area">("status");
+  const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">("status");
+  const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   useEffect(() => {
@@ -546,10 +548,20 @@ export function ProjectDetailView({
       const ids = subtreeIdSet(categories, areaFilter);
       list = list.filter((it) => it.category_id && ids.has(it.category_id));
     }
+    // Status filter (multi-select): empty = all.
+    if (statusFilter.length) {
+      list = list.filter((it) => statusFilter.includes(it.status));
+    }
     return list;
-  }, [pool, creatorFilter, tagFilter, areaFilter, categories]);
+  }, [pool, creatorFilter, tagFilter, areaFilter, statusFilter, categories]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
+
+  // The flat, draggable list: every visible item by global position.
+  const flatItems = useMemo(
+    () => [...visibleItems].sort((a, b) => a.position - b.position),
+    [visibleItems],
+  );
 
   // Items grouped by Area path (with an "Uncategorized" bucket), for the
   // group-by-area list view. Sorted so parent paths read before their children.
@@ -704,22 +716,50 @@ export function ProjectDetailView({
                   >
                     Area
                   </ViewTab>
+                  <ViewTab
+                    active={groupBy === "flat"}
+                    onClick={() => setGroupBy("flat")}
+                  >
+                    Flat
+                  </ViewTab>
                 </div>
               </div>
             ) : null}
           </div>
 
-          {/* Filter cluster */}
-          {allTags.length > 0 ||
-          creators.length > 0 ||
-          (!showArchived && categoryPaths.length > 0) ? (
-            <>
-              <span
-                className="hidden h-5 w-px self-center bg-[var(--color-line)] sm:block"
-                aria-hidden="true"
-              />
+          {/* Filter cluster — status filter is always available. */}
+          <>
+            <span
+              className="hidden h-5 w-px self-center bg-[var(--color-line)] sm:block"
+              aria-hidden="true"
+            />
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-[var(--color-faint)]">Filter</span>
+                <div className="inline-flex items-center gap-1">
+                  {ITEM_STATUSES.map((s) => {
+                    const on = statusFilter.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() =>
+                          setStatusFilter((cur) =>
+                            on ? cur.filter((x) => x !== s) : [...cur, s],
+                          )
+                        }
+                        aria-pressed={on}
+                        title={`Filter: ${STATUS_LABEL[s]}`}
+                        className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                          on
+                            ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                            : "border-[var(--color-line)] text-[var(--color-faint)] hover:text-[var(--color-muted)]"
+                        }`}
+                      >
+                        {STATUS_LABEL[s]}
+                      </button>
+                    );
+                  })}
+                </div>
                 {!showArchived && categoryPaths.length > 0 ? (
                   <select
                     value={areaFilter ?? ""}
@@ -752,8 +792,7 @@ export function ProjectDetailView({
                   />
                 ) : null}
               </div>
-            </>
-          ) : null}
+          </>
         </div>
 
         {/* RIGHT — actions you take: refresh, manage areas, archived. */}
@@ -849,6 +888,7 @@ export function ProjectDetailView({
           areaGroups={
             groupBy === "area" && !showArchived ? groupedByArea : undefined
           }
+          flatItems={groupBy === "flat" && !showArchived ? flatItems : undefined}
         />
       ) : (
         <Board

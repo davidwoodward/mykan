@@ -25,6 +25,7 @@ import { ClampedText } from "@/components/ClampedText";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
+import { computePosition } from "@/lib/position";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -326,9 +327,3 @@ function Card({
   );
 }
 
-function computePosition(before: number | undefined, after: number | undefined): number {
-  if (before == null && after == null) return 1024;
-  if (before == null) return (after as number) - 1024;
-  if (after == null) return before + 1024;
-  return (before + after) / 2;
-}

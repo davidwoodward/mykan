@@ -160,11 +160,13 @@ export async function createItem(
     : paragraphDoc(typeof input.name === "string" ? input.name : "");
   const name = richDocText(doc);
   if (!name) return coreErr("name required", 400);
+  // position is a GLOBAL per-project order (Design A); append to the end of the
+  // whole project so a new item lands at the bottom of the flat list (and, since
+  // it's the highest position, still at the bottom of its status column).
   const { data: tail } = await sb
     .from("items")
     .select("position")
     .eq("project_id", proj.data.id)
-    .eq("status", "new")
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
