@@ -300,16 +300,23 @@ function ItemRow({
           clamp={item.status === "done"}
           className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6 transition-colors hover:text-[var(--color-accent)]"
         />
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <InlineTags
-            tags={item.tags}
-            suggestions={tagSuggestions ?? []}
-            onChange={(tags) => onTagsChange?.(item.id, tags)}
-            onTagClick={onTagClick}
-            activeTags={activeTags}
-          />
-          <ItemAssignees item={item} />
-          <ItemCategory item={item} />
+        {/* Area is the leftmost property in a fixed-width column (single colour,
+            not per-tag varying), then — a decent gap later — tags, then
+            assignees, so those line up across rows. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          <div className="w-60 shrink-0">
+            <ItemCategory item={item} />
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <InlineTags
+              tags={item.tags}
+              suggestions={tagSuggestions ?? []}
+              onChange={(tags) => onTagsChange?.(item.id, tags)}
+              onTagClick={onTagClick}
+              activeTags={activeTags}
+            />
+            <ItemAssignees item={item} />
+          </div>
         </div>
         <Byline
           createdBy={item.created_by}
