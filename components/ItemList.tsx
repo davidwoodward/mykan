@@ -7,6 +7,7 @@ import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
 import { RefBadge } from "@/components/RefBadge";
+import { ItemAssignees } from "@/components/AssigneePicker";
 import {
   ITEM_STATUSES,
   ITEM_TYPES,
@@ -143,13 +144,16 @@ function ItemRow({
           clamp={item.status === "done"}
           className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6 transition-colors hover:text-[var(--color-accent)]"
         />
-        <InlineTags
-          tags={item.tags}
-          suggestions={tagSuggestions ?? []}
-          onChange={(tags) => onTagsChange?.(item.id, tags)}
-          onTagClick={onTagClick}
-          activeTags={activeTags}
-        />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <InlineTags
+            tags={item.tags}
+            suggestions={tagSuggestions ?? []}
+            onChange={(tags) => onTagsChange?.(item.id, tags)}
+            onTagClick={onTagClick}
+            activeTags={activeTags}
+          />
+          <ItemAssignees item={item} />
+        </div>
         <Byline
           createdBy={item.created_by}
           updatedBy={item.updated_by}
@@ -214,6 +218,7 @@ function StatusPill({
     new: "text-[var(--color-muted)] bg-[var(--color-canvas)] ring-[var(--color-line-strong)]",
     in_progress:
       "text-[var(--color-accent-ink)] bg-[var(--color-accent-soft)] ring-[var(--color-line-strong)]",
+    blocked: "text-[var(--color-bug)] bg-[var(--color-bug-bg)] ring-[var(--color-bug-line)]",
     done: "text-[var(--color-feature)] bg-[var(--color-feature-bg)] ring-[var(--color-feature-line)]",
   };
   return (

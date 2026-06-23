@@ -23,6 +23,7 @@ import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
 import { RefBadge } from "@/components/RefBadge";
+import { ItemAssignees } from "@/components/AssigneePicker";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -114,7 +115,7 @@ export function Board({
 
   return (
     <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={onDragEnd}>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
         {ITEM_STATUSES.map((status) => (
           <Column
             key={status}
@@ -264,13 +265,16 @@ function Card({
         dragProps={{ ...attributes, ...listeners }}
         className="cursor-pointer whitespace-pre-wrap break-words leading-5 transition-colors hover:text-[var(--color-accent)] active:cursor-grabbing"
       />
-      <InlineTags
-        tags={item.tags}
-        suggestions={tagSuggestions ?? []}
-        onChange={(tags) => onTagsChange?.(item.id, tags)}
-        onTagClick={onTagClick}
-        activeTags={activeTags}
-      />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <InlineTags
+          tags={item.tags}
+          suggestions={tagSuggestions ?? []}
+          onChange={(tags) => onTagsChange?.(item.id, tags)}
+          onTagClick={onTagClick}
+          activeTags={activeTags}
+        />
+        <ItemAssignees item={item} />
+      </div>
       <Byline
         createdBy={item.created_by}
         updatedBy={item.updated_by}

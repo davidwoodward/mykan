@@ -4,7 +4,12 @@ import Google from "next-auth/providers/google";
 const DEFAULT_WHITELIST = ["dawoodward@gmail.com", "matthewl@experiencealign.com"];
 const DEFAULT_OWNER = "dawoodward@gmail.com";
 
-function whitelist(): string[] {
+/**
+ * The whitelisted member emails (lowercased). These are the people who can sign
+ * in, and — for shared projects — the candidate assignees. Override with the
+ * AUTH_ALLOWED_EMAILS env var (comma-separated).
+ */
+export function whitelist(): string[] {
   const fromEnv = process.env.AUTH_ALLOWED_EMAILS;
   const raw = fromEnv ? fromEnv.split(",") : DEFAULT_WHITELIST;
   return raw.map((e) => e.trim().toLowerCase()).filter(Boolean);

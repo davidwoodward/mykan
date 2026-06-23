@@ -1,5 +1,5 @@
 export type ItemType = "feature" | "bug" | "idea";
-export type ItemStatus = "new" | "in_progress" | "done";
+export type ItemStatus = "new" | "in_progress" | "blocked" | "done";
 
 /**
  * A Tiptap/ProseMirror document. We only ever read it back into the editor or
@@ -131,6 +131,8 @@ export interface Item {
   position: number;
   body: RichDoc | null;
   tags: string[];
+  /** Member emails assigned to this item (shared projects only). */
+  assignees: string[];
   attachments: Attachment[];
   archived_at: string | null;
   created_at: string;
@@ -201,11 +203,17 @@ export function tagStyle(tag: string): {
 }
 
 export const ITEM_TYPES: readonly ItemType[] = ["feature", "bug", "idea"] as const;
-export const ITEM_STATUSES: readonly ItemStatus[] = ["new", "in_progress", "done"] as const;
+export const ITEM_STATUSES: readonly ItemStatus[] = [
+  "new",
+  "in_progress",
+  "blocked",
+  "done",
+] as const;
 
 export const STATUS_LABEL: Record<ItemStatus, string> = {
-  new: "New",
+  new: "Not started",
   in_progress: "In Progress",
+  blocked: "Blocked",
   done: "Done",
 };
 

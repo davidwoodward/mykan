@@ -14,11 +14,13 @@ import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
 import { ProjectKeyProvider } from "@/components/RefBadge";
+import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
 import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { uploadAttachment } from "@/lib/client-attachments";
 import { localPart } from "@/lib/format";
 import {
+  ITEM_STATUSES,
   ITEM_TYPES,
   TYPE_LABEL,
   type Item,
@@ -32,9 +34,13 @@ type View = "list" | "board";
 export function ProjectDetailView({
   projectId,
   projectKey,
+  members,
+  isPrivate,
 }: {
   projectId: string;
   projectKey: string | null;
+  members: string[];
+  isPrivate: boolean;
 }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,6 +181,29 @@ export function ProjectDetailView({
     setItems((prev) =>
       prev ? prev.map((it) => (it.id === updated.id ? updated : it)) : prev,
     );
+  }, []);
+
+  // Fire-and-forget inline assignee edits from rows/cards (optimistic).
+  const changeItemAssignees = useCallback((id: string, assignees: string[]) => {
+    setItems((prev) =>
+      prev ? prev.map((it) => (it.id === id ? { ...it, assignees } : it)) : prev,
+    );
+    void (async () => {
+      try {
+        const res = await fetch(`/api/items/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ assignees }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const updated = (await res.json()) as Item;
+        setItems((prev) =>
+          prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to update assignees");
+      }
+    })();
   }, []);
 
   const toggleTag = useCallback((tag: string) => {
@@ -372,6 +401,9 @@ export function ProjectDetailView({
 
   return (
     <ProjectKeyProvider value={projectKey}>
+      <AssigneeProvider
+        value={{ members, enabled: !isPrivate, onChange: changeItemAssignees }}
+      >
       {!showArchived ? (
       <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
         <AutoGrowTextarea
@@ -581,6 +613,7 @@ export function ProjectDetailView({
           onItemChange={replaceItem}
         />
       ) : null}
+      </AssigneeProvider>
     </ProjectKeyProvider>
   );
 }
@@ -676,7 +709,9 @@ async function uploadFilesTo(itemId: string, files: File[]): Promise<Item | null
 }
 
 function groupByStatus(items: Item[]): Record<ItemStatus, Item[]> {
-  const result: Record<ItemStatus, Item[]> = { new: [], in_progress: [], done: [] };
+  const result = Object.fromEntries(
+    ITEM_STATUSES.map((s) => [s, [] as Item[]]),
+  ) as Record<ItemStatus, Item[]>;
   for (const it of items) result[it.status].push(it);
   for (const k of Object.keys(result) as ItemStatus[]) {
     result[k].sort((a, b) => a.position - b.position);

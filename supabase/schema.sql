@@ -18,9 +18,11 @@ exception when duplicate_object then null;
 end $$;
 
 do $$ begin
-  create type item_status as enum ('new', 'in_progress', 'done');
+  create type item_status as enum ('new', 'in_progress', 'blocked', 'done');
 exception when duplicate_object then null;
 end $$;
+-- 'blocked' was added after the type already existed on deployed DBs:
+alter type item_status add value if not exists 'blocked' before 'done';
 
 create table if not exists items (
   id uuid primary key default uuid_generate_v4(),
@@ -60,6 +62,11 @@ alter table items add column if not exists body jsonb;
 -- separate tags table. GIN index supports tag-membership filters.
 alter table items add column if not exists tags text[] not null default '{}';
 create index if not exists items_tags_idx on items using gin (tags);
+
+-- Assignees: member emails (the whitelist). Shown in the UI only on shared
+-- (non-private) projects. GIN index supports "assigned to X" filters.
+alter table items add column if not exists assignees text[] not null default '{}';
+create index if not exists items_assignees_idx on items using gin (assignees);
 
 -- Soft delete: the Delete action sets archived_at; archived items are hidden from
 -- the normal list/board and shown only in the Archived view, where they can be

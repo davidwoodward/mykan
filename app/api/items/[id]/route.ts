@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { denyItemAccess, requireSession } from "@/lib/api-auth";
+import { whitelist } from "@/lib/auth";
 import {
   isItemStatus,
   isItemType,
@@ -26,6 +27,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     position?: unknown;
     body?: unknown;
     tags?: unknown;
+    assignees?: unknown;
     archived?: unknown;
   };
   const patch: Record<string, unknown> = {};
@@ -35,6 +37,18 @@ export async function PATCH(req: Request, { params }: Ctx) {
     patch.position = body.position;
   }
   if (Array.isArray(body.tags)) patch.tags = normalizeTags(body.tags);
+  // Assignees: keep only known members (the whitelist), lowercased and deduped.
+  if (Array.isArray(body.assignees)) {
+    const allowed = new Set(whitelist());
+    patch.assignees = [
+      ...new Set(
+        body.assignees
+          .filter((e): e is string => typeof e === "string")
+          .map((e) => e.trim().toLowerCase())
+          .filter((e) => allowed.has(e)),
+      ),
+    ];
+  }
   // Soft delete / restore.
   if (typeof body.archived === "boolean") {
     patch.archived_at = body.archived ? new Date().toISOString() : null;

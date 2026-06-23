@@ -1,4 +1,4 @@
-import { auth, isOwner } from "@/lib/auth";
+import { auth, isOwner, whitelist } from "@/lib/auth";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
@@ -65,7 +65,12 @@ export default async function ProjectPage({
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-4 pb-12">
-        <ProjectDetailView projectId={project.id} projectKey={project.key} />
+        <ProjectDetailView
+          projectId={project.id}
+          projectKey={project.key}
+          members={whitelist()}
+          isPrivate={project.is_private}
+        />
       </main>
     </div>
   );
