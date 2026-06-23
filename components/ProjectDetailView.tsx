@@ -942,13 +942,36 @@ function TagFilterBar({
 }) {
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
+  const [hi, setHi] = useState(0);
 
   const query = q.trim().toLowerCase();
-  const matches = query
-    ? tags.filter((t) => !active.includes(t) && t.includes(query))
-    : [];
+  // Drop down on focus: with no query, show every not-yet-active tag; typing
+  // narrows by substring.
+  const matches = tags.filter((t) => !active.includes(t) && t.includes(query));
   const shown = matches.slice(0, 10);
   const more = matches.length - shown.length;
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHi((h) => Math.min(shown.length - 1, h + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHi((h) => Math.max(0, h - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = shown[hi];
+      if (pick) {
+        onToggle(pick);
+        setQ("");
+        setHi(0);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setFocused(false);
+      (e.target as HTMLInputElement).blur();
+    }
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -961,16 +984,20 @@ function TagFilterBar({
       <div className="relative">
         <input
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setHi(0);
+          }}
+          onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
           placeholder={active.length ? "+ tag" : "filter by tag…"}
           aria-label="Filter by tag"
           className="h-6 w-28 rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-2 text-xs outline-none focus:border-[var(--color-accent)]"
         />
-        {focused && query && shown.length > 0 ? (
+        {focused && shown.length > 0 ? (
           <div className="absolute left-0 top-7 z-20 flex max-h-56 w-48 flex-col gap-1 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-md">
-            {shown.map((t) => (
+            {shown.map((t, i) => (
               <button
                 key={t}
                 type="button"
@@ -978,8 +1005,12 @@ function TagFilterBar({
                   e.preventDefault();
                   onToggle(t);
                   setQ("");
+                  setHi(0);
                 }}
-                className="text-left"
+                onMouseEnter={() => setHi(i)}
+                className={`flex rounded text-left ${
+                  i === hi ? "bg-[var(--color-accent-soft)]" : ""
+                }`}
               >
                 <Tag label={t} />
               </button>
