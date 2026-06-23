@@ -81,6 +81,20 @@ export function subtreeIdSet(cats: Category[], rootId: string): Set<string> {
   return out;
 }
 
+function Spinner() {
+  return (
+    <svg
+      className="h-3 w-3 shrink-0 animate-spin text-[var(--color-muted)]"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function FolderIcon() {
   return (
     <svg
@@ -112,7 +126,8 @@ export function PathInput({
   initial = "",
 }: {
   paths: { id: string; path: string }[];
-  onCommit: (path: string) => void;
+  /** id is set when an existing suggestion was picked (skip the create round-trip). */
+  onCommit: (path: string, id?: string) => void;
   onCancel: () => void;
   autoFocus?: boolean;
   /**
@@ -144,13 +159,13 @@ export function PathInput({
     });
   }
 
-  function commit(path: string) {
+  function commit(path: string, id?: string) {
     const p = path.trim();
     if (!p) {
       if (!keepOpen) onCancel();
       return;
     }
-    onCommit(p);
+    onCommit(p, id);
     if (keepOpen) {
       // Trim back to (and including) the last "/" — synchronously, so the field
       // is ready for the next sibling instantly, not after the insert round-trip.
@@ -178,8 +193,9 @@ export function PathInput({
     } else if (e.key === "Enter") {
       e.preventDefault();
       // Builder mode commits exactly what's typed; picker mode takes the
-      // highlighted suggestion when there is one.
-      commit(keepOpen ? draft : (matches[hi]?.path ?? draft));
+      // highlighted suggestion (with its id) when there is one.
+      const sel = keepOpen ? undefined : matches[hi];
+      commit(keepOpen ? draft : (sel?.path ?? draft), sel?.id);
     }
   }
 
@@ -218,7 +234,7 @@ export function PathInput({
                   setDraft(`${m.path} / `);
                   setHi(0);
                 } else {
-                  commit(m.path);
+                  commit(m.path, m.id);
                 }
               }}
               onMouseEnter={() => setHi(i)}
@@ -255,10 +271,14 @@ export function DraftCategory({
   if (!ctx) return null;
   const path = ctx.pathOf(categoryId);
 
-  async function commitPath(p: string) {
+  async function commitPath(p: string, id?: string) {
+    setEditing(false);
+    if (id) {
+      onChange(id);
+      return;
+    }
     const cat = await ctx!.ensure(p);
     onChange(cat ? cat.id : null);
-    setEditing(false);
   }
 
   if (editing) {
@@ -266,7 +286,7 @@ export function DraftCategory({
       <PathInput
         paths={ctx.paths}
         initial={path.replace(/\s*\/\s*/g, "/")}
-        onCommit={(p) => void commitPath(p)}
+        onCommit={(p, id) => void commitPath(p, id)}
         onCancel={() => setEditing(false)}
       />
     );
@@ -317,14 +337,23 @@ export function ItemCategory({
 }) {
   const ctx = useCategories();
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   if (!ctx) return null;
   const { pathOf, paths, assign, ensure } = ctx;
   const path = pathOf(item.category_id);
 
-  async function commitPath(p: string) {
+  async function commitPath(p: string, id?: string) {
+    setEditing(false);
+    // Picked an existing area → assign by id (optimistic = instant). Only a
+    // genuinely new typed path needs the create round-trip, with a spinner.
+    if (id) {
+      assign(item.id, id);
+      return;
+    }
+    setSaving(true);
     const cat = await ensure(p);
     if (cat) assign(item.id, cat.id);
-    setEditing(false);
+    setSaving(false);
   }
 
   if (editing) {
@@ -333,9 +362,18 @@ export function ItemCategory({
         <PathInput
           paths={paths}
           initial={path.replace(/\s*\/\s*/g, "/")}
-          onCommit={(p) => void commitPath(p)}
+          onCommit={(p, id) => void commitPath(p, id)}
           onCancel={() => setEditing(false)}
         />
+      </span>
+    );
+  }
+
+  if (saving) {
+    return (
+      <span className={`inline-flex items-center gap-1 ${className}`}>
+        <Spinner />
+        <span className="text-[11px] text-[var(--color-faint)]">saving…</span>
       </span>
     );
   }
