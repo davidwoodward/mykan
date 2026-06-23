@@ -92,6 +92,42 @@ Tags are lightweight, inline, and keyboard-first — never a separate management
 - **Filtering is AND.** Selecting multiple tags shows items carrying **every** selected tag.
   Clicking a chip toggles it as a filter; a "clear" affordance removes all.
 
+## Item references
+
+- Every item has an immutable, per-project **number** (stamped on insert by a DB trigger, never
+  reused). Shown as a muted monospace badge — `{project.key}-{number}` (e.g. `AMOS-12`) when the
+  project has a short **key**, else `#{number}`. The key is set inline in the project-edit panel
+  (`ProjectHeader`); the badge appears on rows, cards, and the item modal (`RefBadge`,
+  `itemRef` in `lib/format.ts`). Don't surface raw UUIDs to users.
+
+## Categories (Areas)
+
+A per-project **hierarchical** area tree (`categories`: `parent_id` self-reference, depth ≤ 5).
+An item is filed at **one** node; items reference it **by id**, which is what makes the rest work.
+
+- **Rename ripples; filter is by subtree.** Because items point at a node id, renaming a node
+  updates every item instantly, and filtering by a node includes **that node and all
+  descendants** (`subtreeIdSet`). Deleting reparents children up and un-files items.
+- **Entry is a path, find-or-create.** Type `Coach / Program` and missing segments are created;
+  existing ones are reused (case-insensitive). One node per item.
+- **Manager is humble, not a canvas.** The **Areas** panel shows the indented tree with inline
+  rename / add / delete — no drag-reparent. The add field stays open and **trims back to the
+  last `/` immediately on Enter** so you can rattle off siblings without waiting for the insert.
+
+## Pickers (areas, tag filter, assignees)
+
+The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app specifics:
+
+- **Drop down on focus; keyboard-first.** The tag filter and area pickers open their list on
+  focus, highlight the first row, move with **↑/↓**, select/apply with **Enter**, close on
+  **Esc**; the overlay floats (never pushes content) and **scrolls** (no hard item cap).
+- **Slash-insensitive matching.** Area paths display as `coach / program` but match what you
+  type (`coach/`, `coach /`) — both sides are normalised by collapsing spacing around `/`
+  (`normPath`). Editing an item's area **seeds the field with its current path** (despaced).
+- **Pick existing = instant.** Choosing an existing suggestion assigns by id optimistically (no
+  create round-trip); only a genuinely new typed path shows a brief `saving…` spinner.
+- **Assignees** appear only on **shared** projects, drawn from the whitelist members.
+
 ## Theming (light/dark) & icons
 
 - **Class-based dark mode.** The `dark` class on `<html>` drives the theme. An inline script in

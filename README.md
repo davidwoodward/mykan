@@ -4,13 +4,19 @@ A minimal project + item tracker with a kanban board. Two-user app, Google sign-
 
 ## What it does
 
-- **Projects** — a name and an optional description.
-- **Items** — a name and a type (`feature` / `bug` / `idea`), belonging to one project.
-- **List view** — items grouped by status; click the status pill to cycle.
-- **Board view** — kanban with three columns (New / In Progress / Done), drag-and-drop to reorder or change status; a refresh button reloads items in place without a full page reload.
-- **Project page chrome** — a sticky top nav (back-to-projects arrow, project title + byline) over the board/list, which scrolls in its own region under a static toolbar while the page itself still scrolls. Long Done descriptions clamp to ~5 lines with a Show more/less toggle.
-- **Capture** — the name field is a textarea that grows as you type. Enter is a newline; ⌘/Ctrl+Enter (or the Add button) commits.
-- **Rich item bodies** — Tiptap rich-text with inline images and file attachments; free-form tags with AND-filtering; soft-delete with an Archived view.
+- **Projects** — a name, an optional description, a short **key** (e.g. `AMOS`), and a Shared/Private flag. Edit them inline from the pencil in the project nav.
+- **Items** — belong to one project; carry a name, a type (`feature` / `bug` / `idea`), a **status**, a stable **reference**, optional **assignees**, a **category (Area)**, and tags.
+- **Item references** — every item gets an immutable, per-project number shown with the project key as `AMOS-12` (or `#12` before a key is set). Stamped at creation, never reused.
+- **Status** — Not started / In Progress / **Blocked** / Done. Click the status pill to cycle.
+- **List view** — group by **Status**, **Area**, or **Flat** (one ungrouped list, status as a pill). Every list section is **drag-reorderable** (grip per row), and the row columns (status · ref · content) align across items.
+- **Board view** — kanban with four columns (Not started / In Progress / Blocked / Done), drag-and-drop to reorder or change status; a refresh button reloads items in place without a full page reload.
+- **One global order, many lenses** — `position` is a single per-project order (creation order by default); the board (per-status columns), the grouped lists, and the Flat list all read and edit it, so dragging anywhere stays in sync.
+- **Categories (Areas)** — a per-project **hierarchical** area tree (e.g. `coach / program / checkin`). File an item under a node; **renaming a node ripples** to every item; **filtering by a node includes its whole subtree**. Type a `/`-path to find-or-create nodes; manage the tree (rename / add / delete) in the **Areas** panel.
+- **Assignees** — multiple members per item (the whitelist), shown as avatar chips, on **shared** projects only.
+- **Filters** — by **status** (multi-select), **area** (subtree), **tag** (keyboard-driven: drop-down on focus, type to narrow, Enter to apply, AND semantics), and **creator**.
+- **Project page chrome** — a sticky top nav (back-to-projects arrow, project title + byline, edit pencil) over a function-organised toolbar (View · Filter · Actions). The whole app uses one wide `sm:w-[95%]` shell so the nav never shifts between pages. Long Done descriptions clamp to ~5 lines with Show more/less.
+- **Capture** — the name field is a textarea that grows as you type. Enter is a newline; ⌘/Ctrl+Enter (or the Add button) commits. A new item can be filed under an Area as you add it.
+- **Rich item bodies** — Tiptap rich-text with inline images and file attachments; free-form tags; soft-delete with an Archived view.
 - **Private projects** — the owner can mark a project private (visible only to them); everyone else sees only shared projects. See [`docs/mcp-setup.md`](./docs/mcp-setup.md) and the privacy spec under `docs/superpowers/specs/`.
 - **Dark mode** — light/dark theme with a moon/sun toggle; respects the OS preference, persists the choice.
 - **MCP / agent access** — an HTTP MCP server at `/api/mcp` lets Claude Code list projects/items and move them across the board. See [`docs/mcp-setup.md`](./docs/mcp-setup.md).
@@ -104,9 +110,11 @@ app/
     auth/[...nextauth]/route.ts   ← Auth.js handler
     mcp/route.ts                   ← MCP server (7 tools), bearer-gated
     projects/route.ts              ← GET, POST
-    projects/[id]/route.ts         ← GET, PATCH, DELETE
+    projects/[id]/route.ts         ← GET, PATCH (name/desc/key/privacy), DELETE
     projects/[id]/items/route.ts   ← GET, POST
-    items/[id]/route.ts            ← PATCH, DELETE
+    projects/[id]/categories/route.ts ← GET (tree), POST (find-or-create by path)
+    categories/[id]/route.ts       ← PATCH (rename), DELETE (reparent + un-file)
+    items/[id]/route.ts            ← PATCH (status/type/position/tags/assignees/category), DELETE
     items/[id]/attachments/**      ← upload/sign/rename/remove/serve
     items/[id]/images/route.ts     ← inline image upload
     images/[...path]/route.ts      ← authed image serving
@@ -116,8 +124,13 @@ app/
 components/
   Board.tsx                        ← @dnd-kit kanban
   ProjectsView.tsx                 ← projects list + privacy toggle
-  ProjectDetailView.tsx
-  ItemList.tsx · ItemDetailModal.tsx · RichTextEditor.tsx (Tiptap)
+  ProjectDetailView.tsx            ← toolbar, filters, grouping (Status/Area/Flat)
+  ProjectHeader.tsx                ← inline edit of name/desc/key/visibility (the nav pencil)
+  ItemList.tsx                     ← list rows; DraggableRows (sortable sections + Flat)
+  ItemDetailModal.tsx · RichTextEditor.tsx (Tiptap)
+  RefBadge.tsx                     ← KEY-# reference badge (+ project-key context)
+  CategoryPicker.tsx · CategoryManager.tsx ← Area picker + tree manager
+  AssigneePicker.tsx               ← multi-assignee picker (shared projects)
   TagEditor.tsx · InlineTags.tsx · Attachments.tsx · InlineAttachments.tsx
   ThemeToggle.tsx                  ← light/dark moon-sun toggle
   AutoGrowTextarea.tsx · TypeBadge.tsx · Byline.tsx · Brand.tsx · SignOutButton.tsx
@@ -125,14 +138,18 @@ lib/
   auth.ts                          ← Auth.js config + whitelist + ownerEmail/mcpActorEmail
   api-auth.ts                      ← requireSession() + project/item visibility guards
   service-auth.ts                  ← constant-time bearer-key check for /api/mcp
-  projects-core.ts · items-core.ts ← shared core (browser + MCP call these)
+  projects-core.ts · items-core.ts · categories-core.ts ← shared core (browser + MCP)
+  position.ts                      ← computePosition (shared by board + list drag)
+  format.ts                        ← localPart / timeAgo / itemRef helpers
   supabase-server.ts               ← server-only Supabase client
   types.ts                         ← shared types, labels, richDocText/normalizeTags
 proxy.ts                           ← session gate for non-API/non-asset routes (Next 16 middleware)
 .claude/skills/work-item/SKILL.md  ← Claude Code skill: run an item In Progress → Done
-docs/mcp-setup.md                  ← MCP registration walkthrough
+docs/mcp-setup.md · docs/DESIGN.md ← MCP registration · design & UX conventions
 supabase/
   schema.sql                       ← Postgres schema (paste into SQL editor)
+  migrations/                      ← incremental DDL/data migrations (applied via the
+                                     Supabase Management API; folded into schema.sql)
 ```
 
 ## Editing the whitelist
