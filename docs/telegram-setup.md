@@ -53,13 +53,19 @@ so it sees every project (including private) and stamps authorship as the owner.
 
 ### 2. Find your chat id (so only you can drive the bot)
 
-A bot token is not a secret enough on its own — anyone who finds the bot can
-message it. The webhook only obeys chat ids in `TELEGRAM_ALLOWED_CHAT_IDS`.
+A bot token is not secret enough on its own — anyone who finds the bot can
+message it. The webhook only obeys chat ids in `TELEGRAM_ALLOWED_CHAT_IDS`, so
+get your id now, before setting the env vars in step 3.
 
-The easy way: finish steps 3–4 below first, then open your bot in Telegram and
-send `/projects`. If your id isn't allowlisted yet, the bot replies with
-**"Your chat id is `<number>`"** — copy that number. (Or message
-[@userinfobot](https://t.me/userinfobot), which just echoes your id.)
+Message **[@userinfobot](https://t.me/userinfobot)** in Telegram; it replies with
+your numeric id (e.g. `123456789`). Copy that number — it's your
+`TELEGRAM_ALLOWED_CHAT_IDS` value.
+
+> Recovery path (only if you skipped this): once the bot is deployed and the
+> webhook is registered (steps 3–4), messaging the bot from a chat that isn't
+> allowlisted yet makes it reply with **"Your chat id is `<number>`"**. Add that
+> id to `TELEGRAM_ALLOWED_CHAT_IDS` and redeploy. Getting the id up front from
+> @userinfobot avoids this extra round-trip.
 
 ---
 
