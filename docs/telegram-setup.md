@@ -73,18 +73,35 @@ your numeric id (e.g. `123456789`). Copy that number — it's your
 
 ### 3. Set the environment variables
 
-Set these in the Vercel project (production) and, for local testing, in
-`.env.local`:
+Add the three variables to the Vercel project. Use `vercel env add` — it reads
+each value from **stdin** (it prompts, you paste), so the token never lands in
+your shell history or on the command line. Run these from the repo root:
 
-```
-TELEGRAM_BOT_TOKEN=<token from BotFather>
-TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
-TELEGRAM_ALLOWED_CHAT_IDS=<your chat id>   # comma-separated for more than one
+```bash
+vercel env add TELEGRAM_BOT_TOKEN production
+vercel env add TELEGRAM_WEBHOOK_SECRET production
+vercel env add TELEGRAM_ALLOWED_CHAT_IDS production
 ```
 
-`TELEGRAM_WEBHOOK_SECRET` is a random string you choose; Telegram echoes it back
-on every webhook call so the route can reject forged requests. Generate one with
-`openssl rand -hex 32`.
+Each command prompts `What's the value of …?` — paste the value and press Enter:
+
+| Variable | Value |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | the token from BotFather (the whole `8123…:AAH…` string) |
+| `TELEGRAM_WEBHOOK_SECRET` | a random string you choose: `openssl rand -hex 32` |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | your chat id from step 2 (comma-separated for more than one) |
+
+`TELEGRAM_WEBHOOK_SECRET` is echoed back by Telegram on every webhook call so the
+route can reject forged requests — any random value works, it just has to match
+the `secret_token` you pass in step 4.
+
+Notes:
+- If `vercel env add` reports the project isn't linked, run `vercel link` once
+  and pick the mykan project.
+- Env-var changes don't apply to the running deployment — after adding all three,
+  redeploy production: `vercel --prod` (or push a commit / click Redeploy).
+- Verify with `vercel env ls` (values are masked).
+- For a local dev server, put the same three in `.env.local` instead.
 
 ### 4. Register the webhook with Telegram
 
