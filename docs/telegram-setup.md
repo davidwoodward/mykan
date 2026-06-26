@@ -127,11 +127,39 @@ A successful response is `{"ok":true,"result":true,"description":"Webhook was se
 Check status any time with
 `curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"`.
 
-### 5. Use it
+> The `secret_token` here **must exactly equal** the `TELEGRAM_WEBHOOK_SECRET`
+> env var from step 3 — Telegram sends it back on every call and the route
+> rejects mismatches with `403`. If the bot stays silent, run `getWebhookInfo`:
+> a `last_error_message` mentioning `403` means the two don't match — re-run this
+> `setWebhook` with the exact env-var value.
+
+### 5. Redeploy so the env vars take effect
+
+**This step is easy to miss.** Vercel only bakes env vars into a build at deploy
+time, so the variables you added in step 3 are **not** live until you redeploy.
+From the repo root:
+
+```bash
+vercel --prod
+```
+
+(or click **Redeploy** on the latest production deployment in the dashboard).
+
+Sanity check from any terminal — a request with a wrong secret should now be
+rejected, which proves `TELEGRAM_WEBHOOK_SECRET` is live in the build:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://kanban.dbwoodward.com/api/telegram \
+  -H 'x-telegram-bot-api-secret-token: wrong' -d '{}'
+# → 403 (before the redeploy it returns 200)
+```
+
+### 6. Use it
 
 Message your bot `/help`. If your chat id isn't allowlisted yet, it tells you the
-id — add it to `TELEGRAM_ALLOWED_CHAT_IDS` (redeploy on Vercel for the env change
-to take effect), then try `/projects`.
+id — add it to `TELEGRAM_ALLOWED_CHAT_IDS`, **redeploy again (step 5)** for the
+change to take effect, then try `/projects`.
 
 ---
 
