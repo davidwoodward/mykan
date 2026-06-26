@@ -258,40 +258,46 @@ function ItemRow({
     <li
       ref={sortable?.setNodeRef}
       style={sortable?.style}
-      className={`group flex items-start gap-3 px-3 py-2.5 ${
+      className={`group flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-3 ${
         sortable?.isDragging ? "opacity-50" : ""
       }`}
     >
-      {sortable ? (
-        <button
-          type="button"
-          {...sortable.handleProps}
-          aria-label="Drag to reorder"
-          title="Drag to reorder"
-          className="mt-1 shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <circle cx="9" cy="6" r="1.4" />
-            <circle cx="15" cy="6" r="1.4" />
-            <circle cx="9" cy="12" r="1.4" />
-            <circle cx="15" cy="12" r="1.4" />
-            <circle cx="9" cy="18" r="1.4" />
-            <circle cx="15" cy="18" r="1.4" />
-          </svg>
-        </button>
-      ) : null}
-      {/* Fixed-width columns so the ref and content line up across every row,
-          regardless of the status label's width. */}
-      <div className="w-[5.5rem] shrink-0">
-        <StatusPill
-          status={item.status}
-          onCycle={() =>
-            void onPatch(item.id, { status: nextStatus(item.status) })
-          }
-        />
-      </div>
-      <div className="w-16 shrink-0">
-        <RefBadge number={item.number} className="mt-1.5" />
+      {/* Lead "status line": on small screens this is its own row above the
+          content; at sm+ the wrapper becomes `display:contents` so the grip,
+          status, and ref flow into the row as fixed-width columns exactly as
+          before. */}
+      <div className="flex items-center gap-3 sm:contents">
+        {sortable ? (
+          <button
+            type="button"
+            {...sortable.handleProps}
+            aria-label="Drag to reorder"
+            title="Drag to reorder"
+            className="shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing sm:mt-1"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="9" cy="6" r="1.4" />
+              <circle cx="15" cy="6" r="1.4" />
+              <circle cx="9" cy="12" r="1.4" />
+              <circle cx="15" cy="12" r="1.4" />
+              <circle cx="9" cy="18" r="1.4" />
+              <circle cx="15" cy="18" r="1.4" />
+            </svg>
+          </button>
+        ) : null}
+        {/* Fixed-width columns so the ref and content line up across every row,
+            regardless of the status label's width. */}
+        <div className="w-[5.5rem] shrink-0">
+          <StatusPill
+            status={item.status}
+            onCycle={() =>
+              void onPatch(item.id, { status: nextStatus(item.status) })
+            }
+          />
+        </div>
+        <div className="w-16 shrink-0">
+          <RefBadge number={item.number} className="sm:mt-1.5" />
+        </div>
       </div>
       <div className="min-w-0 flex-1">
         <ClampedText
@@ -327,41 +333,45 @@ function ItemRow({
           className="mt-1 block"
         />
       </div>
-      <InlineAttachments item={item} onItemChange={onItemChange} />
-      <TypeMenu
-        value={item.type}
-        onChange={(t) => void onPatch(item.id, { type: t })}
-      />
-      {archivedView ? (
-        <div className="flex shrink-0 items-center gap-3 self-center text-xs">
+      {/* Trailing controls: their own row below the content on small screens;
+          `display:contents` at sm+ lets them flow back into the row as before. */}
+      <div className="flex items-center gap-3 sm:contents">
+        <InlineAttachments item={item} onItemChange={onItemChange} />
+        <TypeMenu
+          value={item.type}
+          onChange={(t) => void onPatch(item.id, { type: t })}
+        />
+        {archivedView ? (
+          <div className="flex shrink-0 items-center gap-3 self-center text-xs">
+            <button
+              type="button"
+              onClick={() => onRestore(item.id)}
+              className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+              aria-label={`Restore ${text || "item"}`}
+            >
+              Restore
+            </button>
+            <button
+              type="button"
+              onClick={() => onPurge(item.id)}
+              className="text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)]"
+              aria-label={`Permanently delete ${text || "item"}`}
+              title="Permanently delete — cannot be undone"
+            >
+              Delete forever
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
-            onClick={() => onRestore(item.id)}
-            className="text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
-            aria-label={`Restore ${text || "item"}`}
+            onClick={() => onArchive(item.id)}
+            className="self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] sm:invisible sm:group-hover:visible"
+            aria-label={`Delete ${text || "item"}`}
           >
-            Restore
+            Delete
           </button>
-          <button
-            type="button"
-            onClick={() => onPurge(item.id)}
-            className="text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)]"
-            aria-label={`Permanently delete ${text || "item"}`}
-            title="Permanently delete — cannot be undone"
-          >
-            Delete forever
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onArchive(item.id)}
-          className="invisible self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-          aria-label={`Delete ${text || "item"}`}
-        >
-          Delete
-        </button>
-      )}
+        )}
+      </div>
     </li>
   );
 }

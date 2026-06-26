@@ -16,11 +16,22 @@ Three layers, and getting this exactly right matters:
   forced `h-screen`) — a tall add form must be able to scroll so its **Add button stays
   reachable**. (This bit us once.)
 - **The header (top nav) is pinned** — `sticky top-0` — so it stays put over everything.
-- **The List/Board is its own scroll region** (≥sm): a container capped to roughly the
-  viewport (`sm:max-h-[calc(100svh-…)] sm:overflow-y-auto sm:overscroll-contain`). Scrolling
+- **The List/Board is its own scroll region** (≥lg only): a container capped to roughly the
+  viewport (`lg:max-h-[calc(100svh-…)] lg:overflow-y-auto lg:overscroll-contain`). Scrolling
   *inside* it scrolls only the items, leaving the **add form + List/Board picker line (and
-  everything above) static**. Scrolling *outside* it scrolls the whole page. Mobile stays
-  plain full-page scroll.
+  everything above) static**. Scrolling *outside* it scrolls the whole page. **Below `lg`
+  (1024px) the page is plain full-page scroll with only the top bar pinned** — the gate is
+  `lg`, not `sm`, so a phone in *landscape* (~960px wide) scrolls the same as in portrait
+  rather than trapping the list in a short contained region.
+
+## Small-screen item rows (list view)
+
+Below `sm` (640px) the list row stacks vertically — **status line → content → Areas/tags →
+byline → controls** — so the description reads directly under the status. At `sm+` it returns
+to the single fixed-column row (status · ref · content · controls). The transform is done with
+`flex-col sm:flex-row` on the `<li>` plus `sm:contents` wrappers around the lead columns and
+trailing controls, so the desktop row is byte-for-byte unchanged. (The hover-only Delete is
+made tap-visible below `sm`, since touch has no hover.)
 
 ## Header & nav
 
