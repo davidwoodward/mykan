@@ -157,26 +157,22 @@ export function ProjectsView({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2">
         <h2 className="text-sm font-medium text-[var(--color-muted)]">Projects</h2>
         <button
           type="button"
           onClick={() => (adding ? closeAdd() : openAdd())}
-          aria-label="New project"
+          aria-label={adding ? "Cancel new project" : "New project"}
           aria-expanded={adding}
-          title="New project"
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors ${
-            adding
-              ? "border-[var(--color-accent)] text-[var(--color-accent-ink)]"
-              : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-ink)]"
-          }`}
+          title={adding ? "Cancel" : "New project"}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#5b58d6] text-white transition-opacity hover:opacity-90"
         >
           <svg
-            className="h-[18px] w-[18px]"
+            className={`h-4 w-4 transition-transform ${adding ? "rotate-45" : ""}`}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.8"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
@@ -184,7 +180,6 @@ export function ProjectsView({
             <path d="M12 5v14" />
             <path d="M5 12h14" />
           </svg>
-          <span>New project</span>
         </button>
       </div>
 
