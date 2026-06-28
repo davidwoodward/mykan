@@ -1,8 +1,18 @@
 -- mykan schema
 -- Paste into the Supabase SQL editor (Database → SQL Editor → New query → Run).
 -- Idempotent: safe to re-run.
+--
+-- mykan's objects live in a dedicated `mykan` schema (the shared Supabase project
+-- hosts several apps, each isolated to its own exposed schema). The Data API
+-- (PostgREST) must have `mykan` in its exposed schemas, and the app client sets
+-- db: { schema: 'mykan' } — see lib/supabase-server.ts. To migrate an existing
+-- public-schema deployment into `mykan`, use
+--   supabase/migrations/2026-06-28-move-to-mykan-schema.sql
 
 create extension if not exists "uuid-ossp";
+
+create schema if not exists mykan;
+set search_path to mykan, public;
 
 create table if not exists projects (
   id uuid primary key default uuid_generate_v4(),
