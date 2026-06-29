@@ -10,19 +10,28 @@ Verify any UI change by looking at the running app (screenshot), not just passin
 
 ## Project page scroll model
 
-Three layers, and getting this exactly right matters:
+Three layers, and getting this exactly right matters. The behaviour differs by breakpoint:
 
-- **The whole page scrolls normally.** Never lock the viewport (`overflow-hidden` /
-  forced `h-screen`) — a tall add form must be able to scroll so its **Add button stays
-  reachable**. (This bit us once.)
-- **The header (top nav) is pinned** — `sticky top-0` — so it stays put over everything.
-- **The List/Board is its own scroll region** (≥lg only): a container capped to roughly the
-  viewport (`lg:max-h-[calc(100svh-…)] lg:overflow-y-auto lg:overscroll-contain`). Scrolling
-  *inside* it scrolls only the items, leaving the **add form + List/Board picker line (and
-  everything above) static**. Scrolling *outside* it scrolls the whole page. **Below `lg`
-  (1024px) the page is plain full-page scroll with only the top bar pinned** — the gate is
-  `lg`, not `sm`, so a phone in *landscape* (~960px wide) scrolls the same as in portrait
-  rather than trapping the list in a short contained region.
+**Desktop (≥lg): the viewport is locked to one screen; only the board/list scrolls.**
+- The page wrapper is `lg:h-[100svh] lg:overflow-hidden` and a flex column; `<main>` is
+  `lg:flex lg:flex-col lg:min-h-0`.
+- **Header pinned** (`sticky top-0`), **add form + toolbar are `lg:shrink-0`** (static,
+  natural height), and the **List/Board is the only scroll region** — sized by flex
+  (`lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain`) so it fills *exactly* the
+  leftover height. There is **no whole-page scroll** — flex-fill replaced the old
+  `lg:max-h-[calc(100svh-13rem)]` magic constant, which under-reserved the real chrome height
+  and left a small residual page scroll *on top of* the board scroll (two scrollbars).
+- **Don't reintroduce a guessed height constant** for the scroll region — let flex measure it.
+- **The "tall add form" guarantee still holds** (this bit us once when the viewport was first
+  locked): the add-form textarea (`AutoGrowTextarea maxHeight={240}`) caps its growth and
+  scrolls internally, so a long draft never pushes the **Add button** past the locked
+  viewport. Don't put `overflow` on the add-form `<section>` itself — it would clip the
+  floating tag/area typeahead overlays; cap the textarea instead.
+
+**Below `lg` (phones/tablets, incl. landscape ~960px): plain full-page scroll**, only the top
+bar pinned — the wrapper stays `min-h-screen` (no lock), and the board/list is *not* a
+contained scroller. The gate is `lg`, not `sm`, so a phone in *landscape* scrolls the same as
+in portrait rather than trapping the list in a short contained region.
 
 ## Small-screen item rows (list view)
 
