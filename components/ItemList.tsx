@@ -22,6 +22,7 @@ import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
+import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
@@ -304,7 +305,7 @@ function ItemRow({
           text={text}
           onOpen={() => onOpen(item)}
           clamp={item.status === "done"}
-          className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6 transition-colors hover:text-[var(--color-accent)]"
+          className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6"
         />
         {/* Area is the leftmost property in a fixed-width column (single colour,
             not per-tag varying), then — a decent gap later — tags, then
@@ -336,6 +337,11 @@ function ItemRow({
       {/* Trailing controls: their own row below the content on small screens;
           `display:contents` at sm+ lets them flow back into the row as before. */}
       <div className="flex items-center gap-3 sm:contents">
+        <EditButton
+          onClick={() => onOpen(item)}
+          label={text || "item"}
+          className="self-center sm:mt-0.5"
+        />
         <InlineAttachments item={item} onItemChange={onItemChange} />
         <TypeMenu
           value={item.type}

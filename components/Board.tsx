@@ -22,6 +22,7 @@ import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ClampedText } from "@/components/ClampedText";
+import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
@@ -258,15 +259,36 @@ function Card({
         isDragging ? "opacity-50" : ""
       }`}
     >
-      {/* Drag handle doubles as the open trigger: a stationary click opens the
-          editor, movement past the activation distance starts a drag. */}
-      <ClampedText
-        text={text}
-        onOpen={() => onOpen(item)}
-        clamp={item.status === "done"}
-        dragProps={{ ...attributes, ...listeners }}
-        className="cursor-pointer whitespace-pre-wrap break-words leading-5 transition-colors hover:text-[var(--color-accent)] active:cursor-grabbing"
-      />
+      {/* Grip drags; the text is plain, selectable content (double-click to
+          edit); the green pencil is the click-to-edit affordance. */}
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+          className="mt-0.5 shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="9" cy="6" r="1.4" />
+            <circle cx="15" cy="6" r="1.4" />
+            <circle cx="9" cy="12" r="1.4" />
+            <circle cx="15" cy="12" r="1.4" />
+            <circle cx="9" cy="18" r="1.4" />
+            <circle cx="15" cy="18" r="1.4" />
+          </svg>
+        </button>
+        <div className="min-w-0 flex-1">
+          <ClampedText
+            text={text}
+            onOpen={() => onOpen(item)}
+            clamp={item.status === "done"}
+            className="whitespace-pre-wrap break-words leading-5"
+          />
+        </div>
+        <EditButton onClick={() => onOpen(item)} label={text || "item"} className="mt-0.5" />
+      </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <InlineTags
           tags={item.tags}
