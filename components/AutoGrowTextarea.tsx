@@ -8,10 +8,13 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 
-type Props = TextareaHTMLAttributes<HTMLTextAreaElement>;
+type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  /** Cap the auto-grow height (px); past it the field scrolls internally. */
+  maxHeight?: number;
+};
 
 export const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, Props>(
-  function AutoGrowTextarea({ className = "", value, ...rest }, ref) {
+  function AutoGrowTextarea({ className = "", value, maxHeight, ...rest }, ref) {
     const innerRef = useRef<HTMLTextAreaElement>(null);
     useImperativeHandle(ref, () => innerRef.current as HTMLTextAreaElement);
 
@@ -19,8 +22,15 @@ export const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, Props>(
       const el = innerRef.current;
       if (!el) return;
       el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
-    }, [value]);
+      const sh = el.scrollHeight;
+      if (maxHeight && sh > maxHeight) {
+        el.style.height = `${maxHeight}px`;
+        el.style.overflowY = "auto";
+      } else {
+        el.style.height = `${sh}px`;
+        el.style.overflowY = "hidden";
+      }
+    }, [value, maxHeight]);
 
     return (
       <textarea

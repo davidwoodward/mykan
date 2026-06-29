@@ -22,9 +22,12 @@ export default async function ProjectPage({
   if (!project) notFound();
 
   return (
-    // The whole page scrolls normally; only the header is pinned (sticky) so it
-    // stays put while the board/list scrolls under it.
-    <div className="flex min-h-screen flex-col">
+    // Desktop (≥lg): the viewport is locked to one screen — header pinned, add
+    // form + toolbar static, and the board/list is the only scroll region,
+    // sized by flex to fill exactly the leftover height (no page scroll).
+    // Below lg (phones/tablets, incl. landscape): plain full-page scroll with
+    // only the header pinned.
+    <div className="flex min-h-screen flex-col lg:h-[100svh] lg:overflow-hidden">
       <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -64,7 +67,7 @@ export default async function ProjectPage({
         </div>
       </header>
 
-      <main className="mx-auto w-full flex-1 px-3 pt-4 pb-12 sm:w-[95%] sm:px-4">
+      <main className="mx-auto flex w-full flex-1 flex-col px-3 pt-4 pb-12 sm:w-[95%] sm:px-4 lg:min-h-0 lg:pb-4">
         <ProjectDetailView
           projectId={project.id}
           projectKey={project.key}

@@ -596,7 +596,7 @@ export function ProjectDetailView({
       >
       <CategoryProvider value={categoryCtx}>
       {!showArchived ? (
-      <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2">
+      <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 lg:shrink-0">
         <AutoGrowTextarea
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -605,6 +605,9 @@ export function ProjectDetailView({
           placeholder="Add an item…  (or paste a screenshot)"
           className="text-base placeholder:text-[var(--color-faint)]"
           aria-label="Item name"
+          // Cap growth so a long draft scrolls inside the field rather than
+          // pushing the Add button past the locked viewport (≥lg).
+          maxHeight={240}
         />
         <div className="mt-2">
           <TagEditor ref={tagEditorRef} value={newTags} suggestions={allTags} onChange={setNewTags} />
@@ -687,7 +690,7 @@ export function ProjectDetailView({
         <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
-      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:shrink-0">
         {/* LEFT — how you look at items: view, then filters. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* View cluster */}
@@ -868,7 +871,7 @@ export function ProjectDetailView({
           Only desktop (≥lg) gets this contained scroll; phones (both
           orientations — landscape is ~960px wide) and tablets keep plain
           full-page scroll, so only the pinned top bar stays put. */}
-      <div className="lg:max-h-[calc(100svh-13rem)] lg:overflow-y-auto lg:overscroll-contain">
+      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
