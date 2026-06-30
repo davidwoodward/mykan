@@ -6,33 +6,26 @@ import {
   useMemo,
   useRef,
   useState,
-  type ClipboardEvent,
   type KeyboardEvent,
 } from "react";
-import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { ItemDetailModal } from "@/components/ItemDetailModal";
+import { AddItemModal } from "@/components/AddItemModal";
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
-import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
-import { uploadAttachment } from "@/lib/client-attachments";
 import { localPart } from "@/lib/format";
 import {
   ITEM_STATUSES,
-  ITEM_TYPES,
   STATUS_LABEL,
-  TYPE_LABEL,
   type Category,
   type Item,
   type ItemStatus,
-  type ItemType,
   type RichDoc,
 } from "@/lib/types";
 import {
   CategoryProvider,
-  DraftCategory,
   buildPathOf,
   subtreeIdSet,
 } from "@/components/CategoryPicker";
@@ -57,16 +50,9 @@ export function ProjectDetailView({
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [showArchived, setShowArchived] = useState(false);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<ItemType>("feature");
-  const [newTags, setNewTags] = useState<string[]>([]);
-  const [newFiles, setNewFiles] = useState<File[]>([]);
-  const addFileRef = useRef<HTMLInputElement>(null);
-  const tagEditorRef = useRef<TagEditorHandle>(null);
-  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
-  const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [areaFilter, setAreaFilter] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">("status");
@@ -105,35 +91,10 @@ export function ProjectDetailView({
     }
   }, [projectId]);
 
-  const createItem = useCallback(async () => {
-    const trimmed = name.trim();
-    if (!trimmed || busy) return;
-    setBusy(true);
-    setError(null);
-    // Pull in a tag the user typed but never confirmed with Enter.
-    const tags = tagEditorRef.current?.flush() ?? newTags;
-    try {
-      const res = await fetch(`/api/projects/${projectId}/items`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: trimmed, type, tags, category_id: newCategoryId }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const created = (await res.json()) as Item;
-      const final = newFiles.length
-        ? ((await uploadFilesTo(created.id, newFiles)) ?? created)
-        : created;
-      setItems((prev) => (prev ? [...prev, final] : [final]));
-      setName("");
-      setNewTags([]);
-      setNewFiles([]);
-      setNewCategoryId(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create");
-    } finally {
-      setBusy(false);
-    }
-  }, [name, type, newTags, newFiles, newCategoryId, busy, projectId]);
+  // A new item was created in the AddItemModal — append it to the local list.
+  const addCreated = useCallback((created: Item) => {
+    setItems((prev) => (prev ? [...prev, created] : [created]));
+  }, []);
 
   const patchItem = useCallback(
     async (
@@ -389,92 +350,6 @@ export function ProjectDetailView({
   const archiveItem = useCallback((id: string) => void setArchived(id, true), [setArchived]);
   const restoreItem = useCallback((id: string) => void setArchived(id, false), [setArchived]);
 
-  function onNameKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      void createItem();
-    }
-  }
-
-  // Pasting a screenshot into the add field: create the item, keep any text the
-  // user already typed as the first line, append the image(s) below it, then
-  // open the editor so they land right where their screenshot is.
-  const createItemWithImages = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0 || busy) return;
-      setBusy(true);
-      setError(null);
-      try {
-        const itemText = name.trim();
-        const createRes = await fetch(`/api/projects/${projectId}/items`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name: itemText, type, tags: newTags }),
-        });
-        if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
-        const created = (await createRes.json()) as Item;
-
-        const urls: string[] = [];
-        for (const file of files) {
-          const up = await fetch(`/api/items/${created.id}/images`, {
-            method: "POST",
-            headers: { "content-type": file.type },
-            body: file,
-          });
-          if (!up.ok) {
-            const msg = await up
-              .json()
-              .then((d: { error?: string }) => d.error)
-              .catch(() => null);
-            throw new Error(msg ?? `Upload failed (${up.status})`);
-          }
-          urls.push(((await up.json()) as { url: string }).url);
-        }
-
-        const content: unknown[] = [];
-        if (itemText) {
-          content.push({
-            type: "paragraph",
-            content: [{ type: "text", text: itemText }],
-          });
-        }
-        for (const src of urls) content.push({ type: "image", attrs: { src } });
-        const body: RichDoc = { type: "doc", content };
-
-        const patchRes = await fetch(`/api/items/${created.id}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ body }),
-        });
-        const withBody = patchRes.ok
-          ? ((await patchRes.json()) as Item)
-          : { ...created, body };
-        const final = newFiles.length
-          ? ((await uploadFilesTo(created.id, newFiles)) ?? withBody)
-          : withBody;
-
-        setItems((prev) => (prev ? [...prev, final] : [final]));
-        setName("");
-        setNewTags([]);
-        setNewFiles([]);
-        setOpenItemId(final.id);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to add image");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [name, type, newTags, newFiles, busy, projectId],
-  );
-
-  function onNamePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
-      f.type.startsWith("image/"),
-    );
-    if (files.length === 0) return; // plain text paste — leave it alone
-    e.preventDefault();
-    void createItemWithImages(files);
-  }
 
   const toggleCreatorFilter = useCallback((email: string) => {
     setCreatorFilter((cur) => (cur === email ? null : email));
@@ -596,94 +471,30 @@ export function ProjectDetailView({
       >
       <CategoryProvider value={categoryCtx}>
       {!showArchived ? (
-      <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 lg:shrink-0">
-        <AutoGrowTextarea
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={onNameKeyDown}
-          onPaste={onNamePaste}
-          placeholder="Add an item…  (or paste a screenshot)"
-          className="text-base placeholder:text-[var(--color-faint)]"
-          aria-label="Item name"
-          // Cap growth so a long draft scrolls inside the field rather than
-          // pushing the Add button past the locked viewport (≥lg).
-          maxHeight={240}
-        />
-        <div className="mt-2">
-          <TagEditor ref={tagEditorRef} value={newTags} suggestions={allTags} onChange={setNewTags} />
-        </div>
-
-        {newFiles.length > 0 ? (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {newFiles.map((f, i) => (
-              <span
-                key={`${f.name}-${i}`}
-                className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-canvas)] px-2 py-0.5 text-xs text-[var(--color-muted)]"
+        <div className="lg:shrink-0">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="group inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] py-1.5 pl-2 pr-3 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+          >
+            <span
+              className="grid h-5 w-5 place-items-center rounded-full bg-white/20"
+              aria-hidden="true"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-3.5 w-3.5"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
               >
-                <span className="max-w-40 truncate">{f.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))}
-                  aria-label={`Remove ${f.name}`}
-                  className="opacity-60 transition-opacity hover:opacity-100"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <TypeSegmented value={type} onChange={setType} />
-            <DraftCategory categoryId={newCategoryId} onChange={setNewCategoryId} />
-            <button
-              type="button"
-              onClick={() => addFileRef.current?.click()}
-              aria-label="Attach files"
-              className="inline-flex items-center justify-center rounded-md border border-[var(--color-line)] p-1.5 text-[var(--color-muted)] transition-colors hover:border-[var(--color-line-strong)] hover:text-[var(--color-accent)]"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
-                <path
-                  d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                <path d="M12 5v14M5 12h14" />
               </svg>
-            </button>
-            <input
-              ref={addFileRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                // Materialise the File list NOW: resetting input.value below
-                // empties the live FileList, and the setState updater runs
-                // afterwards — reading Array.from(picked) there yields nothing.
-                const files = e.target.files ? Array.from(e.target.files) : [];
-                e.target.value = "";
-                if (files.length) setNewFiles((prev) => [...prev, ...files]);
-              }}
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-[var(--color-faint)] sm:inline">
-              Enter for newline · ⌘/Ctrl+Enter to add
             </span>
-            <button
-              type="button"
-              onClick={createItem}
-              disabled={!name.trim() || busy}
-              className="rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-            >
-              Add
-            </button>
-          </div>
+            Add item
+          </button>
         </div>
-      </section>
       ) : null}
 
       {error ? (
@@ -915,6 +726,14 @@ export function ProjectDetailView({
       )}
       </div>
 
+      {adding ? (
+        <AddItemModal
+          projectId={projectId}
+          allTags={allTags}
+          onClose={() => setAdding(false)}
+          onCreated={addCreated}
+        />
+      ) : null}
       {openItem ? (
         <ItemDetailModal
           item={openItem}
@@ -1047,14 +866,6 @@ function TagFilterBar({
 }
 
 /** Uploads staged files to a freshly-created item; returns the latest item. */
-async function uploadFilesTo(itemId: string, files: File[]): Promise<Item | null> {
-  let latest: Item | null = null;
-  for (const file of files) {
-    latest = await uploadAttachment(itemId, file);
-  }
-  return latest;
-}
-
 function groupByStatus(items: Item[]): Record<ItemStatus, Item[]> {
   const result = Object.fromEntries(
     ITEM_STATUSES.map((s) => [s, [] as Item[]]),
@@ -1064,42 +875,6 @@ function groupByStatus(items: Item[]): Record<ItemStatus, Item[]> {
     result[k].sort((a, b) => a.position - b.position);
   }
   return result;
-}
-
-function TypeSegmented({
-  value,
-  onChange,
-}: {
-  value: ItemType;
-  onChange: (v: ItemType) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Item type"
-      className="inline-flex rounded-md border border-[var(--color-line)] p-0.5 text-xs"
-    >
-      {ITEM_TYPES.map((t) => {
-        const active = t === value;
-        return (
-          <button
-            key={t}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(t)}
-            className={`rounded px-2 py-1 transition-colors ${
-              active
-                ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
-                : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
-            }`}
-          >
-            {TYPE_LABEL[t]}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 function ViewTab({
