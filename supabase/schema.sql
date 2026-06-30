@@ -37,7 +37,10 @@ alter type item_status add value if not exists 'blocked' before 'done';
 create table if not exists items (
   id uuid primary key default uuid_generate_v4(),
   project_id uuid not null references projects(id) on delete cascade,
-  name text not null,
+  -- An item's content lives entirely in the rich-text `body` (added below). There
+  -- is no separate name/title column; any plain-text label is derived from `body`
+  -- via richDocText on read. (The legacy `name` column was dropped 2026-06-30,
+  -- see supabase/migrations/2026-06-30-drop-item-name.sql.)
   type item_type not null default 'feature',
   status item_status not null default 'new',
   position double precision not null default 1024,

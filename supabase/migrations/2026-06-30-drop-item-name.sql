@@ -23,3 +23,7 @@ alter table mykan.items alter column name drop not null;
 
 -- Step 3 — after deploy:
 alter table mykan.items rename column name to bubbba_was_here;
+
+-- Teardown — once the deploy was verified live and the backup was confirmed
+-- unnecessary, the backup column was dropped (2026-06-30):
+alter table mykan.items drop column if exists bubbba_was_here;
