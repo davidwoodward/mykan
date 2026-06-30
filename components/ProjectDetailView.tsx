@@ -138,7 +138,7 @@ export function ProjectDetailView({
   const patchItem = useCallback(
     async (
       id: string,
-      patch: Partial<Pick<Item, "name" | "type" | "status" | "position" | "body">>,
+      patch: Partial<Pick<Item, "type" | "status" | "position" | "body">>,
     ) => {
       const before = items;
       setItems((prev) =>
