@@ -117,7 +117,7 @@ async function detailOf(
     ref: refOf(project.key, it.number),
     number: it.number,
     project_id: it.project_id,
-    name: it.name,
+    name: richDocText(it.body),
     body_text: richDocText(it.body),
     type: it.type,
     status: it.status,
@@ -153,7 +153,7 @@ export async function listItems(
       id: it.id,
       ref: refOf(proj.data.key, it.number),
       number: it.number,
-      name: it.name,
+      name: richDocText(it.body),
       type: it.type,
       status: it.status,
       tags: it.tags,
@@ -235,11 +235,13 @@ export async function createItem(
   const type: ItemType = isItemType(input.type) ? input.type : "feature";
   const tags = normalizeTags(input.tags);
   const assignees = normalizeAssignees(input.assignees, whitelist());
+  // An item's content lives entirely in `body`; there is no separate name
+  // column. When only a plain-text `name`/title is supplied, seed the body
+  // with it.
   const doc = isRichDoc(input.body)
     ? input.body
     : paragraphDoc(typeof input.name === "string" ? input.name : "");
-  const name = richDocText(doc);
-  if (!name) return coreErr("name required", 400);
+  if (!richDocText(doc)) return coreErr("content required", 400);
 
   // Area: an explicit category_id wins; otherwise resolve/create from a path.
   let category_id: string | null =
@@ -265,7 +267,6 @@ export async function createItem(
     .from("items")
     .insert({
       project_id: proj.data.id,
-      name,
       body: doc,
       tags,
       assignees,
@@ -282,7 +283,7 @@ export async function createItem(
   return coreOk(data as Item);
 }
 
-/** Append a note paragraph to the item body and re-sync the flattened name. */
+/** Append a note paragraph to the item body. */
 export async function appendItemNote(
   sb: SupabaseClient,
   actor: string,
@@ -304,7 +305,6 @@ export async function appendItemNote(
     .from("items")
     .update({
       body: nextDoc,
-      name: richDocText(nextDoc),
       updated_at: new Date().toISOString(),
       updated_by: actor,
     })

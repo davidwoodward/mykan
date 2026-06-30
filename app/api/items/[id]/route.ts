@@ -9,7 +9,6 @@ import {
   isRichDoc,
   normalizeAssignees,
   normalizeTags,
-  richDocText,
 } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -63,13 +62,12 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (typeof body.archived === "boolean") {
     patch.archived_at = body.archived ? new Date().toISOString() : null;
   }
-  // body is the source of truth; keep the flattened `name` label in sync with it.
+  // body is the sole source of an item's content; any plain-text label is
+  // derived from it on read (see lib/items-core.ts).
   if (isRichDoc(body.body)) {
     patch.body = body.body;
-    patch.name = richDocText(body.body);
   } else if (body.body === null) {
     patch.body = null;
-    patch.name = "";
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });

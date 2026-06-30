@@ -38,7 +38,7 @@ import {
 
 type PatchFn = (
   id: string,
-  patch: Partial<Pick<Item, "name" | "type" | "status" | "position">>,
+  patch: Partial<Pick<Item, "type" | "status" | "position">>,
 ) => Promise<void>;
 
 type RowProps = {

@@ -137,10 +137,15 @@ export interface Item {
   project_id: string;
   /** Immutable, per-project reference number. Displayed as {project.key}-{number}. */
   number: number;
-  name: string;
   type: ItemType;
   status: ItemStatus;
   position: number;
+  /**
+   * The item's content. This is the sole source of truth; any plain-text
+   * "name"/title shown in the UI or API is derived from `body` via
+   * `richDocText` on read. (The legacy `name` column was renamed to
+   * `bubbba_was_here` as a one-time backup and is no longer read or written.)
+   */
   body: RichDoc | null;
   tags: string[];
   /** Member emails assigned to this item (shared projects only). */
