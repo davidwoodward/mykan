@@ -695,6 +695,28 @@ export function ProjectDetailView({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* View cluster */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={refreshing}
+              aria-label="Refresh"
+              title="Refresh"
+              className="grid h-8 w-8 place-items-center rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-60"
+            >
+              <svg
+                className={`h-[15px] w-[15px] ${refreshing ? "animate-spin" : ""}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v6h-6" />
+              </svg>
+            </button>
             <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
               <ViewTab active={view === "list"} onClick={() => setView("list")}>
                 List
@@ -798,30 +820,8 @@ export function ProjectDetailView({
           </>
         </div>
 
-        {/* RIGHT — actions you take: refresh, manage areas, archived. */}
+        {/* RIGHT — actions you take: manage areas, archived. */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={refreshing}
-            aria-label="Refresh"
-            title="Refresh"
-            className="grid h-8 w-8 place-items-center rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-60"
-          >
-            <svg
-              className={`h-[15px] w-[15px] ${refreshing ? "animate-spin" : ""}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <path d="M21 3v6h-6" />
-            </svg>
-          </button>
           {!showArchived ? (
             <button
               type="button"
