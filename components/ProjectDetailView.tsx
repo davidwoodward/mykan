@@ -475,24 +475,21 @@ export function ProjectDetailView({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="group inline-flex items-center gap-2 rounded-md bg-[var(--color-accent)] py-1.5 pl-2 pr-3 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+            title="Add item"
+            aria-label="Add item"
+            className="grid h-10 w-10 place-items-center rounded-full bg-[#5b58d6] text-white shadow-sm transition-opacity hover:opacity-90"
           >
-            <span
-              className="grid h-5 w-5 place-items-center rounded-full bg-white/20"
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
               aria-hidden="true"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-3.5 w-3.5"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-            Add item
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
         </div>
       ) : null}
