@@ -7,6 +7,7 @@ import {
   normalizeAssignees,
   normalizeTags,
   paragraphDoc,
+  richDocImageSrcs,
   richDocText,
   type Item,
   type ItemStatus,
@@ -15,6 +16,7 @@ import {
   type RichDoc,
 } from "@/lib/types";
 import { whitelist } from "@/lib/auth";
+import { ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
 import {
   categoryInProject,
   findOrCreateByPath,
@@ -172,6 +174,86 @@ export async function getItem(
   const r = await loadVisibleItem(sb, actor, itemRef);
   if (!r.ok) return r;
   return coreOk(await detailOf(sb, r.data.project, r.data.item));
+}
+
+/** A decoded inline body image, ready to emit as an MCP image content block. */
+export interface ItemImage {
+  /** The node's original `src`, for correlating with the body text. */
+  src: string;
+  /** Base64-encoded image bytes (no data-URI prefix). */
+  data: string;
+  /** MIME type, e.g. "image/png". */
+  mimeType: string;
+}
+
+export interface ItemImagesResult {
+  images: ItemImage[];
+  /** Images present in the body but omitted (over the count/size guardrails). */
+  skipped: number;
+  /** Total inline images referenced by the body. */
+  total: number;
+}
+
+/** Max inline images decoded per request, and the per-image byte ceiling. */
+const MAX_ITEM_IMAGES = 8;
+const MAX_ITEM_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Maps a stored image `src` to its storage bucket key, or null if not ours. */
+function imageKeyFromSrc(src: string): string | null {
+  const prefix = "/api/images/";
+  if (!src.startsWith(prefix)) return null; // external/absolute URLs aren't in our bucket
+  const key = src.slice(prefix.length).split(/[?#]/)[0];
+  return key || null;
+}
+
+/**
+ * Resolve the inline screenshots embedded in an item's body into base64 image
+ * blocks. Purely a read-time access path over data already stored — it decodes
+ * the private-bucket bytes the body already points at; nothing is written and
+ * the body itself is unchanged. Guarded by count and per-image size so a heavy
+ * item can't return an unbounded payload.
+ */
+export async function getItemImages(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+): Promise<CoreResult<ItemImagesResult>> {
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  // The item is already visible to the actor and these images are embedded in
+  // its body, so no further per-image access check is needed.
+  const srcs = richDocImageSrcs(r.data.item.body);
+  const images: ItemImage[] = [];
+  let skipped = 0;
+  for (const src of srcs) {
+    if (images.length >= MAX_ITEM_IMAGES) {
+      skipped++;
+      continue;
+    }
+    const key = imageKeyFromSrc(src);
+    if (!key) {
+      skipped++;
+      continue;
+    }
+    const { data, error } = await sb.storage
+      .from(ITEM_IMAGES_BUCKET)
+      .download(key);
+    if (error || !data) {
+      skipped++;
+      continue;
+    }
+    const bytes = Buffer.from(await data.arrayBuffer());
+    if (bytes.byteLength > MAX_ITEM_IMAGE_BYTES) {
+      skipped++;
+      continue;
+    }
+    images.push({
+      src,
+      data: bytes.toString("base64"),
+      mimeType: data.type || "application/octet-stream",
+    });
+  }
+  return coreOk({ images, skipped, total: srcs.length });
 }
 
 /** Move an item's kanban column. On a column change, append to the column end. */

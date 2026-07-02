@@ -87,6 +87,30 @@ export function richDocText(body: RichDoc | null | undefined): string {
   return flatten(body as { content?: unknown[] }).replace(/^\s+|\s+$/g, "");
 }
 
+/**
+ * Collects the `src` of every image node in a rich-text body, in document
+ * order. These are the inline screenshots pasted into an item; `richDocText`
+ * drops them, so this is the only way to recover them from a body. Duplicates
+ * are preserved (the same image can legitimately appear twice).
+ */
+export function richDocImageSrcs(body: RichDoc | null | undefined): string[] {
+  if (!body || !Array.isArray(body.content)) return [];
+  const out: string[] = [];
+  const walk = (node: { type?: string; attrs?: unknown; content?: unknown[] }) => {
+    if (node.type === "image") {
+      const src = (node.attrs as { src?: unknown } | undefined)?.src;
+      if (typeof src === "string" && src) out.push(src);
+    }
+    if (Array.isArray(node.content)) {
+      for (const kid of node.content) {
+        walk(kid as { type?: string; attrs?: unknown; content?: unknown[] });
+      }
+    }
+  };
+  walk(body as { content?: unknown[] });
+  return out;
+}
+
 /** Builds a minimal document holding a single paragraph of text (empty → empty doc). */
 export function paragraphDoc(text: string): RichDoc {
   const t = text.trim();

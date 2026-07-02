@@ -8,6 +8,7 @@ import {
   appendItemNote,
   createItem,
   getItem,
+  getItemImages,
   listItems,
   setItemArea,
   setItemAssignees,
@@ -45,9 +46,39 @@ const handler = createMcpHandler(
 
     server.tool(
       "get_item",
-      "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12).",
-      { item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12") },
-      async (a) => out(await getItem(getSupabase(), actor(), a.item)),
+      "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+      {
+        item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
+        include_images: z
+          .boolean()
+          .optional()
+          .describe("also return inline body images as viewable image blocks"),
+      },
+      async (a) => {
+        const r = await getItem(getSupabase(), actor(), a.item);
+        if (!r.ok || !a.include_images) return out(r);
+        const content: (
+          | { type: "text"; text: string }
+          | { type: "image"; data: string; mimeType: string }
+        )[] = [{ type: "text", text: JSON.stringify(r.data, null, 2) }];
+        const imgs = await getItemImages(getSupabase(), actor(), a.item);
+        if (imgs.ok) {
+          for (const img of imgs.data.images) {
+            content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+          }
+          const { images, skipped, total } = imgs.data;
+          content.push({
+            type: "text",
+            text:
+              total === 0
+                ? "(no inline images in this item's body)"
+                : `${images.length} of ${total} inline image(s) returned above${
+                    skipped ? `; ${skipped} skipped (over size/count limits)` : ""
+                  }.`,
+          });
+        }
+        return { content };
+      },
     );
 
     server.tool(
