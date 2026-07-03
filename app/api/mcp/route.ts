@@ -36,7 +36,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "list_items",
-      "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees.",
+      "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees. `name` is the item's body flattened to plain text (there is no separate stored title — the first line of the body acts as the title), so it may span multiple lines for a long item.",
       {
         project: z.string().describe("project name or id"),
         status: status.optional().describe("new | in_progress | blocked | done"),
@@ -46,7 +46,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "get_item",
-      "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+      "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). NOTE: `name` and `body_text` in the response are the SAME value — the item's body flattened to plain text. There is no separate stored title field; the first line of the body serves as the title. So a `name` that mirrors the whole body is expected and correct, not a bug or 'polluted title'. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
       {
         item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
         include_images: z
@@ -90,13 +90,20 @@ const handler = createMcpHandler(
 
     server.tool(
       "create_item",
-      "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. A longer `body` is appended as the first note. Optionally file it under an `area` path (created if missing) and `assignees` (member emails).",
+      "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as a note — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails).",
       {
         project: z.string().describe("project name or id"),
-        name: z.string(),
-        type: z.enum(["feature", "bug", "idea"]).optional(),
-        body: z.string().optional().describe("longer description; appended as a note"),
-        tags: z.array(z.string()).optional(),
+        name: z
+          .string()
+          .describe(
+            "short one-line title; becomes the first line of the item body (there is no separate stored title)",
+          ),
+        type: z.enum(["feature", "bug", "idea"]).optional().describe("feature | bug | idea (default feature)"),
+        body: z
+          .string()
+          .optional()
+          .describe("longer description; appended after the title as a note in the same body"),
+        tags: z.array(z.string()).optional().describe("tags (normalized lowercase)"),
         area: z
           .string()
           .optional()
