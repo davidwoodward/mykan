@@ -118,7 +118,9 @@ export function Board({
 
   return (
     <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={onDragEnd}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+      {/* Below md: stacked / 2-up grid. At md+: a flex row where empty columns
+          shrink to just their header and the populated columns share the rest. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:flex md:flex-row md:items-start">
         {ITEM_STATUSES.map((status) => (
           <Column
             key={status}
@@ -167,10 +169,17 @@ function Column({
 } & TagProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status, data: { status } });
 
+  // At md+, an empty column collapses to a fixed header-width sliver so the
+  // populated columns (flex-1) can take the freed space. An empty column still
+  // widens while a card is dragged over it, keeping it an easy drop target.
+  const wide = items.length > 0 || isOver;
+
   return (
     <section
       ref={setNodeRef}
-      className={`flex flex-col rounded-lg border bg-[var(--color-surface)] transition-colors ${
+      className={`flex flex-col rounded-lg border bg-[var(--color-surface)] transition-all ${
+        wide ? "md:min-w-0 md:flex-1" : "md:w-40 md:shrink-0"
+      } ${
         isOver
           ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
           : "border-[var(--color-line)]"
