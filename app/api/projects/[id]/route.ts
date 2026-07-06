@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { loadProjectForAccess, requireSession } from "@/lib/api-auth";
-import { isOwner } from "@/lib/auth";
+import { whitelist } from "@/lib/auth";
+import { normalizeAssignees } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -27,7 +28,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     name?: unknown;
     description?: unknown;
     key?: unknown;
-    isPrivate?: unknown;
+    sharedWith?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (typeof body.name === "string") patch.name = body.name.trim();
@@ -41,13 +42,19 @@ export async function PATCH(req: Request, { params }: Ctx) {
         ? body.key.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null
         : null;
   }
-  // Visibility may be changed only by the owner, and only on a project they
-  // created (Matthew has no toggle; this is the server-side enforcement).
-  if (typeof body.isPrivate === "boolean") {
-    if (!isOwner(gate.email) || access.project.created_by !== gate.email) {
+  // Sharing may be changed only by the project's owner (creator). The list is
+  // normalized to whitelisted members, minus the owner (always implicit).
+  // `is_private` is kept as a mirror of "shared with no one".
+  if (Array.isArray(body.sharedWith)) {
+    if (access.project.created_by !== gate.email) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-    patch.is_private = body.isPrivate;
+    const members = normalizeAssignees(
+      body.sharedWith as string[],
+      whitelist(),
+    ).filter((e) => e !== gate.email);
+    patch.shared_with = members;
+    patch.is_private = members.length === 0;
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });

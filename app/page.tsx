@@ -1,4 +1,4 @@
-import { auth, isOwner } from "@/lib/auth";
+import { auth, whitelist } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ProjectsView } from "@/components/ProjectsView";
 import { SignOutButton } from "@/components/SignOutButton";
@@ -23,7 +23,7 @@ export default async function Home() {
       </header>
 
       <main className="mx-auto w-full flex-1 px-3 pt-4 pb-12 sm:w-[95%] sm:px-4">
-        <ProjectsView isOwner={isOwner(session.user.email)} viewerEmail={session.user.email} />
+        <ProjectsView viewerEmail={session.user.email} members={whitelist()} />
       </main>
     </div>
   );
