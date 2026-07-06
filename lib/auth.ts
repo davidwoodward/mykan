@@ -1,7 +1,11 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
-const DEFAULT_WHITELIST = ["dawoodward@gmail.com", "matthewl@experiencealign.com"];
+const DEFAULT_WHITELIST = [
+  "dawoodward@gmail.com",
+  "matthewl@experiencealign.com",
+  "dwoody55@gmail.com",
+];
 const DEFAULT_OWNER = "dawoodward@gmail.com";
 
 /**
