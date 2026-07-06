@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { requireSession } from "@/lib/api-auth";
-import { isOwner } from "@/lib/auth";
+import { whitelist } from "@/lib/auth";
+import { normalizeAssignees } from "@/lib/types";
 import { listProjects } from "@/lib/projects-core";
 
 export async function GET() {
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
     name?: unknown;
     description?: unknown;
     key?: unknown;
-    isPrivate?: unknown;
+    sharedWith?: unknown;
   };
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -32,20 +33,22 @@ export async function POST(req: Request) {
       ? body.key.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null
       : null;
 
+  // The creator owns the project; optionally share it with whitelisted members
+  // at creation. Empty (the default) means private. `is_private` mirrors it.
+  const sharedWith = Array.isArray(body.sharedWith)
+    ? normalizeAssignees(body.sharedWith as string[], whitelist()).filter(
+        (e) => e !== gate.email,
+      )
+    : [];
   const insert: Record<string, unknown> = {
     name,
     description,
     key,
     created_by: gate.email,
     updated_by: gate.email,
+    shared_with: sharedWith,
+    is_private: sharedWith.length === 0,
   };
-  // Visibility may be set private only by the owner (the creator is the owner here).
-  if (body.isPrivate === true) {
-    if (!isOwner(gate.email)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-    insert.is_private = true;
-  }
 
   const { data, error } = await getSupabase()
     .from("projects")

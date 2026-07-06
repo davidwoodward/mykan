@@ -13,7 +13,11 @@ export async function requireSession() {
   return { session, email } as const;
 }
 
-type ProjectAccessRow = { is_private?: boolean | null; created_by?: string | null };
+type ProjectAccessRow = {
+  is_private?: boolean | null;
+  created_by?: string | null;
+  shared_with?: string[] | null;
+};
 
 const notFound = () => NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -22,10 +26,9 @@ type ProjectAccess =
   | { error?: undefined; project: ProjectAccessRow };
 
 /**
- * Loads a project and enforces visibility: a private project is reachable only
- * by its creator. Returns a 404 (never 403 — don't reveal existence) otherwise.
- * Selects "*" so a pre-migration table without `is_private` is treated as public
- * rather than erroring.
+ * Loads a project and enforces visibility: reachable only by its owner
+ * (creator) or a member it's shared with. Returns a 404 (never 403 — don't
+ * reveal existence) otherwise.
  */
 export async function loadProjectForAccess(
   projectId: string,
@@ -38,7 +41,8 @@ export async function loadProjectForAccess(
     .maybeSingle();
   if (!data) return { error: notFound() };
   const project = data as ProjectAccessRow;
-  if (project.is_private && project.created_by !== email) {
+  const shared = project.shared_with ?? [];
+  if (project.created_by !== email && !shared.includes(email)) {
     return { error: notFound() };
   }
   return { project };

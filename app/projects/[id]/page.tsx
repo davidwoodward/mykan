@@ -55,6 +55,7 @@ export default async function ProjectPage({
               project={project}
               isOwner={isOwner(session.user.email)}
               viewerEmail={session.user.email}
+              allMembers={whitelist()}
             />
           </div>
           <div className="flex shrink-0 items-center gap-4">
@@ -71,11 +72,26 @@ export default async function ProjectPage({
         <ProjectDetailView
           projectId={project.id}
           projectKey={project.key}
-          members={whitelist()}
+          members={projectMembers(project)}
           isPrivate={project.is_private}
         />
       </main>
     </div>
+  );
+}
+
+/**
+ * Who can be assigned on a project = who can see it: the owner plus the members
+ * it's shared with (deduped). Assignee candidates are drawn from this, not the
+ * whole whitelist, so you can't assign someone who can't see the project.
+ */
+function projectMembers(project: Project): string[] {
+  return Array.from(
+    new Set(
+      [project.created_by, ...(project.shared_with ?? [])].filter(
+        (e): e is string => !!e,
+      ),
+    ),
   );
 }
 

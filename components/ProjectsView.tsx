@@ -10,14 +10,16 @@ import {
 import Link from "next/link";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { Byline } from "@/components/Byline";
+import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
 
 export function ProjectsView({
-  isOwner,
   viewerEmail,
+  members,
 }: {
-  isOwner: boolean;
   viewerEmail: string;
+  /** The full whitelist — share candidates for projects you own. */
+  members: string[];
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function ProjectsView({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [key, setKey] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [sharedWith, setSharedWith] = useState<string[]>([]);
   const [, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
 
@@ -51,7 +53,7 @@ export function ProjectsView({
     setName("");
     setDescription("");
     setKey("");
-    setIsPrivate(false);
+    setSharedWith([]);
     setError(null);
     setAdding(true);
   }
@@ -62,7 +64,7 @@ export function ProjectsView({
     setName("");
     setDescription("");
     setKey("");
-    setIsPrivate(false);
+    setSharedWith([]);
   }
 
   // Live-suggested key from the typed name, matching the project-edit panel.
@@ -84,7 +86,7 @@ export function ProjectsView({
           name: trimmed,
           description: description.trim() || null,
           key: key.trim().toUpperCase() || null,
-          isPrivate,
+          sharedWith,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -100,23 +102,25 @@ export function ProjectsView({
     }
   }
 
-  async function toggleVisibility(id: string, isPrivate: boolean) {
+  async function shareProject(id: string, next: string[]) {
     const before = projects;
     setProjects((prev) =>
-      prev?.map((p) => (p.id === id ? { ...p, is_private: isPrivate } : p)) ?? prev,
+      prev?.map((p) =>
+        p.id === id ? { ...p, shared_with: next, is_private: next.length === 0 } : p,
+      ) ?? prev,
     );
     try {
       const res = await fetch(`/api/projects/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ isPrivate }),
+        body: JSON.stringify({ sharedWith: next }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const updated = (await res.json()) as Project;
       setProjects((prev) => prev?.map((p) => (p.id === id ? updated : p)) ?? prev);
     } catch (e) {
       setProjects(before ?? null);
-      setError(e instanceof Error ? e.message : "Failed to update visibility");
+      setError(e instanceof Error ? e.message : "Failed to update sharing");
     }
   }
 
@@ -230,29 +234,16 @@ export function ProjectsView({
             </span>
           </div>
 
-          {isOwner ? (
-            <div className="mt-3 flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--color-faint)]">Visibility</span>
-              <button
-                type="button"
-                onClick={() => setIsPrivate((v) => !v)}
-                className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                  isPrivate
-                    ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                    : "border-[var(--color-line)] text-[var(--color-faint)] hover:text-[var(--color-muted)]"
-                }`}
-                aria-pressed={isPrivate}
-                aria-label={isPrivate ? "Make project shared" : "Make project private"}
-                title={
-                  isPrivate
-                    ? "Private — only you can see this. Click to share."
-                    : "Shared with everyone. Click to make private (only you)."
-                }
-              >
-                {isPrivate ? "Private" : "Shared"}
-              </button>
-            </div>
-          ) : null}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <span className="text-xs text-[var(--color-faint)]">Shared with</span>
+            <ProjectShareControl
+              sharedWith={sharedWith}
+              candidates={members}
+              ownerEmail={viewerEmail}
+              canEdit
+              onChange={setSharedWith}
+            />
+          </div>
 
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-[var(--color-faint)]">
@@ -305,27 +296,13 @@ export function ProjectsView({
                   />
                 </Link>
                 <div className="flex items-center gap-3 self-center">
-                  {isOwner && p.created_by?.toLowerCase() === viewerEmail.toLowerCase() ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleVisibility(p.id, !p.is_private)}
-                      className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                        p.is_private
-                          ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                          : "border-[var(--color-line)] text-[var(--color-faint)] hover:text-[var(--color-muted)]"
-                      }`}
-                      aria-label={
-                        p.is_private ? `Make ${p.name} shared` : `Make ${p.name} private`
-                      }
-                      title={
-                        p.is_private
-                          ? "Private — only you can see this. Click to share."
-                          : "Shared with everyone. Click to make private (only you)."
-                      }
-                    >
-                      {p.is_private ? "Private" : "Shared"}
-                    </button>
-                  ) : null}
+                  <ProjectShareControl
+                    sharedWith={p.shared_with ?? []}
+                    candidates={members}
+                    ownerEmail={p.created_by}
+                    canEdit={p.created_by?.toLowerCase() === viewerEmail.toLowerCase()}
+                    onChange={(next) => void shareProject(p.id, next)}
+                  />
                   <button
                     type="button"
                     onClick={() => deleteProject(p.id)}

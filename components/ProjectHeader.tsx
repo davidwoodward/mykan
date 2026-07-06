@@ -9,9 +9,18 @@ import {
 import { useRouter } from "next/navigation";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { Byline } from "@/components/Byline";
+import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
 
 type Status = "idle" | "saving" | "error";
+
+/** Order-insensitive equality for two member-email lists. */
+function sameMembers(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((x, i) => x === sb[i]);
+}
 
 /**
  * The project title in the nav, with an inline pencil-edit affordance.
@@ -24,10 +33,13 @@ export function ProjectHeader({
   project: initial,
   isOwner,
   viewerEmail,
+  allMembers,
 }: {
   project: Project;
   isOwner: boolean;
   viewerEmail: string;
+  /** The full whitelist — share candidates offered to the owner. */
+  allMembers: string[];
 }) {
   const router = useRouter();
   const [project, setProject] = useState(initial);
@@ -35,7 +47,7 @@ export function ProjectHeader({
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? "");
   const [key, setKey] = useState(initial.key ?? "");
-  const [isPrivate, setIsPrivate] = useState(initial.is_private);
+  const [sharedWith, setSharedWith] = useState<string[]>(initial.shared_with ?? []);
   const [status, setStatus] = useState<Status>("idle");
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -51,7 +63,7 @@ export function ProjectHeader({
     setName(project.name);
     setDescription(project.description ?? "");
     setKey(project.key ?? "");
-    setIsPrivate(project.is_private);
+    setSharedWith(project.shared_with ?? []);
     setStatus("idle");
     setEditing(true);
   }
@@ -66,8 +78,8 @@ export function ProjectHeader({
     if (trimmedName && trimmedName !== project.name) patch.name = trimmedName;
     if (nextDescription !== project.description) patch.description = nextDescription;
     if (nextKey !== project.key) patch.key = nextKey;
-    if (canToggleVisibility && isPrivate !== project.is_private) {
-      patch.isPrivate = isPrivate;
+    if (canToggleVisibility && !sameMembers(sharedWith, project.shared_with ?? [])) {
+      patch.sharedWith = sharedWith;
     }
     return patch;
   }
@@ -233,25 +245,14 @@ export function ProjectHeader({
 
           {canToggleVisibility ? (
             <div className="mt-3 flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--color-faint)]">Visibility</span>
-              <button
-                type="button"
-                onClick={() => setIsPrivate((v) => !v)}
-                className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                  isPrivate
-                    ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                    : "border-[var(--color-line)] text-[var(--color-faint)] hover:text-[var(--color-muted)]"
-                }`}
-                aria-pressed={isPrivate}
-                aria-label={isPrivate ? "Make project shared" : "Make project private"}
-                title={
-                  isPrivate
-                    ? "Private — only you can see this. Click to share."
-                    : "Shared with everyone. Click to make private (only you)."
-                }
-              >
-                {isPrivate ? "Private" : "Shared"}
-              </button>
+              <span className="text-xs text-[var(--color-faint)]">Shared with</span>
+              <ProjectShareControl
+                sharedWith={sharedWith}
+                candidates={allMembers}
+                ownerEmail={project.created_by}
+                canEdit
+                onChange={setSharedWith}
+              />
             </div>
           ) : null}
 

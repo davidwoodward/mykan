@@ -13,7 +13,7 @@ export function coreErr(error: string, status = 400): CoreResult<never> {
   return { ok: false, error, status };
 }
 
-/** Projects visible to `actor`: every public project plus the actor's own private ones. */
+/** Projects visible to `actor`: the ones they own plus any shared with them. */
 export async function listProjects(
   sb: SupabaseClient,
   actor: string,
@@ -24,7 +24,7 @@ export async function listProjects(
     .order("created_at", { ascending: false });
   if (error) return coreErr(error.message, 500);
   const visible = (data ?? []).filter(
-    (p) => !p.is_private || p.created_by === actor,
+    (p) => p.created_by === actor || (p.shared_with ?? []).includes(actor),
   ) as Project[];
   return coreOk(visible);
 }

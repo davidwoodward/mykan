@@ -128,8 +128,16 @@ export interface Project {
   description: string | null;
   /** Short uppercase key prefixing item references, e.g. "AMOS" → AMOS-12. */
   key: string | null;
-  /** When true, visible only to its creator (the owner). Defaults to public. */
+  /**
+   * True when the project is shared with no one — visible only to its creator.
+   * Mirrors `shared_with` being empty; kept for the "Private" label and lock.
+   */
   is_private: boolean;
+  /**
+   * Member emails this project is shared with, beyond the owner. The owner
+   * always sees it; these members also see it. Empty = private (owner only).
+   */
+  shared_with: string[];
   created_at: string;
   updated_at: string;
   created_by: string | null;
