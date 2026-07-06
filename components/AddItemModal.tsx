@@ -12,9 +12,10 @@ const EMPTY_DOC: RichDoc = { type: "doc", content: [] };
 /**
  * Create a new item through the same surface as the edit popup — a rich-text
  * body editor in a modal. Unlike the edit modal there is no row to autosave
- * against yet, so the item is POSTed once on an explicit commit (the Add
- * button or ⌘/Ctrl+Enter); Esc / click-off / ✕ abandon the draft. Inline
- * images need an item id, so they are added after creating (open the item).
+ * against yet, so the item is POSTed once on a commit — the Add button,
+ * ⌘/Ctrl+Enter, or Esc when the draft has content (Esc on an empty draft just
+ * closes). Click-off and ✕ are the explicit discard paths. Inline images need
+ * an item id, so they are added after creating (open the item).
  */
 export function AddItemModal({
   projectId,
@@ -31,6 +32,9 @@ export function AddItemModal({
   const [tags, setTags] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const bodyRef = useRef<RichDoc>(EMPTY_DOC);
+  // Live getter for the editor's current doc — bypasses the editor's 700ms
+  // onChange debounce so an immediate Esc still sees what was just typed.
+  const getDoc = useRef<(() => RichDoc) | null>(null);
   const [hasContent, setHasContent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +44,13 @@ export function AddItemModal({
     setHasContent(richDocText(doc).trim().length > 0);
   }, []);
 
+  const currentDoc = useCallback(
+    (): RichDoc => getDoc.current?.() ?? bodyRef.current,
+    [],
+  );
+
   const submit = useCallback(async () => {
-    const body = bodyRef.current;
+    const body = currentDoc();
     if (!richDocText(body).trim() || busy) return;
     setBusy(true);
     setError(null);
@@ -59,13 +68,21 @@ export function AddItemModal({
       setError(e instanceof Error ? e.message : "Failed to create");
       setBusy(false);
     }
-  }, [projectId, type, tags, categoryId, busy, onCreated, onClose]);
+  }, [projectId, type, tags, categoryId, busy, onCreated, onClose, currentDoc]);
 
-  // Esc abandons the draft; ⌘/Ctrl+Enter commits (Enter alone makes newlines).
+  // Esc means "I'm done" (like the editor): if the draft has content it
+  // commits, so you never lose typed work to a reflexive Esc; an empty draft
+  // just closes. ⌘/Ctrl+Enter also commits (Enter alone makes newlines). The
+  // ✕ and backdrop click remain the explicit discard paths.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        onClose();
+        if (richDocText(currentDoc()).trim()) {
+          e.preventDefault();
+          void submit();
+        } else {
+          onClose();
+        }
       } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         void submit();
@@ -73,7 +90,7 @@ export function AddItemModal({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, submit]);
+  }, [onClose, submit, currentDoc]);
 
   // No item exists yet, so inline image embedding is unavailable here.
   const uploadImage = useCallback(async (): Promise<string> => {
@@ -110,6 +127,7 @@ export function AddItemModal({
           value={null}
           onChange={onBodyChange}
           onUploadImage={uploadImage}
+          getDocRef={getDoc}
           autoFocus
         />
 
@@ -125,7 +143,7 @@ export function AddItemModal({
           {error ? (
             <span className="text-[var(--color-bug)]">{error}</span>
           ) : (
-            <span className="hidden sm:inline">⌘/Ctrl+Enter to add · Esc to cancel</span>
+            <span className="hidden sm:inline">⌘/Ctrl+Enter or Esc to add · ✕ to discard</span>
           )}
           <button
             type="button"
