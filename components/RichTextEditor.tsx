@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Content, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -14,6 +14,7 @@ export function RichTextEditor({
   onChange,
   onUploadImage,
   autoFocus = false,
+  getDocRef,
 }: {
   value: RichDoc | null;
   /** Fired (debounced) with the latest document whenever it changes. */
@@ -21,6 +22,12 @@ export function RichTextEditor({
   /** Uploads a pasted/dropped image and resolves to its served URL. */
   onUploadImage: (file: File) => Promise<string>;
   autoFocus?: boolean;
+  /**
+   * Populated with a synchronous getter for the editor's current document, so
+   * callers can read live content that hasn't cleared the debounced `onChange`
+   * yet (e.g. deciding what to do on an immediate Esc). Null while unmounted.
+   */
+  getDocRef?: MutableRefObject<(() => RichDoc) | null>;
 }) {
   // Keep the latest callbacks in refs so the editor's static editorProps
   // closures always call through to current values without re-initialising.
@@ -75,6 +82,16 @@ export function RichTextEditor({
       // Swallow — the modal surfaces upload errors via its own state.
     }
   }
+
+  // Expose a live-content getter so callers can read the document synchronously
+  // (bypassing the 700ms onChange debounce).
+  useEffect(() => {
+    if (!getDocRef) return;
+    getDocRef.current = editor ? () => editor.getJSON() as RichDoc : null;
+    return () => {
+      getDocRef.current = null;
+    };
+  }, [editor, getDocRef]);
 
   // Flush any pending debounced save when unmounting (e.g. modal close).
   useEffect(() => {
