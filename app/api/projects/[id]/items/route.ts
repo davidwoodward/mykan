@@ -36,6 +36,7 @@ export async function POST(req: Request, { params }: Ctx) {
     body?: unknown;
     tags?: unknown;
     category_id?: unknown;
+    position?: unknown;
   };
   const r = await createItem(getSupabase(), gate.email, id, {
     name: body.name,
@@ -43,6 +44,7 @@ export async function POST(req: Request, { params }: Ctx) {
     body: body.body,
     tags: body.tags,
     category_id: body.category_id,
+    position: body.position,
   });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   return NextResponse.json(r.data, { status: 201 });

@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   DndContext,
   PointerSensor,
@@ -55,6 +61,10 @@ type RowProps = {
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
   onItemChange: (item: Item) => void;
+  /** The currently selected row id (status list only), or null. */
+  selectedId?: string | null;
+  /** Select a row (null clears). */
+  onSelect?: (id: string | null) => void;
 };
 
 /** The drag bits passed to a row when it lives in the flat sortable list. */
@@ -80,6 +90,8 @@ export function ItemList({
   tagSuggestions,
   onTagsChange,
   onItemChange,
+  selectedId,
+  onSelect,
   areaGroups,
   flatItems,
 }: {
@@ -97,6 +109,8 @@ export function ItemList({
   tagSuggestions?: string[];
   onTagsChange?: (id: string, tags: string[]) => void;
   onItemChange: (item: Item) => void;
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
   /** When set, render these Area groups instead of the status sections. */
   areaGroups?: { key: string; items: Item[] }[];
   /** When set, render one flat, draggable list (ordered by position). */
@@ -116,6 +130,8 @@ export function ItemList({
     tagSuggestions,
     onTagsChange,
     onItemChange,
+    selectedId,
+    onSelect,
   };
 
   // Flat, draggable single list (the "Flat" grouping) — drag reorders the
@@ -252,15 +268,42 @@ function ItemRow({
   tagSuggestions,
   onTagsChange,
   onItemChange,
+  selectedId,
+  onSelect,
 }: { item: Item; sortable?: SortableBits } & RowProps) {
   const text = richDocText(item.body);
+  const selected = !!onSelect && item.id === selectedId;
+
+  // A plain click on the row's background selects it. We skip when the click
+  // landed on an interactive control (buttons, pickers, inputs) or when the
+  // user drag-selected text (so copying text still works).
+  function onRowClick(e: ReactMouseEvent) {
+    if (!onSelect) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(
+        'button, a, input, textarea, [role="listbox"], [role="option"], [contenteditable="true"]',
+      )
+    ) {
+      return;
+    }
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && sel.toString().length > 0) return;
+    onSelect(item.id);
+  }
 
   return (
     <li
       ref={sortable?.setNodeRef}
       style={sortable?.style}
+      data-item-row
+      onClick={onSelect ? onRowClick : undefined}
       className={`group flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-3 ${
         sortable?.isDragging ? "opacity-50" : ""
+      } ${
+        selected
+          ? "bg-[var(--color-accent-soft)] shadow-[inset_2px_0_0_var(--color-accent)]"
+          : ""
       }`}
     >
       {/* Lead "status line": on small screens this is its own row above the

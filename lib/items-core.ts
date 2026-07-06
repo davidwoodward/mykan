@@ -303,6 +303,12 @@ export type CreateItemInput = {
   /** An Area path like "coach / home"; created if missing when no category_id. */
   area?: unknown;
   assignees?: unknown;
+  /**
+   * Explicit global position for the new item. When omitted, the item appends
+   * to the end of the project (the default). Used to insert a new item at a
+   * specific spot (e.g. right after a selected row).
+   */
+  position?: unknown;
 };
 
 /** Create an item in a project (mirrors POST /api/projects/[id]/items). */
@@ -334,17 +340,23 @@ export async function createItem(
     category_id = cat.data.id;
   }
 
-  // position is a GLOBAL per-project order (Design A); append to the end of the
-  // whole project so a new item lands at the bottom of the flat list (and, since
-  // it's the highest position, still at the bottom of its status column).
-  const { data: tail } = await sb
-    .from("items")
-    .select("position")
-    .eq("project_id", proj.data.id)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const position = (tail?.position ?? 0) + 1024;
+  // position is a GLOBAL per-project order (Design A). An explicit position
+  // (e.g. inserting right after a selected row) wins; otherwise append to the
+  // end of the whole project so a new item lands at the bottom of the flat list
+  // (and, since it's the highest position, at the bottom of its status column).
+  let position: number;
+  if (typeof input.position === "number" && Number.isFinite(input.position)) {
+    position = input.position;
+  } else {
+    const { data: tail } = await sb
+      .from("items")
+      .select("position")
+      .eq("project_id", proj.data.id)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    position = (tail?.position ?? 0) + 1024;
+  }
   const { data, error } = await sb
     .from("items")
     .insert({
