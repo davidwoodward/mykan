@@ -454,6 +454,8 @@ function StatusMenu({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
       }}
     >
+      {/* The trigger IS the original status pill, unchanged — clicking it opens
+          the menu (instead of cycling). No extra affordance/chevron. */}
       <button
         ref={btnRef}
         type="button"
@@ -461,21 +463,9 @@ function StatusMenu({
         aria-haspopup="listbox"
         aria-expanded={open}
         title="Change status"
-        className="inline-flex items-center gap-1 rounded"
+        className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset ${STATUS_STYLES[value]}`}
       >
-        <StatusBadge status={value} />
-        <svg
-          className="h-3 w-3 shrink-0 text-[var(--color-faint)]"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        {STATUS_LABEL[value]}
       </button>
       {open ? (
         <div
