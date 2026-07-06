@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -289,11 +289,9 @@ function ItemRow({
         {/* Fixed-width columns so the ref and content line up across every row,
             regardless of the status label's width. */}
         <div className="w-[5.5rem] shrink-0">
-          <StatusPill
-            status={item.status}
-            onCycle={() =>
-              void onPatch(item.id, { status: nextStatus(item.status) })
-            }
+          <StatusMenu
+            value={item.status}
+            onChange={(s) => void onPatch(item.id, { status: s })}
           />
         </div>
         <div className="w-16 shrink-0">
@@ -382,34 +380,140 @@ function ItemRow({
   );
 }
 
-function nextStatus(s: ItemStatus): ItemStatus {
-  const i = ITEM_STATUSES.indexOf(s);
-  return ITEM_STATUSES[(i + 1) % ITEM_STATUSES.length];
-}
+const STATUS_STYLES: Record<ItemStatus, string> = {
+  new: "text-[var(--color-muted)] bg-[var(--color-canvas)] ring-[var(--color-line-strong)]",
+  in_progress:
+    "text-[var(--color-accent-ink)] bg-[var(--color-accent-soft)] ring-[var(--color-line-strong)]",
+  blocked: "text-[var(--color-bug)] bg-[var(--color-bug-bg)] ring-[var(--color-bug-line)]",
+  done: "text-[var(--color-feature)] bg-[var(--color-feature-bg)] ring-[var(--color-feature-line)]",
+};
 
-function StatusPill({
-  status,
-  onCycle,
-}: {
-  status: ItemStatus;
-  onCycle: () => void;
-}) {
-  const styles: Record<ItemStatus, string> = {
-    new: "text-[var(--color-muted)] bg-[var(--color-canvas)] ring-[var(--color-line-strong)]",
-    in_progress:
-      "text-[var(--color-accent-ink)] bg-[var(--color-accent-soft)] ring-[var(--color-line-strong)]",
-    blocked: "text-[var(--color-bug)] bg-[var(--color-bug-bg)] ring-[var(--color-bug-line)]",
-    done: "text-[var(--color-feature)] bg-[var(--color-feature-bg)] ring-[var(--color-feature-line)]",
-  };
+/** The status pill, styled per state — shared by the trigger and menu options. */
+function StatusBadge({ status }: { status: ItemStatus }) {
   return (
-    <button
-      type="button"
-      onClick={onCycle}
-      title="Click to cycle status"
-      className={`mt-0.5 inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset ${styles[status]}`}
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset ${STATUS_STYLES[status]}`}
     >
       {STATUS_LABEL[status]}
-    </button>
+    </span>
+  );
+}
+
+/**
+ * Direct status picker for a list row: click (or focus + ↓) the pill to open a
+ * floating listbox of all statuses and pick one — no more cycling through each
+ * state. Keyboard-first per DESIGN.md: opens with the current status focused,
+ * ↑/↓ move, Enter selects, Esc closes (Tab just leaves). The overlay floats and
+ * does not push the row content.
+ */
+function StatusMenu({
+  value,
+  onChange,
+}: {
+  value: ItemStatus;
+  onChange: (s: ItemStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // On open, focus the current status so ↑/↓ move from where you are.
+  useEffect(() => {
+    if (!open) return;
+    const i = Math.max(0, ITEM_STATUSES.indexOf(value));
+    optionRefs.current[i]?.focus();
+  }, [open, value]);
+
+  function moveFocus(delta: number) {
+    const cur = optionRefs.current.findIndex((el) => el === document.activeElement);
+    const start = cur < 0 ? ITEM_STATUSES.indexOf(value) : cur;
+    const next = (start + delta + ITEM_STATUSES.length) % ITEM_STATUSES.length;
+    optionRefs.current[next]?.focus();
+  }
+
+  function pick(s: ItemStatus) {
+    if (s !== value) onChange(s);
+    setOpen(false);
+    btnRef.current?.focus();
+  }
+
+  return (
+    <div
+      className="relative mt-0.5"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          setOpen(false);
+          btnRef.current?.focus();
+        } else if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+          e.preventDefault();
+          moveFocus(e.key === "ArrowDown" ? 1 : -1);
+        }
+      }}
+      // Close when focus leaves the whole control (e.g. Tab away or click off).
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Change status"
+        className="inline-flex items-center gap-1 rounded"
+      >
+        <StatusBadge status={value} />
+        <svg
+          className="h-3 w-3 shrink-0 text-[var(--color-faint)]"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute left-0 z-10 mt-1 flex w-36 flex-col gap-0.5 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-sm"
+        >
+          {ITEM_STATUSES.map((s, i) => (
+            <button
+              key={s}
+              ref={(el) => {
+                optionRefs.current[i] = el;
+              }}
+              type="button"
+              role="option"
+              aria-selected={s === value}
+              onClick={() => pick(s)}
+              className="flex items-center justify-between rounded px-2 py-1 text-left hover:bg-[var(--color-canvas)] focus:bg-[var(--color-canvas)] focus:outline-none"
+            >
+              <StatusBadge status={s} />
+              {s === value ? (
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted)]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
