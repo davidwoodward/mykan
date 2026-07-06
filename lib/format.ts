@@ -17,6 +17,21 @@ export function localPart(email: string | null | undefined): string {
   return at > 0 ? email.slice(0, at) : email;
 }
 
+/**
+ * Short display names for members whose email local-part would otherwise be
+ * ambiguous or unwieldy. dwoody55 shows as "Woody" (initial "W") so it doesn't
+ * collide with dawoodward's "D" on assignee avatars.
+ */
+const DISPLAY_NAMES: Record<string, string> = {
+  "dwoody55@gmail.com": "Woody",
+};
+
+/** The name to show for a member — an override when set, else the local-part. */
+export function displayName(email: string | null | undefined): string {
+  if (!email) return "—";
+  return DISPLAY_NAMES[email.trim().toLowerCase()] ?? localPart(email);
+}
+
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();

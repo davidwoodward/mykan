@@ -8,7 +8,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { localPart } from "@/lib/format";
+import { displayName } from "@/lib/format";
 import type { Item } from "@/lib/types";
 
 type AssigneeConfig = {
@@ -23,14 +23,14 @@ const AssigneeContext = createContext<AssigneeConfig | null>(null);
 export const AssigneeProvider = AssigneeContext.Provider;
 
 function initial(email: string): string {
-  return localPart(email).charAt(0).toUpperCase() || "?";
+  return displayName(email).charAt(0).toUpperCase() || "?";
 }
 
 /** A small circular initial for a member. */
 function Avatar({ email, dim = false }: { email: string; dim?: boolean }) {
   return (
     <span
-      title={localPart(email)}
+      title={displayName(email)}
       className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-medium ${
         dim
           ? "bg-[var(--color-canvas)] text-[var(--color-faint)] ring-1 ring-inset ring-[var(--color-line)]"
@@ -144,7 +144,7 @@ export function ItemAssignees({
                   {checked ? "✓" : ""}
                 </span>
                 <Avatar email={m} dim={!checked} />
-                <span className="truncate">{localPart(m)}</span>
+                <span className="truncate">{displayName(m)}</span>
               </button>
             );
           })}
