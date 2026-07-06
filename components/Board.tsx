@@ -1,5 +1,6 @@
 "use client";
 
+import { type MouseEvent as ReactMouseEvent } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -61,6 +62,10 @@ type TagProps = {
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
   onPurge: (id: string) => void;
+  /** The selected card id (shared with the list), or null. */
+  selectedId?: string | null;
+  /** Select a card (null clears). */
+  onSelect?: (id: string | null) => void;
 };
 
 export function Board({
@@ -78,6 +83,8 @@ export function Board({
   tagSuggestions,
   onTagsChange,
   onItemChange,
+  selectedId,
+  onSelect,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
@@ -138,6 +145,8 @@ export function Board({
             tagSuggestions={tagSuggestions}
             onTagsChange={onTagsChange}
             onItemChange={onItemChange}
+            selectedId={selectedId}
+            onSelect={onSelect}
           />
         ))}
       </div>
@@ -160,6 +169,8 @@ function Column({
   tagSuggestions,
   onTagsChange,
   onItemChange,
+  selectedId,
+  onSelect,
 }: {
   status: ItemStatus;
   items: Item[];
@@ -212,6 +223,8 @@ function Column({
               tagSuggestions={tagSuggestions}
               onTagsChange={onTagsChange}
               onItemChange={onItemChange}
+              selectedId={selectedId}
+              onSelect={onSelect}
             />
           ))}
           {items.length === 0 ? (
@@ -239,6 +252,8 @@ function Card({
   tagSuggestions,
   onTagsChange,
   onItemChange,
+  selectedId,
+  onSelect,
 }: {
   item: Item;
   onOpen: (item: Item) => void;
@@ -246,6 +261,7 @@ function Card({
   activeCreator?: string | null;
 } & TagProps) {
   const text = richDocText(item.body);
+  const selected = !!onSelect && item.id === selectedId;
   const {
     attributes,
     listeners,
@@ -260,12 +276,35 @@ function Card({
     transition,
   };
 
+  // A plain click on the card's background selects it. Skip when the click hit
+  // a control (drag grip, pencil, tags, inputs) or was a text-selection drag.
+  function onCardClick(e: ReactMouseEvent) {
+    if (!onSelect) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(
+        'button, a, input, textarea, [role="listbox"], [role="option"], [contenteditable="true"]',
+      )
+    ) {
+      return;
+    }
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && sel.toString().length > 0) return;
+    onSelect(item.id);
+  }
+
   return (
     <li
       ref={setNodeRef}
       style={style}
-      className={`group rounded-md border border-[var(--color-line)] bg-[var(--color-canvas)] p-2.5 text-sm shadow-[0_1px_0_var(--color-line)] ${
+      data-item-id={item.id}
+      onClick={onSelect ? onCardClick : undefined}
+      className={`group rounded-md border p-2.5 text-sm shadow-[0_1px_0_var(--color-line)] ${
         isDragging ? "opacity-50" : ""
+      } ${
+        selected
+          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]"
+          : "border-[var(--color-line)] bg-[var(--color-canvas)]"
       }`}
     >
       {/* Grip drags; the text is plain, selectable content (double-click to
