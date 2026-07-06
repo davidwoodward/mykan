@@ -20,11 +20,18 @@ const EMPTY_DOC: RichDoc = { type: "doc", content: [] };
 export function AddItemModal({
   projectId,
   allTags,
+  position,
   onClose,
   onCreated,
 }: {
   projectId: string;
   allTags: string[];
+  /**
+   * Explicit global position for the new item — computed from the current
+   * selection (insert after a selected Not Started row, else end of Not
+   * Started). Omitted → the server appends to the end of the project.
+   */
+  position?: number;
   onClose: () => void;
   onCreated: (item: Item) => void;
 }) {
@@ -58,7 +65,13 @@ export function AddItemModal({
       const res = await fetch(`/api/projects/${projectId}/items`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body, type, tags, category_id: categoryId }),
+        body: JSON.stringify({
+          body,
+          type,
+          tags,
+          category_id: categoryId,
+          ...(typeof position === "number" ? { position } : {}),
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const created = (await res.json()) as Item;
@@ -68,7 +81,7 @@ export function AddItemModal({
       setError(e instanceof Error ? e.message : "Failed to create");
       setBusy(false);
     }
-  }, [projectId, type, tags, categoryId, busy, onCreated, onClose, currentDoc]);
+  }, [projectId, type, tags, categoryId, position, busy, onCreated, onClose, currentDoc]);
 
   // Esc means "I'm done" (like the editor): if the draft has content it
   // commits, so you never lose typed work to a reflexive Esc; an empty draft

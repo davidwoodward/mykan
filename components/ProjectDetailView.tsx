@@ -30,6 +30,7 @@ import {
   subtreeIdSet,
 } from "@/components/CategoryPicker";
 import { CategoryManager } from "@/components/CategoryManager";
+import { computePosition } from "@/lib/position";
 
 type View = "list" | "board";
 
@@ -58,6 +59,9 @@ export function ProjectDetailView({
   const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">("status");
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  // The row "selected" in the status-grouped list — drives the highlight, the
+  // j/k/g/G/u/d keyboard model, and where a new item is inserted.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -459,6 +463,103 @@ export function ProjectDetailView({
     }));
   }, [visibleItems, pathOf]);
 
+  // Selection + keyboard nav are scoped to the status-grouped list (the model
+  // is entirely status-based).
+  const selectionActive = view === "list" && groupBy === "status" && !showArchived;
+
+  // Drop the selection whenever it leaves the DOM (filtered out, deleted) or
+  // the status list is no longer showing, so no stale highlight lingers.
+  useEffect(() => {
+    if (!selectionActive) {
+      if (selectedId !== null) setSelectedId(null);
+      return;
+    }
+    if (selectedId && !visibleItems.some((it) => it.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [selectionActive, selectedId, visibleItems]);
+
+  // Where a new item lands: right after the selected row when it's in Not
+  // Started, otherwise the end of the Not Started column. New items are always
+  // Not Started, so a selection in another status falls back to the end.
+  const addPosition = useMemo(() => {
+    const news = grouped.new;
+    const sel = selectedId ? visibleItems.find((it) => it.id === selectedId) : null;
+    if (sel && sel.status === "new") {
+      const i = news.findIndex((it) => it.id === sel.id);
+      return computePosition(sel.position, news[i + 1]?.position);
+    }
+    return computePosition(news[news.length - 1]?.position, undefined);
+  }, [grouped, selectedId, visibleItems]);
+
+  // j/k move the selection (across status sections in display order); g/G jump
+  // to the first/last Not Started row; u/d move the selected item one slot
+  // within its own status section (never crossing into another status).
+  useEffect(() => {
+    if (!selectionActive) return;
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (adding || openItemId || showCategoryManager) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))
+      ) {
+        return;
+      }
+      if (!"jkgGud".includes(e.key)) return;
+      const order = ITEM_STATUSES.flatMap((s) => grouped[s]);
+      if (order.length === 0) return;
+      const news = grouped.new;
+      const idx = selectedId ? order.findIndex((it) => it.id === selectedId) : -1;
+
+      if (e.key === "j") {
+        e.preventDefault();
+        setSelectedId((order[idx < 0 ? 0 : Math.min(idx + 1, order.length - 1)]).id);
+      } else if (e.key === "k") {
+        e.preventDefault();
+        setSelectedId((order[idx < 0 ? 0 : Math.max(idx - 1, 0)]).id);
+      } else if (e.key === "g") {
+        if (news[0]) {
+          e.preventDefault();
+          setSelectedId(news[0].id);
+        }
+      } else if (e.key === "G") {
+        if (news.length) {
+          e.preventDefault();
+          setSelectedId(news[news.length - 1].id);
+        }
+      } else if (e.key === "u" || e.key === "d") {
+        if (!selectedId) return;
+        const sel = order.find((it) => it.id === selectedId);
+        if (!sel) return;
+        const section = grouped[sel.status];
+        const i = section.findIndex((it) => it.id === sel.id);
+        const target = e.key === "u" ? i - 1 : i + 1;
+        if (target < 0 || target >= section.length) return; // clamp within status
+        e.preventDefault();
+        const reordered = [...section];
+        reordered.splice(i, 1);
+        reordered.splice(target, 0, sel);
+        const pos = computePosition(
+          reordered[target - 1]?.position,
+          reordered[target + 1]?.position,
+        );
+        void patchItem(sel.id, { position: pos });
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    selectionActive,
+    adding,
+    openItemId,
+    showCategoryManager,
+    grouped,
+    selectedId,
+    patchItem,
+  ]);
+
   const openItem = useMemo(
     () => (openItemId ? (items?.find((it) => it.id === openItemId) ?? null) : null),
     [openItemId, items],
@@ -682,12 +783,23 @@ export function ProjectDetailView({
           Only desktop (≥lg) gets this contained scroll; phones (both
           orientations — landscape is ~960px wide) and tablets keep plain
           full-page scroll, so only the pinned top bar stays put. */}
-      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
+      <div
+        className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+        onClick={(e) => {
+          // Click on the empty background (not on a row) clears the selection.
+          if (!selectionActive) return;
+          if (!(e.target as HTMLElement).closest("[data-item-row]")) {
+            setSelectedId(null);
+          }
+        }}
+      >
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
         <ItemList
           grouped={grouped}
+          selectedId={selectionActive ? selectedId : null}
+          onSelect={setSelectedId}
           onPatch={patchItem}
           archivedView={showArchived}
           onArchive={archiveItem}
@@ -730,6 +842,7 @@ export function ProjectDetailView({
         <AddItemModal
           projectId={projectId}
           allTags={allTags}
+          position={addPosition}
           onClose={() => setAdding(false)}
           onCreated={addCreated}
         />
