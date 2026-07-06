@@ -297,6 +297,7 @@ function ItemRow({
       ref={sortable?.setNodeRef}
       style={sortable?.style}
       data-item-row
+      data-item-id={item.id}
       onClick={onSelect ? onRowClick : undefined}
       className={`group flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-3 ${
         sortable?.isDragging ? "opacity-50" : ""

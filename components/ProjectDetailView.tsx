@@ -560,6 +560,17 @@ export function ProjectDetailView({
     patchItem,
   ]);
 
+  // Keep the selected row visible as j/k/g/G move the selection and u/d reorder
+  // it. `block: "nearest"` only scrolls when the row is actually out of view.
+  const selectedPos = selectedId
+    ? visibleItems.find((it) => it.id === selectedId)?.position
+    : undefined;
+  useEffect(() => {
+    if (!selectionActive || !selectedId) return;
+    const el = document.querySelector(`[data-item-id="${selectedId}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectionActive, selectedId, selectedPos]);
+
   const openItem = useMemo(
     () => (openItemId ? (items?.find((it) => it.id === openItemId) ?? null) : null),
     [openItemId, items],
