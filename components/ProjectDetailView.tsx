@@ -463,9 +463,11 @@ export function ProjectDetailView({
     }));
   }, [visibleItems, pathOf]);
 
-  // Selection + keyboard nav are scoped to the status-grouped list (the model
-  // is entirely status-based).
-  const selectionActive = view === "list" && groupBy === "status" && !showArchived;
+  // Selection + keyboard nav run on the status-grouped list and on the board
+  // (which is always status-grouped). The model is entirely status-based.
+  const selectionActive =
+    !showArchived &&
+    ((view === "list" && groupBy === "status") || view === "board");
 
   // Drop the selection whenever it leaves the DOM (filtered out, deleted) or
   // the status list is no longer showing, so no stale highlight lingers.
@@ -508,30 +510,13 @@ export function ProjectDetailView({
         return;
       }
       if (!"jkgGud".includes(e.key)) return;
-      const order = ITEM_STATUSES.flatMap((s) => grouped[s]);
-      if (order.length === 0) return;
-      const news = grouped.new;
-      const idx = selectedId ? order.findIndex((it) => it.id === selectedId) : -1;
+      const sel = selectedId
+        ? visibleItems.find((it) => it.id === selectedId) ?? null
+        : null;
 
-      if (e.key === "j") {
-        e.preventDefault();
-        setSelectedId((order[idx < 0 ? 0 : Math.min(idx + 1, order.length - 1)]).id);
-      } else if (e.key === "k") {
-        e.preventDefault();
-        setSelectedId((order[idx < 0 ? 0 : Math.max(idx - 1, 0)]).id);
-      } else if (e.key === "g") {
-        if (news[0]) {
-          e.preventDefault();
-          setSelectedId(news[0].id);
-        }
-      } else if (e.key === "G") {
-        if (news.length) {
-          e.preventDefault();
-          setSelectedId(news[news.length - 1].id);
-        }
-      } else if (e.key === "u" || e.key === "d") {
-        if (!selectedId) return;
-        const sel = order.find((it) => it.id === selectedId);
+      // u/d move the selected item one slot within its own status column,
+      // clamped so it never leaves that status. Identical for list and board.
+      if (e.key === "u" || e.key === "d") {
         if (!sel) return;
         const section = grouped[sel.status];
         const i = section.findIndex((it) => it.id === sel.id);
@@ -546,6 +531,45 @@ export function ProjectDetailView({
           reordered[target + 1]?.position,
         );
         void patchItem(sel.id, { position: pos });
+        return;
+      }
+
+      // j/k/g/G move the selection. On the board they stay inside the selected
+      // card's column (no cross-column flow); on the list they flow across
+      // status sections in display order. g/G go to the ends of the relevant
+      // column/section.
+      if (view === "board") {
+        // Column of the selected card, or Not Started as the default entry.
+        const col = grouped[sel ? sel.status : "new"];
+        if (col.length === 0) return;
+        const i = sel ? col.findIndex((it) => it.id === sel.id) : -1;
+        e.preventDefault();
+        if (e.key === "j") setSelectedId(col[i < 0 ? 0 : Math.min(i + 1, col.length - 1)].id);
+        else if (e.key === "k") setSelectedId(col[i < 0 ? 0 : Math.max(i - 1, 0)].id);
+        else if (e.key === "g") setSelectedId(col[0].id);
+        else if (e.key === "G") setSelectedId(col[col.length - 1].id);
+      } else {
+        const order = ITEM_STATUSES.flatMap((s) => grouped[s]);
+        if (order.length === 0) return;
+        const news = grouped.new;
+        const idx = selectedId ? order.findIndex((it) => it.id === selectedId) : -1;
+        if (e.key === "j") {
+          e.preventDefault();
+          setSelectedId((order[idx < 0 ? 0 : Math.min(idx + 1, order.length - 1)]).id);
+        } else if (e.key === "k") {
+          e.preventDefault();
+          setSelectedId((order[idx < 0 ? 0 : Math.max(idx - 1, 0)]).id);
+        } else if (e.key === "g") {
+          if (news[0]) {
+            e.preventDefault();
+            setSelectedId(news[0].id);
+          }
+        } else if (e.key === "G") {
+          if (news.length) {
+            e.preventDefault();
+            setSelectedId(news[news.length - 1].id);
+          }
+        }
       }
     }
     window.addEventListener("keydown", onKey);
@@ -556,6 +580,8 @@ export function ProjectDetailView({
     openItemId,
     showCategoryManager,
     grouped,
+    visibleItems,
+    view,
     selectedId,
     patchItem,
   ]);
@@ -799,7 +825,7 @@ export function ProjectDetailView({
         onClick={(e) => {
           // Click on the empty background (not on a row) clears the selection.
           if (!selectionActive) return;
-          if (!(e.target as HTMLElement).closest("[data-item-row]")) {
+          if (!(e.target as HTMLElement).closest("[data-item-id]")) {
             setSelectedId(null);
           }
         }}
@@ -832,6 +858,8 @@ export function ProjectDetailView({
       ) : (
         <Board
           grouped={grouped}
+          selectedId={selectionActive ? selectedId : null}
+          onSelect={setSelectedId}
           onPatch={patchItem}
           archivedView={showArchived}
           onArchive={archiveItem}
