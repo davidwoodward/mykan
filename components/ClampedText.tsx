@@ -8,25 +8,25 @@ import { useLayoutEffect, useRef, useState } from "react";
  * **Double-clicking** it opens the item editor; the explicit green pencil
  * (`EditButton`) on the row/card is the single-click path to edit.
  *
- * When `clamp` is set — currently for Done items, whose descriptions pile up —
- * the text is limited to the first 5 lines and a Show more/less toggle appears,
- * but only when the text actually overflows that height.
+ * `clampLines` limits the body to that many lines with a Show more/less toggle
+ * (shown only when the text actually overflows). 0 disables the clamp entirely.
  */
 export function ClampedText({
   text,
   onOpen,
-  clamp,
+  clampLines,
   className,
 }: {
   text: string;
   onOpen: () => void;
-  clamp: boolean;
+  clampLines: number;
   className: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
 
+  const clamp = clampLines > 0;
   const collapsed = clamp && !expanded;
 
   // Measure overflow while collapsed; re-measure on width changes. When
@@ -53,7 +53,7 @@ export function ClampedText({
     ? {
         display: "-webkit-box",
         WebkitBoxOrient: "vertical",
-        WebkitLineClamp: 5,
+        WebkitLineClamp: clampLines,
         overflow: "hidden",
       }
     : undefined;

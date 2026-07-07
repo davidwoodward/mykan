@@ -2,6 +2,17 @@ export type ItemType = "feature" | "bug" | "idea";
 export type ItemStatus = "new" | "in_progress" | "blocked" | "done";
 
 /**
+ * How many body lines a card/row shows before the Show more/less toggle, by
+ * status. Roomier for active work; tighter for Blocked/Done which pile up.
+ */
+export const CLAMP_LINES: Record<ItemStatus, number> = {
+  new: 10,
+  in_progress: 10,
+  blocked: 5,
+  done: 5,
+};
+
+/**
  * A Tiptap/ProseMirror document. We only ever read it back into the editor or
  * render it read-only, so the loose shape is enough — the editor owns the schema.
  */
