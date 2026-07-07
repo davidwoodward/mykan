@@ -29,6 +29,7 @@ import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import { computePosition } from "@/lib/position";
 import {
+  CLAMP_LINES,
   ITEM_STATUSES,
   STATUS_LABEL,
   richDocText,
@@ -331,7 +332,7 @@ function Card({
           <ClampedText
             text={text}
             onOpen={() => onOpen(item)}
-            clamp={item.status === "done"}
+            clampLines={CLAMP_LINES[item.status]}
             className="whitespace-pre-wrap break-words leading-5"
           />
         </div>

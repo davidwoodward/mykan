@@ -33,6 +33,7 @@ import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import {
+  CLAMP_LINES,
   ITEM_STATUSES,
   ITEM_TYPES,
   STATUS_LABEL,
@@ -346,7 +347,7 @@ function ItemRow({
         <ClampedText
           text={text}
           onOpen={() => onOpen(item)}
-          clamp={item.status === "done"}
+          clampLines={CLAMP_LINES[item.status]}
           className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6"
         />
         {/* Area is the leftmost property in a fixed-width column (single colour,
