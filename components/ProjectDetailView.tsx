@@ -1024,7 +1024,17 @@ function groupByStatus(items: Item[]): Record<ItemStatus, Item[]> {
   ) as Record<ItemStatus, Item[]>;
   for (const it of items) result[it.status].push(it);
   for (const k of Object.keys(result) as ItemStatus[]) {
-    result[k].sort((a, b) => a.position - b.position);
+    if (k === "done") {
+      // Done is ordered by when each item entered Done (oldest first, newest at
+      // the bottom); fall back to position when done_at is missing.
+      result[k].sort((a, b) => {
+        const at = a.done_at ? Date.parse(a.done_at) : Infinity;
+        const bt = b.done_at ? Date.parse(b.done_at) : Infinity;
+        return at - bt || a.position - b.position;
+      });
+    } else {
+      result[k].sort((a, b) => a.position - b.position);
+    }
   }
   return result;
 }

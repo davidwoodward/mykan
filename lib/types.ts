@@ -186,6 +186,11 @@ export interface Item {
   category_id: string | null;
   attachments: Attachment[];
   archived_at: string | null;
+  /**
+   * When the item most recently entered the Done column (null otherwise).
+   * Drives the Done ordering on the list and board; cleared when it leaves Done.
+   */
+  done_at: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

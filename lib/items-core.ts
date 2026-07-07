@@ -282,6 +282,9 @@ export async function setItemStatus(
       .limit(1)
       .maybeSingle();
     patch.position = (tail?.position ?? 0) + 1024;
+    // Stamp/clear the Done timestamp that drives Done ordering.
+    if (status === "done") patch.done_at = new Date().toISOString();
+    else if (it.status === "done") patch.done_at = null;
   }
   const { data, error } = await sb
     .from("items")
