@@ -34,7 +34,13 @@ export async function PATCH(req: Request, { params }: Ctx) {
   };
   const patch: Record<string, unknown> = {};
   if (isItemType(body.type)) patch.type = body.type;
-  if (isItemStatus(body.status)) patch.status = body.status;
+  if (isItemStatus(body.status)) {
+    patch.status = body.status;
+    // Stamp when an item enters Done (drives Done ordering); clear on leaving.
+    // Callers only send `status` on an actual transition, so this never
+    // re-stamps an item already in Done.
+    patch.done_at = body.status === "done" ? new Date().toISOString() : null;
+  }
   if (typeof body.position === "number" && Number.isFinite(body.position)) {
     patch.position = body.position;
   }
