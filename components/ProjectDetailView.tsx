@@ -129,13 +129,14 @@ export function ProjectDetailView({
   );
 
   // Rich-text body saves go through the same optimistic PATCH path. Re-thrown so
-  // the modal can show a save-failed state.
+  // the modal can show a save-failed state. `editSession` (minted per modal
+  // open) makes one editing session read as one history entry.
   const saveBody = useCallback(
-    async (id: string, body: RichDoc) => {
+    async (id: string, body: RichDoc, editSession?: string) => {
       const res = await fetch(`/api/items/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, edit_session: editSession }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const updated = (await res.json()) as Item;

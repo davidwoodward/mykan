@@ -44,6 +44,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     assignees?: unknown;
     archived?: unknown;
     category_id?: unknown;
+    edit_session?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (isItemType(body.type)) patch.type = body.type;
@@ -85,9 +86,23 @@ export async function PATCH(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
   }
 
+  // The editor's per-open session id: body autosaves within one editing
+  // session coalesce to one history entry; closing the editor seals it.
+  const editSession =
+    typeof body.edit_session === "string" && body.edit_session.length <= 64
+      ? body.edit_session
+      : null;
+
   // The chokepoint records history (when tracked fields change) and stamps
   // updated_at/updated_by.
-  const w = await snapshotThenWrite(getSupabase(), gate.email, current, patch, "web");
+  const w = await snapshotThenWrite(
+    getSupabase(),
+    gate.email,
+    current,
+    patch,
+    "web",
+    editSession,
+  );
   if (!w.ok) return NextResponse.json({ error: w.error }, { status: w.status });
   return NextResponse.json(w.data);
 }

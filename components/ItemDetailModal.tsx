@@ -21,11 +21,14 @@ export function ItemDetailModal({
   item: Item;
   allTags: string[];
   onClose: () => void;
-  onSaveBody: (id: string, body: RichDoc) => Promise<void>;
+  onSaveBody: (id: string, body: RichDoc, editSession?: string) => Promise<void>;
   onSaveTags: (id: string, tags: string[]) => Promise<void>;
   onItemChange: (item: Item) => void;
 }) {
   const [status, setStatus] = useState<SaveStatus>("idle");
+  // One id per modal open: the autosaves of this editing session coalesce into
+  // a single history entry, and closing the modal seals it.
+  const [editSession] = useState(() => crypto.randomUUID());
 
   // Close on Escape.
   useEffect(() => {
@@ -40,13 +43,13 @@ export function ItemDetailModal({
     async (body: RichDoc) => {
       setStatus("saving");
       try {
-        await onSaveBody(item.id, body);
+        await onSaveBody(item.id, body, editSession);
         setStatus("saved");
       } catch {
         setStatus("error");
       }
     },
-    [item.id, onSaveBody],
+    [item.id, onSaveBody, editSession],
   );
 
   const handleTags = useCallback(
