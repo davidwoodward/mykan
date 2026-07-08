@@ -16,14 +16,17 @@ import type { Project } from "@/lib/types";
 export function ProjectsView({
   viewerEmail,
   members,
+  startAdding = false,
 }: {
   viewerEmail: string;
   /** The full whitelist — share candidates for projects you own. */
   members: string[];
+  /** Open the new-project form immediately (the /?new=1 deep link). */
+  startAdding?: boolean;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(startAdding);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [key, setKey] = useState("");

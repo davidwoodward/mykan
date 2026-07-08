@@ -1,9 +1,9 @@
 import { auth, isOwner, whitelist } from "@/lib/auth";
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 import { ProjectHeader } from "@/components/ProjectHeader";
+import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Brand } from "@/components/Brand";
@@ -32,25 +32,7 @@ export default async function ProjectPage({
         <div className="mx-auto flex w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <Brand />
-            <Link
-              href="/"
-              aria-label="Back to projects"
-              title="Back to projects"
-              className="ml-3 grid h-8 w-8 shrink-0 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
-            >
-              <svg
-                className="h-[18px] w-[18px]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </Link>
+            <ProjectSwitcher currentId={project.id} />
             <ProjectHeader
               project={project}
               isOwner={isOwner(session.user.email)}

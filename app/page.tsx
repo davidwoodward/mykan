@@ -5,9 +5,16 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Brand } from "@/components/Brand";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.email) redirect("/signin");
+  // /?new=1 (the project switcher's "New project" option) lands with the
+  // create form already open.
+  const startAdding = (await searchParams).new === "1";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -23,7 +30,11 @@ export default async function Home() {
       </header>
 
       <main className="mx-auto w-full flex-1 px-3 pt-4 pb-12 sm:w-[95%] sm:px-4">
-        <ProjectsView viewerEmail={session.user.email} members={whitelist()} />
+        <ProjectsView
+          viewerEmail={session.user.email}
+          members={whitelist()}
+          startAdding={startAdding}
+        />
       </main>
     </div>
   );
