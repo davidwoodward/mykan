@@ -155,6 +155,11 @@ create table if not exists item_versions (
   created_at timestamptz not null default now(),
   created_by text
 );
+-- Editor session id (minted per editor open): body autosaves coalesce into one
+-- history entry only within a session, so dismissing the editor seals the
+-- entry. Null (MCP/Telegram/recovery) never coalesces.
+-- Migration: supabase/migrations/2026-07-08-item-versions-edit-session.sql
+alter table item_versions add column if not exists edit_session text;
 create index if not exists item_versions_item_created_idx
   on item_versions (item_id, created_at desc);
 

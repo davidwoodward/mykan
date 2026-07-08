@@ -41,17 +41,16 @@ export type ItemVersion = {
   /** Which tracked fields the write FOLLOWING this snapshot changed. */
   fields_changed: TrackedField[];
   source: HistorySource;
+  /**
+   * The editor session the following write belonged to (minted per editor
+   * open). Body autosaves coalesce only within one session, so dismissing the
+   * editor (Esc / click-off / close) seals the entry. Null for writers with no
+   * session (MCP, Telegram, recovery) — those never coalesce.
+   */
+  edit_session: string | null;
   created_at: string;
   created_by: string | null;
 };
-
-/**
- * A body edit is continuous typing saved in ~700ms debounced bursts; one
- * history entry per editing session is the useful granularity. A body-only
- * write coalesces into the latest entry when that entry is also a body-only
- * edit by the same actor + source and younger than this window.
- */
-const BODY_BURST_WINDOW_MS = 15 * 60 * 1000;
 
 export function snapshotOf(item: Item): ItemSnapshot {
   return {
@@ -91,8 +90,10 @@ export function changedTrackedFields(
  * Snapshot rules:
  *  - no tracked field changes → write only (dedupe; covers no-op body flushes
  *    and untracked writes like position/archived).
- *  - body-only change coalescing into a recent body-only entry by the same
- *    actor + source → write only (one entry per editing session).
+ *  - body-only change within the SAME editor session as the latest body-only
+ *    entry → write only. The editor mints `editSession` per open, so the
+ *    debounced autosaves of one sitting collapse to one entry and dismissing
+ *    the editor seals it — the next session gets its own entry.
  *  - otherwise insert a snapshot of the PREVIOUS state, then write.
  */
 export async function snapshotThenWrite(
@@ -101,15 +102,20 @@ export async function snapshotThenWrite(
   current: Item,
   patch: Record<string, unknown>,
   source: HistorySource,
+  editSession: string | null = null,
 ): Promise<CoreResult<Item>> {
   const changed = changedTrackedFields(current, patch);
 
-  if (changed.length > 0 && !(await coalescesIntoLatest(sb, current.id, actor, source, changed))) {
+  if (
+    changed.length > 0 &&
+    !(await coalescesIntoLatest(sb, current.id, actor, source, changed, editSession))
+  ) {
     const { error: verr } = await sb.from("item_versions").insert({
       item_id: current.id,
       snapshot: snapshotOf(current),
       fields_changed: changed,
       source,
+      edit_session: editSession,
       created_by: actor,
     });
     if (verr) return coreErr(verr.message, 500);
@@ -129,18 +135,24 @@ export async function snapshotThenWrite(
   return coreOk(data as Item);
 }
 
-/** True when a body-only change should fold into the latest history entry. */
+/**
+ * True when a body-only change should fold into the latest history entry:
+ * the latest entry must be a body-only edit from the SAME editor session (and
+ * actor + source). No session id — no coalescing; each write is its own entry.
+ */
 async function coalescesIntoLatest(
   sb: SupabaseClient,
   itemId: string,
   actor: string,
   source: HistorySource,
   changed: TrackedField[],
+  editSession: string | null,
 ): Promise<boolean> {
+  if (!editSession) return false;
   if (!(changed.length === 1 && changed[0] === "body")) return false;
   const { data } = await sb
     .from("item_versions")
-    .select("fields_changed, source, created_at, created_by")
+    .select("fields_changed, source, edit_session, created_by")
     .eq("item_id", itemId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -148,14 +160,14 @@ async function coalescesIntoLatest(
   if (!data) return false;
   const latest = data as Pick<
     ItemVersion,
-    "fields_changed" | "source" | "created_at" | "created_by"
+    "fields_changed" | "source" | "edit_session" | "created_by"
   >;
   return (
+    latest.edit_session === editSession &&
     latest.created_by === actor &&
     latest.source === source &&
     latest.fields_changed.length === 1 &&
-    latest.fields_changed[0] === "body" &&
-    Date.now() - new Date(latest.created_at).getTime() < BODY_BURST_WINDOW_MS
+    latest.fields_changed[0] === "body"
   );
 }
 
