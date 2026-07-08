@@ -41,7 +41,12 @@ the repo.
 ## Tools
 
 `list_projects`, `list_items`, `get_item`, `update_item_status`,
-`create_item`, `append_item_note`, `set_item_tags`.
+`create_item`, `append_item_note`, `set_item_body`, `set_item_tags`,
+`set_item_area`, `set_item_assignees`.
+
+`set_item_body` REPLACES an item's whole body (safe overwrite): the previous
+state is snapshotted to the item's history first, so it is always recoverable
+from the History panel (clock icon on any row/card).
 
 ## How it works
 

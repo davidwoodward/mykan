@@ -12,6 +12,7 @@ import {
   listItems,
   setItemArea,
   setItemAssignees,
+  setItemBody,
   setItemStatus,
   setItemTags,
 } from "@/lib/items-core";
@@ -130,6 +131,20 @@ const handler = createMcpHandler(
         // Return the full detail (ref, area, assignees) of the created item.
         return out(await getItem(sb, actor(), created.data.id));
       },
+    );
+
+    server.tool(
+      "set_item_body",
+      "REPLACE an item's entire body with new plain text (one paragraph per line; the first line becomes the item's title/name). Safe overwrite: the previous state is snapshotted to the item's history first, so it is always recoverable — prefer this over append_item_note when rewriting or retitling. NOTE: inline images in the old body are dropped from the new body (they remain viewable in history). `item` is an id or KEY-N reference.",
+      {
+        item: z.string().describe("item id or KEY-N reference"),
+        body: z
+          .string()
+          .describe(
+            "the full new body text; first line acts as the title, blank lines separate paragraphs",
+          ),
+      },
+      async (a) => out(await setItemBody(getSupabase(), actor(), a.item, a.body)),
     );
 
     server.tool(

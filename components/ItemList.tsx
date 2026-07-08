@@ -27,6 +27,7 @@ import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
+import { ItemHistory } from "@/components/ItemHistory";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
@@ -386,6 +387,12 @@ function ItemRow({
           className="self-center sm:mt-0.5"
         />
         <InlineAttachments item={item} onItemChange={onItemChange} />
+        <ItemHistory
+          item={item}
+          onItemChange={onItemChange}
+          label={text || "item"}
+          className="self-center sm:invisible sm:group-hover:visible"
+        />
         <TypeMenu
           value={item.type}
           onChange={(t) => void onPatch(item.id, { type: t })}

@@ -30,6 +30,7 @@ import {
   resolveProject,
   type CoreResult,
 } from "@/lib/projects-core";
+import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -262,16 +263,13 @@ export async function setItemStatus(
   actor: string,
   itemRef: string,
   status: string,
+  source: HistorySource = "mcp",
 ): Promise<CoreResult<ItemDetail>> {
   if (!isItemStatus(status)) return coreErr(`Invalid status: ${status}`, 400);
   const r = await loadVisibleItem(sb, actor, itemRef);
   if (!r.ok) return r;
   const { item: it, project } = r.data;
-  const patch: Record<string, unknown> = {
-    status,
-    updated_at: new Date().toISOString(),
-    updated_by: actor,
-  };
+  const patch: Record<string, unknown> = { status };
   if (it.status !== status) {
     const { data: tail } = await sb
       .from("items")
@@ -286,14 +284,9 @@ export async function setItemStatus(
     if (status === "done") patch.done_at = new Date().toISOString();
     else if (it.status === "done") patch.done_at = null;
   }
-  const { data, error } = await sb
-    .from("items")
-    .update(patch)
-    .eq("id", it.id)
-    .select()
-    .single();
-  if (error) return coreErr(error.message, 500);
-  return coreOk(await detailOf(sb, project, data as Item));
+  const w = await snapshotThenWrite(sb, actor, it, patch, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
 }
 
 export type CreateItemInput = {
@@ -386,6 +379,7 @@ export async function appendItemNote(
   actor: string,
   itemRef: string,
   note: string,
+  source: HistorySource = "mcp",
 ): Promise<CoreResult<ItemDetail>> {
   const text = String(note ?? "").trim();
   if (!text) return coreErr("note required", 400);
@@ -398,18 +392,40 @@ export async function appendItemNote(
     type: "doc",
     content: [...(Array.isArray(doc.content) ? doc.content : []), para],
   };
-  const { data, error } = await sb
-    .from("items")
-    .update({
-      body: nextDoc,
-      updated_at: new Date().toISOString(),
-      updated_by: actor,
-    })
-    .eq("id", it.id)
-    .select()
-    .single();
-  if (error) return coreErr(error.message, 500);
-  return coreOk(await detailOf(sb, project, data as Item));
+  const w = await snapshotThenWrite(sb, actor, it, { body: nextDoc }, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
+}
+
+/**
+ * Replace an item's entire body with plain text (one paragraph per line).
+ * The safe-overwrite counterpart to appendItemNote: the previous state is
+ * always recoverable from history, so an agent may REPLACE content — including
+ * the first line, which acts as the title. NOTE: inline images in the old body
+ * are dropped from the new one (they remain in the history snapshot).
+ */
+export async function setItemBody(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+  text: string,
+  source: HistorySource = "mcp",
+): Promise<CoreResult<ItemDetail>> {
+  const raw = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  if (!raw) return coreErr("body text required", 400);
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const { item: it, project } = r.data;
+  const nextDoc: RichDoc = {
+    type: "doc",
+    content: raw.split("\n").map((line) => ({
+      type: "paragraph",
+      content: line ? [{ type: "text", text: line }] : [],
+    })),
+  };
+  const w = await snapshotThenWrite(sb, actor, it, { body: nextDoc }, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
 }
 
 /** Replace an item's tags (normalized). */
@@ -418,22 +434,20 @@ export async function setItemTags(
   actor: string,
   itemRef: string,
   tags: unknown,
+  source: HistorySource = "mcp",
 ): Promise<CoreResult<ItemDetail>> {
   const r = await loadVisibleItem(sb, actor, itemRef);
   if (!r.ok) return r;
   const { item: it, project } = r.data;
-  const { data, error } = await sb
-    .from("items")
-    .update({
-      tags: normalizeTags(tags),
-      updated_at: new Date().toISOString(),
-      updated_by: actor,
-    })
-    .eq("id", it.id)
-    .select()
-    .single();
-  if (error) return coreErr(error.message, 500);
-  return coreOk(await detailOf(sb, project, data as Item));
+  const w = await snapshotThenWrite(
+    sb,
+    actor,
+    it,
+    { tags: normalizeTags(tags) },
+    source,
+  );
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
 }
 
 /** Replace an item's assignees (members only, normalized to the whitelist). */
@@ -442,22 +456,20 @@ export async function setItemAssignees(
   actor: string,
   itemRef: string,
   assignees: unknown,
+  source: HistorySource = "mcp",
 ): Promise<CoreResult<ItemDetail>> {
   const r = await loadVisibleItem(sb, actor, itemRef);
   if (!r.ok) return r;
   const { item: it, project } = r.data;
-  const { data, error } = await sb
-    .from("items")
-    .update({
-      assignees: normalizeAssignees(assignees, whitelist()),
-      updated_at: new Date().toISOString(),
-      updated_by: actor,
-    })
-    .eq("id", it.id)
-    .select()
-    .single();
-  if (error) return coreErr(error.message, 500);
-  return coreOk(await detailOf(sb, project, data as Item));
+  const w = await snapshotThenWrite(
+    sb,
+    actor,
+    it,
+    { assignees: normalizeAssignees(assignees, whitelist()) },
+    source,
+  );
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
 }
 
 /**
@@ -469,6 +481,7 @@ export async function setItemArea(
   actor: string,
   itemRef: string,
   area: unknown,
+  source: HistorySource = "mcp",
 ): Promise<CoreResult<ItemDetail>> {
   const r = await loadVisibleItem(sb, actor, itemRef);
   if (!r.ok) return r;
@@ -485,16 +498,7 @@ export async function setItemArea(
       category_id = cat.data.id;
     }
   }
-  const { data, error } = await sb
-    .from("items")
-    .update({
-      category_id,
-      updated_at: new Date().toISOString(),
-      updated_by: actor,
-    })
-    .eq("id", it.id)
-    .select()
-    .single();
-  if (error) return coreErr(error.message, 500);
-  return coreOk(await detailOf(sb, project, data as Item));
+  const w = await snapshotThenWrite(sb, actor, it, { category_id }, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
 }

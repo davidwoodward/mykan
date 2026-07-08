@@ -140,6 +140,24 @@ alter table items add column if not exists category_id uuid
   references categories(id) on delete set null;
 create index if not exists items_category_idx on items (category_id);
 
+-- Item history (KANBAN-10): whole-item version snapshots. Every field mutation
+-- routes through snapshotThenWrite (lib/item-history.ts), which records the
+-- item's PREVIOUS state before applying the patch. `fields_changed` names the
+-- tracked fields the following write modified — it drives the history panel's
+-- change summaries and the body-burst coalescing rule.
+-- Migration: supabase/migrations/2026-07-07-item-versions.sql
+create table if not exists item_versions (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references items (id) on delete cascade,
+  snapshot jsonb not null,
+  fields_changed text[] not null default '{}',
+  source text not null check (source in ('web', 'mcp', 'telegram', 'recovery')),
+  created_at timestamptz not null default now(),
+  created_by text
+);
+create index if not exists item_versions_item_created_idx
+  on item_versions (item_id, created_at desc);
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding
