@@ -61,7 +61,9 @@ export function ProjectDetailView({
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   // The row "selected" in the status-grouped list — drives the highlight, the
   // j/k/g/G/u/d keyboard model, and where a new item is inserted.
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Raw last-selected id; the effective `selectedId` is derived below, clamped
+  // to the items actually on screen.
+  const [rawSelectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -470,17 +472,16 @@ export function ProjectDetailView({
     !showArchived &&
     ((view === "list" && groupBy === "status") || view === "board");
 
-  // Drop the selection whenever it leaves the DOM (filtered out, deleted) or
-  // the status list is no longer showing, so no stale highlight lingers.
-  useEffect(() => {
-    if (!selectionActive) {
-      if (selectedId !== null) setSelectedId(null);
-      return;
-    }
-    if (selectedId && !visibleItems.some((it) => it.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [selectionActive, selectedId, visibleItems]);
+  // The effective selection, derived at render (no state-sync effect): it only
+  // exists while the status-grouped list/board is showing AND the item is
+  // still visible — filtered-out/deleted items and other views read as no
+  // selection, so no stale highlight lingers.
+  const selectedId =
+    selectionActive &&
+    rawSelectedId &&
+    visibleItems.some((it) => it.id === rawSelectedId)
+      ? rawSelectedId
+      : null;
 
   // Where a new item lands: right after the selected row when it's in Not
   // Started, otherwise the end of the Not Started column. New items are always
@@ -836,7 +837,7 @@ export function ProjectDetailView({
       ) : view === "list" ? (
         <ItemList
           grouped={grouped}
-          selectedId={selectionActive ? selectedId : null}
+          selectedId={selectedId}
           onSelect={setSelectedId}
           onPatch={patchItem}
           archivedView={showArchived}
@@ -859,7 +860,7 @@ export function ProjectDetailView({
       ) : (
         <Board
           grouped={grouped}
-          selectedId={selectionActive ? selectedId : null}
+          selectedId={selectedId}
           onSelect={setSelectedId}
           onPatch={patchItem}
           archivedView={showArchived}
