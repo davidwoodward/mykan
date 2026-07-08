@@ -228,7 +228,7 @@ async function cmdStatus(
   const ref = tokens[0];
   const status = parseStatus(tokens[1]);
   if (!status) return err(`Unknown status: ${tokens[1]}`);
-  const r = await setItemStatus(sb, actor, ref, status);
+  const r = await setItemStatus(sb, actor, ref, status, "telegram");
   if (!r.ok) return err(r.error);
   const m = STATUS_META[r.data.status];
   return `${m.emoji} <code>${esc(r.data.ref)}</code> → <b>${m.label}</b>\n${esc(
@@ -286,7 +286,7 @@ async function cmdTag(
   const next = cur.data.tags.filter((t) => !removeSet.has(t));
   for (const a of adds) if (!next.includes(a)) next.push(a);
 
-  const r = await setItemTags(sb, actor, ref, next);
+  const r = await setItemTags(sb, actor, ref, next, "telegram");
   if (!r.ok) return err(r.error);
   const after = r.data.tags.length
     ? r.data.tags.map((t) => `#${esc(t)}`).join(" ")
@@ -305,7 +305,7 @@ async function cmdArea(
   const sp = trimmed.search(/\s/);
   const ref = sp < 0 ? trimmed : trimmed.slice(0, sp);
   const path = sp < 0 ? "" : trimmed.slice(sp + 1).trim();
-  const r = await setItemArea(sb, actor, ref, path);
+  const r = await setItemArea(sb, actor, ref, path, "telegram");
   if (!r.ok) return err(r.error);
   return r.data.area
     ? `📁 <code>${esc(r.data.ref)}</code> filed under <b>${esc(r.data.area)}</b>`

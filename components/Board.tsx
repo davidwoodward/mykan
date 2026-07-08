@@ -22,6 +22,7 @@ import { TypeBadge } from "@/components/TypeBadge";
 import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
+import { ItemHistory } from "@/components/ItemHistory";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
@@ -362,6 +363,12 @@ function Card({
           <RefBadge number={item.number} />
           <TypeBadge type={item.type} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
+          <ItemHistory
+            item={item}
+            onItemChange={onItemChange}
+            label={text || "item"}
+            className="invisible group-hover:visible"
+          />
         </div>
         {archivedView ? (
           <div className="flex items-center gap-3 text-xs">

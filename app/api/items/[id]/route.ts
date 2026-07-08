@@ -3,12 +3,14 @@ import { getSupabase } from "@/lib/supabase-server";
 import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { categoryInProject } from "@/lib/categories-core";
+import { snapshotThenWrite } from "@/lib/item-history";
 import {
   isItemStatus,
   isItemType,
   isRichDoc,
   normalizeAssignees,
   normalizeTags,
+  type Item,
 } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -20,6 +22,17 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   const deny = await denyItemAccess(id, gate.email);
   if (deny) return deny;
+
+  // Load the full current row: snapshotThenWrite records the previous state.
+  const { data: currentRow } = await getSupabase()
+    .from("items")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (!currentRow) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  const current = currentRow as Item;
 
   const body = (await req.json().catch(() => ({}))) as {
     name?: unknown;
@@ -50,19 +63,12 @@ export async function PATCH(req: Request, { params }: Ctx) {
     patch.assignees = normalizeAssignees(body.assignees, whitelist());
   }
   // Category: must belong to this item's project (or null to un-file).
-  if (typeof body.category_id === "string" || body.category_id === null) {
-    const { data: itemRow } = await getSupabase()
-      .from("items")
-      .select("project_id")
-      .eq("id", id)
-      .maybeSingle();
-    const projectId = (itemRow as { project_id: string } | null)?.project_id;
-    if (
-      projectId &&
-      (await categoryInProject(getSupabase(), projectId, body.category_id))
-    ) {
-      patch.category_id = body.category_id;
-    }
+  if (
+    (typeof body.category_id === "string" &&
+      (await categoryInProject(getSupabase(), current.project_id, body.category_id))) ||
+    body.category_id === null
+  ) {
+    patch.category_id = body.category_id;
   }
   // Soft delete / restore.
   if (typeof body.archived === "boolean") {
@@ -78,17 +84,12 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
   }
-  patch.updated_at = new Date().toISOString();
-  patch.updated_by = gate.email;
 
-  const { data, error } = await getSupabase()
-    .from("items")
-    .update(patch)
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  // The chokepoint records history (when tracked fields change) and stamps
+  // updated_at/updated_by.
+  const w = await snapshotThenWrite(getSupabase(), gate.email, current, patch, "web");
+  if (!w.ok) return NextResponse.json({ error: w.error }, { status: w.status });
+  return NextResponse.json(w.data);
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {
