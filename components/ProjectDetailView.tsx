@@ -496,9 +496,10 @@ export function ProjectDetailView({
     return computePosition(news[news.length - 1]?.position, undefined);
   }, [grouped, selectedId, visibleItems]);
 
-  // j/k move the selection (across status sections in display order); g/G jump
-  // to the first/last Not Started row; u/d move the selected item one slot
-  // within its own status section (never crossing into another status).
+  // j/k move the selection (across status sections in display order); 0/g jump
+  // to the top item of the current category and G to the bottom; Ctrl-f/Ctrl-b
+  // move the selected item forward/back one status; u/d move it one slot within
+  // its own status section (never crossing into another status).
   useEffect(() => {
     if (!selectionActive) return;
     function onKey(e: globalThis.KeyboardEvent) {
@@ -515,19 +516,23 @@ export function ProjectDetailView({
         : null;
 
       // Ctrl-f / Ctrl-b move the selected item forward/back one status
-      // (new → in_progress → blocked → done), clamped at the ends.
+      // (new → in_progress → blocked → done), landing it at the TOP of the
+      // destination category. It stays selected, so the focus effect scrolls
+      // it into view at its new home. Clamped at the ends.
       if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "f" || e.key === "b")) {
         if (!sel) return;
         const i = ITEM_STATUSES.indexOf(sel.status);
         const target = e.key === "f" ? i + 1 : i - 1;
         if (target < 0 || target >= ITEM_STATUSES.length) return;
         e.preventDefault();
-        void patchItem(sel.id, { status: ITEM_STATUSES[target] });
+        const destStatus = ITEM_STATUSES[target];
+        const pos = computePosition(undefined, grouped[destStatus][0]?.position);
+        void patchItem(sel.id, { status: destStatus, position: pos });
         return;
       }
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (!"jkgGud".includes(e.key)) return;
+      if (!"jkgG0ud".includes(e.key)) return;
 
       // u/d move the selected item one slot within its own status column,
       // clamped so it never leaves that status. Identical for list and board.
@@ -549,24 +554,31 @@ export function ProjectDetailView({
         return;
       }
 
-      // j/k/g/G move the selection. On the board they stay inside the selected
-      // card's column (no cross-column flow); on the list they flow across
-      // status sections in display order. g/G go to the ends of the relevant
-      // column/section.
-      if (view === "board") {
-        // Column of the selected card, or Not Started as the default entry.
-        const col = grouped[sel ? sel.status : "new"];
-        if (col.length === 0) return;
-        const i = sel ? col.findIndex((it) => it.id === sel.id) : -1;
+      // The current category: the selected card's column/section, or Not
+      // Started as the default entry point when nothing is selected.
+      const cat = grouped[sel ? sel.status : "new"];
+
+      // 0/g jump to the top item of the current category, G to the bottom.
+      // Identical in list and board.
+      if (e.key === "0" || e.key === "g" || e.key === "G") {
+        if (cat.length === 0) return;
         e.preventDefault();
-        if (e.key === "j") setSelectedId(col[i < 0 ? 0 : Math.min(i + 1, col.length - 1)].id);
-        else if (e.key === "k") setSelectedId(col[i < 0 ? 0 : Math.max(i - 1, 0)].id);
-        else if (e.key === "g") setSelectedId(col[0].id);
-        else if (e.key === "G") setSelectedId(col[col.length - 1].id);
+        setSelectedId(cat[e.key === "G" ? cat.length - 1 : 0].id);
+        return;
+      }
+
+      // j/k move the selection. On the board they stay inside the selected
+      // card's column (no cross-column flow); on the list they flow across
+      // status sections in display order.
+      if (view === "board") {
+        if (cat.length === 0) return;
+        const i = sel ? cat.findIndex((it) => it.id === sel.id) : -1;
+        e.preventDefault();
+        if (e.key === "j") setSelectedId(cat[i < 0 ? 0 : Math.min(i + 1, cat.length - 1)].id);
+        else if (e.key === "k") setSelectedId(cat[i < 0 ? 0 : Math.max(i - 1, 0)].id);
       } else {
         const order = ITEM_STATUSES.flatMap((s) => grouped[s]);
         if (order.length === 0) return;
-        const news = grouped.new;
         const idx = selectedId ? order.findIndex((it) => it.id === selectedId) : -1;
         if (e.key === "j") {
           e.preventDefault();
@@ -574,16 +586,6 @@ export function ProjectDetailView({
         } else if (e.key === "k") {
           e.preventDefault();
           setSelectedId((order[idx < 0 ? 0 : Math.max(idx - 1, 0)]).id);
-        } else if (e.key === "g") {
-          if (news[0]) {
-            e.preventDefault();
-            setSelectedId(news[0].id);
-          }
-        } else if (e.key === "G") {
-          if (news.length) {
-            e.preventDefault();
-            setSelectedId(news[news.length - 1].id);
-          }
         }
       }
     }
