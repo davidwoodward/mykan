@@ -503,7 +503,6 @@ export function ProjectDetailView({
     if (!selectionActive) return;
     function onKey(e: globalThis.KeyboardEvent) {
       if (adding || openItemId || showCategoryManager) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -511,10 +510,24 @@ export function ProjectDetailView({
       ) {
         return;
       }
-      if (!"jkgGud".includes(e.key)) return;
       const sel = selectedId
         ? visibleItems.find((it) => it.id === selectedId) ?? null
         : null;
+
+      // Ctrl-f / Ctrl-b move the selected item forward/back one status
+      // (new → in_progress → blocked → done), clamped at the ends.
+      if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "f" || e.key === "b")) {
+        if (!sel) return;
+        const i = ITEM_STATUSES.indexOf(sel.status);
+        const target = e.key === "f" ? i + 1 : i - 1;
+        if (target < 0 || target >= ITEM_STATUSES.length) return;
+        e.preventDefault();
+        void patchItem(sel.id, { status: ITEM_STATUSES[target] });
+        return;
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!"jkgGud".includes(e.key)) return;
 
       // u/d move the selected item one slot within its own status column,
       // clamped so it never leaves that status. Identical for list and board.
