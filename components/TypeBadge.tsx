@@ -4,6 +4,7 @@ const styles: Record<ItemType, string> = {
   feature:
     "text-[var(--color-feature)] bg-[var(--color-feature-bg)] ring-[var(--color-feature-line)]",
   bug: "text-[var(--color-bug)] bg-[var(--color-bug-bg)] ring-[var(--color-bug-line)]",
+  task: "text-[var(--color-task)] bg-[var(--color-task-bg)] ring-[var(--color-task-line)]",
   idea: "text-[var(--color-idea)] bg-[var(--color-idea-bg)] ring-[var(--color-idea-line)]",
 };
 
