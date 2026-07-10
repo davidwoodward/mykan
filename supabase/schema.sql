@@ -23,9 +23,11 @@ create table if not exists projects (
 );
 
 do $$ begin
-  create type item_type as enum ('feature', 'bug', 'idea');
+  create type item_type as enum ('feature', 'bug', 'task', 'idea');
 exception when duplicate_object then null;
 end $$;
+-- 'task' was added after the type already existed on deployed DBs:
+alter type item_type add value if not exists 'task' before 'idea';
 
 do $$ begin
   create type item_status as enum ('new', 'in_progress', 'blocked', 'done');

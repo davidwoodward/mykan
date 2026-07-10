@@ -20,6 +20,10 @@
   --color-bug-bg: oklch(95% 0.05 30);
   --color-bug-line: oklch(85% 0.08 30);
 
+  --color-task: oklch(42% 0.11 210);
+  --color-task-bg: oklch(95% 0.05 210);
+  --color-task-line: oklch(85% 0.08 210);
+
   --color-idea: oklch(40% 0.12 75);
   --color-idea-bg: oklch(95% 0.05 75);
   --color-idea-line: oklch(85% 0.08 75);
@@ -69,6 +73,10 @@ html.dark {
   --color-bug: oklch(80% 0.13 30);
   --color-bug-bg: oklch(28% 0.06 30);
   --color-bug-line: oklch(40% 0.08 30);
+
+  --color-task: oklch(80% 0.11 210);
+  --color-task-bg: oklch(28% 0.055 210);
+  --color-task-line: oklch(40% 0.07 210);
 
   --color-idea: oklch(82% 0.12 75);
   --color-idea-bg: oklch(28% 0.055 75);

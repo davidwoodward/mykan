@@ -99,7 +99,7 @@ const handler = createMcpHandler(
           .describe(
             "short one-line title; becomes the first line of the item body (there is no separate stored title)",
           ),
-        type: z.enum(["feature", "bug", "idea"]).optional().describe("feature | bug | idea (default feature)"),
+        type: z.enum(["feature", "bug", "task", "idea"]).optional().describe("feature | bug | task | idea (default feature)"),
         body: z
           .string()
           .optional()

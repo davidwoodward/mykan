@@ -1,4 +1,4 @@
-export type ItemType = "feature" | "bug" | "idea";
+export type ItemType = "feature" | "bug" | "task" | "idea";
 export type ItemStatus = "new" | "in_progress" | "blocked" | "done";
 
 /**
@@ -287,7 +287,7 @@ export function tagStyle(tag: string): {
   };
 }
 
-export const ITEM_TYPES: readonly ItemType[] = ["feature", "bug", "idea"] as const;
+export const ITEM_TYPES: readonly ItemType[] = ["feature", "bug", "task", "idea"] as const;
 export const ITEM_STATUSES: readonly ItemStatus[] = [
   "new",
   "in_progress",
@@ -305,6 +305,7 @@ export const STATUS_LABEL: Record<ItemStatus, string> = {
 export const TYPE_LABEL: Record<ItemType, string> = {
   feature: "Feature",
   bug: "Bug",
+  task: "Task",
   idea: "Thought",
 };
 
