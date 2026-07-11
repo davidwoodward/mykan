@@ -47,9 +47,15 @@ export async function listProjects(
     if (!cur || row.updated_at > cur) lastActivity.set(row.project_id, row.updated_at);
   }
 
-  const touchedAt = (p: Project) =>
-    lastActivity.get(p.id) ?? p.updated_at ?? p.created_at ?? "";
-  visible.sort((a, b) => (touchedAt(a) < touchedAt(b) ? 1 : touchedAt(a) > touchedAt(b) ? -1 : 0));
+  // Stamp each project's last activity, then order by it (most recent first).
+  for (const p of visible) {
+    p.last_activity = lastActivity.get(p.id) ?? p.updated_at ?? p.created_at ?? null;
+  }
+  visible.sort((a, b) => {
+    const at = a.last_activity ?? "";
+    const bt = b.last_activity ?? "";
+    return at < bt ? 1 : at > bt ? -1 : 0;
+  });
   return coreOk(visible);
 }
 

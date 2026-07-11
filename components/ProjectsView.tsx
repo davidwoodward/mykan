@@ -294,7 +294,7 @@ export function ProjectsView({
                   <Byline
                     createdBy={p.created_by}
                     updatedBy={p.updated_by}
-                    updatedAt={p.updated_at}
+                    updatedAt={p.last_activity ?? p.updated_at}
                     className="mt-1"
                   />
                 </Link>
