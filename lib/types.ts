@@ -153,6 +153,13 @@ export interface Project {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+  /**
+   * Computed server-side in `listProjects`: the most recent `items.updated_at`
+   * across the project's items (falls back to the project's own timestamp when
+   * it has none). Drives the activity ordering and the "last touched" label.
+   * Not a stored column.
+   */
+  last_activity?: string | null;
 }
 
 /** A node in a project's Area tree. Items reference one by id. */
