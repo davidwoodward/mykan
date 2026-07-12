@@ -47,6 +47,11 @@ const STATUS_ALIASES: Record<string, ItemStatus> = {
   blocked: "blocked",
   block: "blocked",
   stuck: "blocked",
+  testing: "testing",
+  test: "testing",
+  qa: "testing",
+  verify: "testing",
+  review: "testing",
   done: "done",
   complete: "done",
   completed: "done",
@@ -64,9 +69,10 @@ const STATUS_META: Record<ItemStatus, { emoji: string; label: string }> = {
   new: { emoji: "🆕", label: "New" },
   in_progress: { emoji: "⏳", label: "In progress" },
   blocked: { emoji: "🚫", label: "Blocked" },
+  testing: { emoji: "🧪", label: "Testing" },
   done: { emoji: "✅", label: "Done" },
 };
-const STATUS_ORDER: ItemStatus[] = ["new", "in_progress", "blocked", "done"];
+const STATUS_ORDER: ItemStatus[] = ["new", "in_progress", "blocked", "testing", "done"];
 
 // --- Project resolution (by key, then name/id) -------------------------------
 /** Resolve a project ref preferring its short key (e.g. "KANBAN"), then name/id. */
@@ -97,7 +103,7 @@ const HELP = [
   "<b>/list</b> &lt;project&gt; [status] — list items (e.g. <code>/list KANBAN in_progress</code>)",
   "<b>/add</b> &lt;project&gt; &lt;text&gt; — add an item (first line = title, rest = note)",
   "<b>/item</b> &lt;ref&gt; — show one item (e.g. <code>/item KANBAN-4</code>)",
-  "<b>/status</b> &lt;ref&gt; &lt;status&gt; — move it (new · doing · blocked · done)",
+  "<b>/status</b> &lt;ref&gt; &lt;status&gt; — move it (new · doing · blocked · testing · done)",
   "<b>/tags</b> &lt;ref&gt; — review an item's tags",
   "<b>/tag</b> &lt;ref&gt; +add -remove — add/remove tags (e.g. <code>/tag KANBAN-4 +urgent -later</code>)",
   "<b>/area</b> &lt;ref&gt; &lt;path&gt; — file under an area (e.g. <code>/area KANBAN-4 coach / home</code>; empty to un-file)",

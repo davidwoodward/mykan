@@ -35,6 +35,8 @@ exception when duplicate_object then null;
 end $$;
 -- 'blocked' was added after the type already existed on deployed DBs:
 alter type item_status add value if not exists 'blocked' before 'done';
+-- 'testing' is a verification gate between In Progress and Done (KANBAN-18):
+alter type item_status add value if not exists 'testing' before 'done';
 
 create table if not exists items (
   id uuid primary key default uuid_generate_v4(),

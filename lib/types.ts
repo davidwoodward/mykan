@@ -1,14 +1,16 @@
 export type ItemType = "feature" | "bug" | "task" | "idea";
-export type ItemStatus = "new" | "in_progress" | "blocked" | "done";
+export type ItemStatus = "new" | "in_progress" | "blocked" | "testing" | "done";
 
 /**
  * How many body lines a card/row shows before the Show more/less toggle, by
- * status. Roomier for active work; tighter for Blocked/Done which pile up.
+ * status. Roomier for active work (incl. Testing, where you read to verify);
+ * tighter for Blocked/Done which pile up.
  */
 export const CLAMP_LINES: Record<ItemStatus, number> = {
   new: 10,
   in_progress: 10,
   blocked: 5,
+  testing: 10,
   done: 5,
 };
 
@@ -299,6 +301,7 @@ export const ITEM_STATUSES: readonly ItemStatus[] = [
   "new",
   "in_progress",
   "blocked",
+  "testing",
   "done",
 ] as const;
 
@@ -306,6 +309,7 @@ export const STATUS_LABEL: Record<ItemStatus, string> = {
   new: "Not started",
   in_progress: "In Progress",
   blocked: "Blocked",
+  testing: "Testing",
   done: "Done",
 };
 

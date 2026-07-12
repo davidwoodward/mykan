@@ -94,6 +94,8 @@ export function ItemList({
   onItemChange,
   selectedId,
   onSelect,
+  isCollapsed,
+  onToggleCollapse,
   areaGroups,
   flatItems,
 }: {
@@ -113,6 +115,10 @@ export function ItemList({
   onItemChange: (item: Item) => void;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  /** Whether a given status section is collapsed to its header, for this viewer. */
+  isCollapsed?: (status: ItemStatus) => boolean;
+  /** Toggle a status section's collapsed state (persisted per-viewer). */
+  onToggleCollapse?: (status: ItemStatus) => void;
   /** When set, render these Area groups instead of the status sections. */
   areaGroups?: { key: string; items: Item[] }[];
   /** When set, render one flat, draggable list (ordered by position). */
@@ -144,29 +150,108 @@ export function ItemList({
 
   // Either the status sections (default) or the Area groups. Each section is
   // independently sortable (drag reorders within the group), except in the
-  // archived view.
+  // archived view. Only status sections carry a `status`, so only they can
+  // collapse — Area/Flat groupings always show their rows.
   const sections = areaGroups
-    ? areaGroups.map((g) => ({ title: g.key, items: g.items }))
-    : ITEM_STATUSES.map((s) => ({ title: STATUS_LABEL[s], items: grouped[s] }));
+    ? areaGroups.map((g) => ({ title: g.key, items: g.items, status: null }))
+    : ITEM_STATUSES.map((s) => ({
+        title: STATUS_LABEL[s],
+        items: grouped[s],
+        status: s,
+      }));
 
   return (
     <div className="space-y-8">
-      {sections.map((section) => (
-        <section key={section.title}>
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">
-            {section.title}{" "}
-            <span className="ml-1 text-[var(--color-faint)]">
-              {section.items.length}
-            </span>
-          </h2>
-          <DraggableRows
-            items={section.items}
-            sortable={!archivedView}
-            {...rowProps}
-          />
-        </section>
-      ))}
+      {sections.map((section) => {
+        const collapsed =
+          section.status != null && (isCollapsed?.(section.status) ?? false);
+        return (
+          <section key={section.title}>
+            <SectionHeader
+              title={section.title}
+              count={section.items.length}
+              collapsed={collapsed}
+              onToggle={
+                section.status != null && onToggleCollapse
+                  ? () => onToggleCollapse(section.status as ItemStatus)
+                  : undefined
+              }
+            />
+            {collapsed ? null : (
+              <DraggableRows
+                items={section.items}
+                sortable={!archivedView}
+                {...rowProps}
+              />
+            )}
+          </section>
+        );
+      })}
     </div>
+  );
+}
+
+/**
+ * A status/area section header. When the section can collapse (status sections
+ * only), the whole header is a disclosure button: a chevron points down when
+ * open, right when collapsed, with title + aria-label. Collapsing hides the
+ * rows but keeps the header + count so marking something Done still reads as
+ * feedback (the count ticks) and the section stays discoverable.
+ */
+function SectionHeader({
+  title,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  title: string;
+  count: number;
+  collapsed: boolean;
+  onToggle?: () => void;
+}) {
+  const inner = (
+    <>
+      {onToggle ? (
+        <svg
+          className={`h-4 w-4 shrink-0 text-[var(--color-faint)] transition-transform ${
+            collapsed ? "" : "rotate-90"
+          }`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      ) : null}
+      <span className="text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">
+        {title}
+      </span>
+      <span className="text-[var(--color-faint)]">{count}</span>
+    </>
+  );
+
+  if (!onToggle) {
+    return (
+      <h2 className="mb-2 flex items-center gap-1.5 text-xs">{inner}</h2>
+    );
+  }
+  return (
+    <h2 className="mb-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        title={collapsed ? `Expand ${title}` : `Collapse ${title}`}
+        aria-label={collapsed ? `Expand ${title} section` : `Collapse ${title} section`}
+        aria-expanded={!collapsed}
+        className="-ml-1 flex items-center gap-1.5 rounded px-1 py-0.5 text-xs transition-colors hover:bg-[var(--color-canvas)]"
+      >
+        {inner}
+      </button>
+    </h2>
   );
 }
 
@@ -437,6 +522,7 @@ const STATUS_STYLES: Record<ItemStatus, string> = {
   in_progress:
     "text-[var(--color-accent-ink)] bg-[var(--color-accent-soft)] ring-[var(--color-line-strong)]",
   blocked: "text-[var(--color-bug)] bg-[var(--color-bug-bg)] ring-[var(--color-bug-line)]",
+  testing: "text-[var(--color-idea)] bg-[var(--color-idea-bg)] ring-[var(--color-idea-line)]",
   done: "text-[var(--color-feature)] bg-[var(--color-feature-bg)] ring-[var(--color-feature-line)]",
 };
 

@@ -54,6 +54,13 @@ type PatchFn = (
   patch: Partial<Pick<Item, "type" | "status" | "position">>,
 ) => Promise<void>;
 
+type CollapseProps = {
+  /** Whether a given status column is collapsed to a rail, for this viewer. */
+  isCollapsed: (status: ItemStatus) => boolean;
+  /** Toggle a column's collapsed state (persisted per-viewer). */
+  onToggleCollapse: (status: ItemStatus) => void;
+};
+
 type TagProps = {
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
@@ -87,13 +94,16 @@ export function Board({
   onItemChange,
   selectedId,
   onSelect,
+  isCollapsed,
+  onToggleCollapse,
 }: {
   grouped: Record<ItemStatus, Item[]>;
   onPatch: PatchFn;
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
-} & TagProps) {
+} & TagProps &
+  CollapseProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -149,6 +159,8 @@ export function Board({
             onItemChange={onItemChange}
             selectedId={selectedId}
             onSelect={onSelect}
+            isCollapsed={isCollapsed}
+            onToggleCollapse={onToggleCollapse}
           />
         ))}
       </div>
@@ -173,14 +185,63 @@ function Column({
   onItemChange,
   selectedId,
   onSelect,
+  isCollapsed,
+  onToggleCollapse,
 }: {
   status: ItemStatus;
   items: Item[];
   onOpen: (item: Item) => void;
   onCreatorClick?: (email: string) => void;
   activeCreator?: string | null;
-} & TagProps) {
+} & TagProps &
+  CollapseProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status, data: { status } });
+  const label = STATUS_LABEL[status];
+  const collapsed = isCollapsed(status);
+
+  // A collapsed column shrinks to a thin, counted rail — but it stays the SAME
+  // droppable `<section>` (setNodeRef), so dropping a card onto it (or Ctrl-f
+  // into it) still works and the count ticks up. It widens + highlights while a
+  // card is dragged over it, keeping the most common action (finishing an item)
+  // an easy target even when collapsed.
+  if (collapsed) {
+    return (
+      <section
+        ref={setNodeRef}
+        aria-label={`${label} column, collapsed`}
+        className={`flex rounded-lg border bg-[var(--color-surface)] transition-all ${
+          isOver
+            ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] md:min-w-0 md:flex-1"
+            : "border-[var(--color-line)] md:w-12 md:shrink-0"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => onToggleCollapse(status)}
+          title={`Expand ${label}`}
+          aria-label={`Expand ${label} column`}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[var(--color-canvas)] md:flex-col md:justify-start md:gap-3 md:py-3"
+        >
+          <svg
+            className="h-4 w-4 shrink-0 text-[var(--color-muted)]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+          <span className="text-xs font-medium uppercase tracking-wider text-[var(--color-muted)] md:[writing-mode:vertical-rl]">
+            {label}
+          </span>
+          <span className="text-xs text-[var(--color-faint)]">{items.length}</span>
+        </button>
+      </section>
+    );
+  }
 
   // At md+, an empty column collapses to a fixed header-width sliver so the
   // populated columns (flex-1) can take the freed space. An empty column still
@@ -198,11 +259,33 @@ function Column({
           : "border-[var(--color-line)]"
       }`}
     >
-      <header className="flex items-baseline justify-between border-b border-[var(--color-line)] px-3 py-2">
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--color-line)] px-3 py-2">
         <h2 className="text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">
-          {STATUS_LABEL[status]}
+          {label}
         </h2>
-        <span className="text-xs text-[var(--color-faint)]">{items.length}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-[var(--color-faint)]">{items.length}</span>
+          <button
+            type="button"
+            onClick={() => onToggleCollapse(status)}
+            title={`Collapse ${label}`}
+            aria-label={`Collapse ${label} column`}
+            className="-mr-1 grid h-5 w-5 place-items-center rounded text-[var(--color-faint)] transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-muted)]"
+          >
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+        </div>
       </header>
       <SortableContext
         items={items.map((it) => it.id)}
