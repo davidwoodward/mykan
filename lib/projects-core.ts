@@ -24,9 +24,23 @@ export async function listProjects(
   sb: SupabaseClient,
   actor: string,
 ): Promise<CoreResult<Project[]>> {
-  const { data, error } = await sb.from("projects").select("*");
-  if (error) return coreErr(error.message, 500);
-  const visible = (data ?? []).filter(
+  // Fetch the project rows and the per-project item activity CONCURRENTLY. The
+  // activity query used to filter by the visible project ids, which forced it to
+  // wait for the projects query first — two sequential round-trips to Supabase
+  // (the dominant cost of this endpoint from Vercel). Dropping that dependency
+  // lets both run in parallel; we only read activity for visible projects below,
+  // so fetching every item's (project_id, updated_at) is harmless — two tiny
+  // columns. (If the item count ever grows large enough that this transfer
+  // matters, denormalise a `last_activity_at` column onto projects via a trigger
+  // and select+order in one query.)
+  const [projectsRes, itemsRes] = await Promise.all([
+    sb.from("projects").select("*"),
+    sb.from("items").select("project_id, updated_at"),
+  ]);
+  if (projectsRes.error) return coreErr(projectsRes.error.message, 500);
+  if (itemsRes.error) return coreErr(itemsRes.error.message, 500);
+
+  const visible = (projectsRes.data ?? []).filter(
     (p) => p.created_by === actor || (p.shared_with ?? []).includes(actor),
   ) as Project[];
   if (visible.length === 0) return coreOk(visible);
@@ -34,15 +48,7 @@ export async function listProjects(
   // Max item activity per visible project. ISO-8601 timestamps from Postgres
   // share one format, so lexical string comparison is chronological.
   const lastActivity = new Map<string, string>();
-  const { data: rows, error: itemsErr } = await sb
-    .from("items")
-    .select("project_id, updated_at")
-    .in(
-      "project_id",
-      visible.map((p) => p.id),
-    );
-  if (itemsErr) return coreErr(itemsErr.message, 500);
-  for (const row of (rows ?? []) as { project_id: string; updated_at: string }[]) {
+  for (const row of (itemsRes.data ?? []) as { project_id: string; updated_at: string }[]) {
     const cur = lastActivity.get(row.project_id);
     if (!cur || row.updated_at > cur) lastActivity.set(row.project_id, row.updated_at);
   }

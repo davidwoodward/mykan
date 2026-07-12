@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/types";
 
@@ -24,18 +24,31 @@ export function ProjectSwitcher({ currentId }: { currentId: string }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Fetch the project list the first time the menu opens.
-  useEffect(() => {
-    if (!open || projects !== null) return;
-    let cancelled = false;
+  // Load the project list once, lazily — but PREFETCH it rather than waiting for
+  // the click. `/api/projects` is a different serverless function than the ones
+  // the project page loads (items, categories), so it's stone cold on first
+  // open: a click would pay a full Vercel cold start + first Supabase
+  // connection (~2s). Prefetching on mount (deferred so it yields to the page's
+  // own initial fetches) warms both the data and the function, so the menu opens
+  // instantly. Guarded by a ref so it runs at most once regardless of trigger.
+  const fetchedRef = useRef(false);
+  const ensureProjects = useCallback(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     fetch("/api/projects")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: Project[]) => !cancelled && setProjects(d))
-      .catch(() => !cancelled && setProjects([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [open, projects]);
+      .then((d: Project[]) => setProjects(d))
+      .catch(() => {
+        // Let a later open retry a failed prefetch.
+        fetchedRef.current = false;
+        setProjects((prev) => prev ?? []);
+      });
+  }, []);
+
+  useEffect(() => {
+    const id = setTimeout(ensureProjects, 400);
+    return () => clearTimeout(id);
+  }, [ensureProjects]);
 
   // Click-off closes.
   useEffect(() => {
@@ -59,6 +72,7 @@ export function ProjectSwitcher({ currentId }: { currentId: string }) {
 
   function toggle() {
     setHighlighted(0);
+    ensureProjects(); // in case the deferred prefetch hasn't fired (or failed)
     setOpen((o) => !o);
   }
 
@@ -101,6 +115,8 @@ export function ProjectSwitcher({ currentId }: { currentId: string }) {
         ref={buttonRef}
         type="button"
         onClick={toggle}
+        onPointerEnter={ensureProjects}
+        onFocus={ensureProjects}
         aria-label="Switch project"
         title="Switch project"
         aria-haspopup="menu"
