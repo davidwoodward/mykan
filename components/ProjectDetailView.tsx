@@ -30,6 +30,7 @@ import {
   subtreeIdSet,
 } from "@/components/CategoryPicker";
 import { CategoryManager } from "@/components/CategoryManager";
+import { useColumnCollapse } from "@/components/useColumnCollapse";
 import { computePosition } from "@/lib/position";
 
 type View = "list" | "board";
@@ -64,6 +65,9 @@ export function ProjectDetailView({
   // Raw last-selected id; the effective `selectedId` is derived below, clamped
   // to the items actually on screen.
   const [rawSelectedId, setSelectedId] = useState<string | null>(null);
+  // Per-viewer column collapse (Board + status List share one source of truth,
+  // so both views tell the same story). Done ships collapsed.
+  const { isCollapsed, toggle: toggleCollapse } = useColumnCollapse();
 
   useEffect(() => {
     let cancelled = false;
@@ -516,8 +520,8 @@ export function ProjectDetailView({
         : null;
 
       // Ctrl-f / Ctrl-b move the selected item forward/back one status
-      // (new → in_progress → blocked → done), landing it at the TOP of the
-      // destination category. It stays selected, so the focus effect scrolls
+      // (new → in_progress → blocked → testing → done), landing it at the TOP
+      // of the destination category. It stays selected, so the focus effect scrolls
       // it into view at its new home. Clamped at the ends.
       if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "f" || e.key === "b")) {
         if (!sel) return;
@@ -867,6 +871,8 @@ export function ProjectDetailView({
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
           onItemChange={replaceItem}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={toggleCollapse}
           areaGroups={
             groupBy === "area" && !showArchived ? groupedByArea : undefined
           }
@@ -890,6 +896,8 @@ export function ProjectDetailView({
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
           onItemChange={replaceItem}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={toggleCollapse}
         />
       )}
       </div>

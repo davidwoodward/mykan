@@ -24,7 +24,7 @@ function out<T>(r: CoreResult<T>) {
   return json(r.ok ? r.data : { error: r.error });
 }
 const actor = () => mcpActorEmail();
-const status = z.enum(["new", "in_progress", "blocked", "done"]);
+const status = z.enum(["new", "in_progress", "blocked", "testing", "done"]);
 
 const handler = createMcpHandler(
   (server) => {
@@ -40,7 +40,7 @@ const handler = createMcpHandler(
       "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees. `name` is the item's body flattened to plain text (there is no separate stored title — the first line of the body acts as the title), so it may span multiple lines for a long item.",
       {
         project: z.string().describe("project name or id"),
-        status: status.optional().describe("new | in_progress | blocked | done"),
+        status: status.optional().describe("new | in_progress | blocked | testing | done"),
       },
       async (a) => out(await listItems(getSupabase(), actor(), a.project, a.status)),
     );
@@ -84,7 +84,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "update_item_status",
-      "Move an item to a kanban column: new, in_progress, blocked, or done. `item` is an id or KEY-N reference.",
+      "Move an item to a kanban column: new, in_progress, blocked, testing, or done. `item` is an id or KEY-N reference.",
       { item: z.string().describe("item id or KEY-N reference"), status },
       async (a) => out(await setItemStatus(getSupabase(), actor(), a.item, a.status)),
     );
