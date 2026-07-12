@@ -19,6 +19,16 @@ MCP support bolted on after the fact. The strategic move is to travel _right_
 (add breadth) without giving up the agent-native, keyboard-first character that
 is mykan's moat.
 
+### The moat is the Claude Code MCP
+
+The single most valuable, most differentiated thing about mykan is that you can
+**operate the entire app from Claude Code (or any MCP client) as a first-class
+surface** — nine tools with full parity to the UI, designed agent-first rather
+than retrofitted. That's the outstanding feature and the thing worth protecting
+and deepening. The Telegram bot is a real but _minor_ convenience by comparison —
+a lightweight capture front door, not a differentiator — and should not be
+mistaken for the moat.
+
 ## Master feature table
 
 ✅ = has it · ⚠️ = partial / basic · ❌ = doesn't have it
@@ -82,12 +92,14 @@ Slack/GitHub, saved custom views & filters, notifications, analytics, native
 mobile apps, and a command palette. It's a team execution tool; mykan is a
 personal / small-team tracker.
 
-**Where mykan beats Linear** — it's **agent-native by construction** (an agent
-can do anything a user can via the MCP layer, not bolted on), it has a **Telegram
-bot**, the data is **yours** (self-hosted Supabase, no per-seat pricing), and the
+**Where mykan beats Linear** — the **Claude Code MCP** is the standout: mykan is
+**agent-native by construction** (an agent can do anything a user can, full tool
+parity, not bolted on), so you can drive the whole tracker from your coding agent.
+The data is **yours** (self-hosted Supabase, no per-seat pricing), and the
 interaction model is more radically minimal — inline-everything, implicit
-autosave, Esc/click-off dismiss, no modal ceremony. Linear is fast; mykan is
-_smaller_, with essentially zero learning curve.
+autosave, Esc/click-off dismiss, no modal ceremony. (A Telegram bot exists for
+quick capture, but it's a minor convenience, not the differentiator.) Linear is
+fast; mykan is _smaller_, with essentially zero learning curve.
 
 ## Notion
 
@@ -98,12 +110,14 @@ real-time multiplayer, public pages, granular permissions, forms, and a huge
 integration ecosystem. Anything mykan models with fixed columns, Notion models
 with configurable properties.
 
-**Where mykan beats Notion** — **speed and focus**: mykan is a purpose-built
-tracker, not a blank canvas you have to assemble, so there's no setup tax and no
-lag. It's **keyboard-first with vim navigation** (Notion is mouse-centric). It's
-**agent-native with a Telegram front door**. History is **save-granular** (each
-save seals a version — a cleaner mental model than Notion's timestamped page
-history, which is also paywalled). And the data is self-hosted and free.
+**Where mykan beats Notion** — the **Claude Code MCP**, again: you operate mykan
+from your agent as a first-class surface, where Notion's MCP is a later add-on to
+a human-first canvas. Plus **speed and focus** — mykan is a purpose-built tracker,
+not a blank canvas you have to assemble, so there's no setup tax and no lag. It's
+**keyboard-first with vim navigation** (Notion is mouse-centric). History is
+**save-granular** (each save seals a version — a cleaner mental model than
+Notion's timestamped page history, which is also paywalled). And the data is
+self-hosted and free.
 
 ## Bottom line
 
@@ -111,10 +125,10 @@ history, which is also paywalled). And the data is self-hosted and free.
   priorities, analytics).
 - **Notion** is the better _flexible workspace_ (databases, docs, custom fields,
   collaboration).
-- **mykan** wins on **agent-native design, keyboard minimalism, owned data, and a
-  Telegram bot** — it's the tightest, fastest, most automatable option for one
-  person or a tiny trusted group, and the only one where an AI agent is a genuine
-  first-class user rather than an afterthought.
+- **mykan** wins on the **Claude Code MCP** (its killer feature), plus
+  keyboard minimalism, owned data, and radical focus — it's the tightest, fastest,
+  most automatable option for one person or a tiny trusted group, and the only one
+  where an AI agent is a genuine first-class user rather than an afterthought.
 
 The clearest gaps worth closing — the "travel right on the map" work — are
 **priorities/estimates**, **sub-items**, **item relations (blocks/related)**,
