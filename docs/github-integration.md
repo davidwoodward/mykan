@@ -146,19 +146,55 @@ Per the standing rule, new surfaces ship with MCP parity — **with one delibera
 - **Associations** (project→account, area→repo) and **import** and **status changes** (which
   drive write-back) *do* get MCP tools / parity.
 
-**MCP must become per-user authenticated.** Today MCP is a single `MYKAN_SERVICE_API_KEY`
-identity, so it can't tell "David" from "Kenyon" — and therefore can't pick whose PAT to use.
-Moving MCP to **per-user bearer tokens** (token → mykan user → that user's PAT) is a prerequisite
-for MCP-driven import/write-back. It's valuable beyond GitHub (per-user attribution and
-revocation), so it's treated as its own foundational piece, not part of the import feature.
+### Per-user authentication — OAuth 2.0 for MCP
+
+Today MCP is a single `MYKAN_SERVICE_API_KEY` identity, so it can't tell "David" from "Kenyon" —
+and therefore can't pick whose PAT to use. The fix is **OAuth 2.0 for MCP** (the MCP spec's
+standard auth mechanism), the same self-service flow products like BluplAI use:
+
+- The MCP endpoint becomes an **OAuth-authenticated resource** — it advertises the OAuth
+  discovery metadata (protected-resource + authorization-server), supports dynamic client
+  registration + PKCE, and issues **per-user access tokens**.
+- **Login delegates to mykan's existing Auth.js v5 / Google OAuth + whitelist** — so
+  authenticating to the MCP *is* signing into mykan as yourself. No parallel identity system;
+  the whitelist is the user set.
+- Each MCP call carries the user's token → server maps **token → mykan user → that user's PAT**.
+  The "whose PAT?" question dissolves.
+
+This is **Phase I.5**, and it **supersedes the static shared key** — which keeps working in the
+interim for the already-registered user. It's valuable beyond GitHub (per-user attribution and
+revocation), so it's a foundational piece, not part of the import feature itself.
+
+**Onboarding a user (e.g. Kenyon) becomes self-service** — the BluplAI shape exactly:
+
+1. Add their email to the whitelist.
+2. `claude mcp add --transport http mykan https://kanban.dbwoodward.com/mcp`
+3. `/mcp` → mykan → **Authenticate** → browser opens mykan's Google sign-in → sign in as
+   yourself → consent.
+4. `/mcp` shows mykan connected; every call is now identified as that user.
+
+No literal key pasted into `~/.claude.json`.
+
+**Headless/cron caveat:** the browser "Authenticate" step is for humans at a terminal. Automated
+agents (workflows, scheduled runs) can't complete an interactive OAuth flow, so they need a
+**non-interactive token path** (a service token, or a long-lived per-user token issued from
+settings) designed alongside the OAuth flow — otherwise automation gets locked out.
+
+### Endpoint URL — `/mcp`
+
+The MCP endpoint is served at **`https://kanban.dbwoodward.com/mcp`** — a rewrite from the
+current `app/api/mcp` route (or the route moved to `app/mcp`). `/api/mcp` was only the Next.js
+default; the public connect URL is the cleaner **`/mcp`**. A subdomain (`mcp.dbwoodward.com/mcp`)
+is a possible alternative but **not** chosen. **Lock the final URL before onboarding additional
+users** — changing it later forces everyone to re-run `claude mcp add`.
 
 ## Phasing
 
 - **Phase I — UI, full loop.** Connect GitHub + encrypted per-user PAT store + associations
   (project→account, area→repo) + **UI import** + **UI write-back** (Done→close, un-done→reopen).
   Needs **no** MCP change — the logged-in session *is* the identity.
-- **Phase I.5 — per-user MCP authentication.** Foundational; unlocks the MCP half. Valuable on
-  its own.
+- **Phase I.5 — per-user MCP authentication (OAuth 2.0 for MCP).** Foundational; unlocks the MCP
+  half; delegates login to mykan's existing Google/Auth.js, served at `/mcp`. Valuable on its own.
 - **Phase II — MCP import + MCP write-back**, built on I.5.
 
 Deliberately deferred: webhooks / live two-way sync (GitHub App territory), PR write-back,
