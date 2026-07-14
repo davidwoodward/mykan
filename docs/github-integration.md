@@ -206,21 +206,30 @@ Deliberately deferred: webhooks / live two-way sync (GitHub App territory), PR w
   encrypted at rest, write-only (never returned to the client), least-privilege in scope
   (Issues, not repo-wide), and lifecycle-managed (validate-on-connect, revocation detection,
   per-user reconnect).
-- **Encryption mechanism — spec-time decision, not yet made:** Supabase Vault vs app-level AES
-  with a KEK held in Vercel env. Either keeps the *user* secret out of plaintext and the *system*
-  key (the KEK) in env — never a raw PAT in env, never a plaintext PAT in the DB.
+- **Encryption mechanism — DECIDED (KANBAN-20): app-level AES-256-GCM.** PATs are encrypted and
+  decrypted in the Node API route using a 32-byte KEK held in Vercel env; `encrypted_pat` stores
+  only the ciphertext (`nonce || ciphertext || auth tag`, base64). Chosen over Supabase Vault
+  because it matches mykan's existing "secrets in env, service-role DB" pattern, is portable, and
+  behaves identically local/prod — while giving the same threat-model win (a DB-only compromise
+  yields ciphertext, never plaintext, since the KEK lives in a separate trust domain). Invariant
+  holds: never a raw PAT in env, never a plaintext PAT in the DB. The KEK env var and the
+  encrypt/decrypt code land at GH-2 (KANBAN-21); GH-1 is schema-only.
 - **Never store raw PATs in Vercel env** — env is global config and can't be per-user; per-user
   secrets belong in the (encrypted) DB.
 - **Blast radius:** because tokens are Issues **read+write**, a leak can rewrite issues, not just
   read them. That is the explicit justification for the encrypt-at-rest + write-only discipline —
   it is the price of holding a write-capable token, accepted knowingly.
 
-## Schema deltas (indicative)
+## Schema deltas
 
-- `github_accounts` — global registry: `id`, `login`, created-by/at.
-- `github_credentials` — per-user secret: `id`, `user`, `account_id`, `encrypted_pat`,
-  `status` (active/invalid), `expires_at?`, created/updated. Encrypted, write-only.
-- `projects.github_account_id` — nullable FK to `github_accounts`.
+**Built in GH-1 (KANBAN-20)** — `supabase/migrations/2026-07-13-github-integration.sql`, applied
+to the `mykan` schema via the Management API and folded into `supabase/schema.sql`:
+
+- `github_accounts` — global registry: `id`, `login` (unique), `created_at`, `created_by`.
+- `github_credentials` — per-user secret, `unique (account_id, user_email)`: `id`, `account_id`
+  (FK → `github_accounts`, cascade), `user_email`, `encrypted_pat` (AES-256-GCM ciphertext only),
+  `status` (`active|invalid`), `expires_at?`, `created_at`, `updated_at`. Encrypted, write-only.
+- `projects.github_account_id` — nullable FK → `github_accounts` (on delete set null).
 - `categories.github_repo` — nullable `owner/repo` on the area node.
-- `items.github_issue` — nullable backlink `owner/repo#number` (+ maybe url); the dedupe key
-  and the write-back target.
+- `items.github_issue` — nullable backlink `owner/repo#number` (indexed); the dedupe key and the
+  write-back target.

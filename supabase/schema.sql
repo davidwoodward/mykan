@@ -167,6 +167,52 @@ alter table item_versions add column if not exists edit_session text;
 create index if not exists item_versions_item_created_idx
   on item_versions (item_id, created_at desc);
 
+-- GitHub integration (KANBAN-19/20). A GitHub account is a global entity; a
+-- per-user PAT is the credential that reaches it; projects/areas/items link to
+-- GitHub. Full design: docs/github-integration.md.
+-- Migration: supabase/migrations/2026-07-13-github-integration.sql
+--
+-- A GitHub account/org, registered once and shared system-wide, identified by its
+-- canonical login (captured from GitHub /user on connect, never user-typed).
+create table if not exists github_accounts (
+  id uuid primary key default uuid_generate_v4(),
+  login text not null unique,
+  created_at timestamptz not null default now(),
+  created_by text
+);
+
+-- One user's PAT for one account: one row per (mykan user, account). mykan's first
+-- user-supplied secret at rest — encrypted_pat holds AES-256-GCM ciphertext ONLY
+-- (encrypt/decrypt happen app-side with a KEK in Vercel env; the DB never sees
+-- plaintext and the KEK never lives in the DB). status flips to 'invalid' on a
+-- GitHub 401/403 so the UI can prompt that user alone to reconnect.
+create table if not exists github_credentials (
+  id uuid primary key default uuid_generate_v4(),
+  account_id uuid not null references github_accounts (id) on delete cascade,
+  user_email text not null,
+  encrypted_pat text not null,
+  status text not null default 'active' check (status in ('active', 'invalid')),
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (account_id, user_email)
+);
+create index if not exists github_credentials_user_idx
+  on github_credentials (user_email);
+
+-- A project pulls from exactly one GitHub account (1:1, global/shared).
+alter table projects add column if not exists github_account_id uuid
+  references github_accounts (id) on delete set null;
+
+-- An area (category node) is bound to one repo within the project's account, as
+-- `owner/repo`. This binding IS the import routing target.
+alter table categories add column if not exists github_repo text;
+
+-- Backlink from an imported item to its source issue, as `owner/repo#number` — the
+-- dedupe key for import and the target for Done→close / un-done→reopen write-back.
+alter table items add column if not exists github_issue text;
+create index if not exists items_github_issue_idx on items (github_issue);
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding
