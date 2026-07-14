@@ -58,6 +58,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
       if (pathname.startsWith("/signin")) return true;
+      // API routes gate themselves (requireSession / service key) and must answer
+      // with their own JSON — including a 401 when unauthenticated. If the proxy
+      // instead redirects them to the /signin HTML page, any client `fetch().json()`
+      // blows up with "Unexpected token '<', <!DOCTYPE …". Let /api through and let
+      // the route decide.
+      if (pathname.startsWith("/api/")) return true;
       return !!auth?.user;
     },
   },
