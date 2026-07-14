@@ -22,6 +22,7 @@ export function GithubConnect() {
   const [pat, setPat] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const patRef = useRef<HTMLInputElement>(null);
   const fetchedRef = useRef(false);
@@ -32,8 +33,11 @@ export function GithubConnect() {
       .then((d: { configured: boolean; accounts: GithubConnection[] }) => {
         setConfigured(d.configured);
         setConnections(d.accounts);
+        setListError(null);
       })
-      .catch(() => setConnections([]));
+      // Don't blank an already-loaded list on a transient failure (e.g. a lapsed
+      // session) — that reads as "everything got deleted." Surface it instead.
+      .catch(() => setListError("Couldn’t load connections — try reopening."));
   }, []);
 
   // Load once on first open (fetch-in-callback, not synchronous setState-in-effect).
@@ -93,13 +97,23 @@ export function GithubConnect() {
   }
 
   async function disconnect(accountId: string) {
+    // Optimistically drop just THIS account; roll back if the delete fails, so a
+    // rejected request never blanks the whole list.
+    const before = connections;
+    setConnections((prev) => (prev ? prev.filter((c) => c.id !== accountId) : prev));
     try {
-      await fetch(`/api/github/accounts/${accountId}`, { method: "DELETE" });
-    } finally {
-      load();
+      const res = await fetch(`/api/github/accounts/${accountId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setListError(null);
+    } catch {
+      setConnections(before ?? null);
+      setListError("Couldn’t disconnect — try again.");
     }
   }
 
+  // Update an account's token (reconnect): prefill the login and focus the PAT
+  // field. Re-entering login + a new PAT and hitting Connect upserts the
+  // credential — works for an active account (swap the token) or an invalid one.
   function reconnect(accountLogin: string) {
     setLogin(accountLogin);
     setPat("");
@@ -143,8 +157,13 @@ export function GithubConnect() {
           </div>
 
           {/* Existing connections for this user. */}
+          {listError ? (
+            <div className="mb-2 px-1 py-1 text-xs text-[var(--color-bug)]">{listError}</div>
+          ) : null}
           {connections === null ? (
-            <div className="px-1 py-1 text-xs text-[var(--color-faint)]">Loading…</div>
+            <div className="px-1 py-1 text-xs text-[var(--color-faint)]">
+              {listError ? "" : "Loading…"}
+            </div>
           ) : connections.length === 0 ? (
             <div className="px-1 py-1 text-xs text-[var(--color-faint)]">
               No accounts connected yet.
@@ -167,15 +186,14 @@ export function GithubConnect() {
                     )}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    {c.status === "invalid" ? (
-                      <button
-                        type="button"
-                        onClick={() => reconnect(c.login)}
-                        className="text-xs text-[var(--color-accent-ink)] hover:underline"
-                      >
-                        Reconnect
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => reconnect(c.login)}
+                      title={`Update the token for ${c.login}`}
+                      className="text-xs text-[var(--color-accent-ink)] hover:underline"
+                    >
+                      {c.status === "invalid" ? "Reconnect" : "Update token"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => disconnect(c.id)}
