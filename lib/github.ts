@@ -178,28 +178,32 @@ interface RawRepo {
   owner?: { login?: string };
 }
 
+type RepoPageResult =
+  | { ok: true; names: string[] }
+  | { ok: false; status: number; authFailed: boolean; error: string };
+
 /**
- * List the (non-archived) repo names under `owner` that the caller's PAT can
- * see — for the area→repo binding picker. Uses `/user/repos` (which returns
- * everything a fine-grained PAT was granted, across affiliations) and filters to
- * the bound account's owner. A 401/403 sets `authFailed` like {@link listOpenIssues}.
+ * Paginate a repos endpoint, collecting non-archived repo names. When `ownerFilter`
+ * is set (the cross-owner `/user/repos` case) only repos owned by it are kept; the
+ * org endpoint is already owner-scoped so it passes null. A 404 (e.g. the owner is
+ * a user, not an org) resolves to an empty page set, not an error.
  */
-export async function listAccessibleRepos(
+async function collectRepoNames(
   pat: string,
-  owner: string,
-): Promise<ListReposResult> {
+  path: (page: number) => string,
+  ownerFilter: string | null,
+): Promise<RepoPageResult> {
   const names: string[] = [];
   const PER_PAGE = 100;
   const MAX_PAGES = 10;
-  const target = owner.toLowerCase();
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = `${GITHUB_API}/user/repos?per_page=${PER_PAGE}&page=${page}&sort=full_name`;
     let res: Response;
     try {
-      res = await fetch(url, { headers: githubHeaders(pat) });
+      res = await fetch(`${GITHUB_API}${path(page)}`, { headers: githubHeaders(pat) });
     } catch {
       return { ok: false, status: 0, authFailed: false, error: "Couldn’t reach GitHub — try again." };
     }
+    if (res.status === 404) break; // owner isn't an org (or no visibility) — treat as empty
     if (res.status === 401 || res.status === 403) {
       return { ok: false, status: res.status, authFailed: true, error: "GitHub rejected your token." };
     }
@@ -209,11 +213,46 @@ export async function listAccessibleRepos(
     const batch = (await res.json().catch(() => [])) as RawRepo[];
     if (!Array.isArray(batch) || batch.length === 0) break;
     for (const r of batch) {
-      if (r.archived) continue;
-      if ((r.owner?.login ?? "").toLowerCase() === target && r.name) names.push(r.name);
+      if (r.archived || !r.name) continue;
+      if (ownerFilter && (r.owner?.login ?? "").toLowerCase() !== ownerFilter) continue;
+      names.push(r.name);
     }
     if (batch.length < PER_PAGE) break;
   }
-  names.sort((a, b) => a.localeCompare(b));
-  return { ok: true, repos: names };
+  return { ok: true, names };
+}
+
+/**
+ * List the (non-archived) repo names under `owner` that the caller's PAT can see —
+ * for the area→repo binding picker. Queries BOTH `/user/repos` (filtered to the
+ * owner; covers personal accounts and repos surfaced by affiliation) AND
+ * `/orgs/{owner}/repos` (covers an ORG account reached via a member's PAT, whose
+ * repos don't always appear under `/user/repos`), then unions the names. A 401/403
+ * on either sets `authFailed` like {@link listOpenIssues}.
+ */
+export async function listAccessibleRepos(
+  pat: string,
+  owner: string,
+): Promise<ListReposResult> {
+  const target = owner.toLowerCase();
+  const enc = encodeURIComponent(owner);
+  const [user, org] = await Promise.all([
+    collectRepoNames(
+      pat,
+      (p) => `/user/repos?per_page=100&page=${p}&sort=full_name`,
+      target,
+    ),
+    collectRepoNames(pat, (p) => `/orgs/${enc}/repos?per_page=100&page=${p}&sort=full_name`, null),
+  ]);
+  // Surface an auth failure from either call so the caller can prompt a reconnect.
+  for (const r of [user, org]) {
+    if (!r.ok && r.authFailed) return r;
+  }
+  // A hard (non-auth) error only matters if BOTH failed — a single failure (e.g.
+  // the org endpoint 403ing) shouldn't wipe out results from the other.
+  if (!user.ok && !org.ok) return user;
+  const names = new Set<string>();
+  if (user.ok) for (const n of user.names) names.add(n);
+  if (org.ok) for (const n of org.names) names.add(n);
+  return { ok: true, repos: [...names].sort((a, b) => a.localeCompare(b)) };
 }
