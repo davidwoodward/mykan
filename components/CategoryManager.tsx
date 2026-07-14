@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useCategories, PathInput } from "@/components/CategoryPicker";
 import type { Category } from "@/lib/types";
 
@@ -403,13 +403,27 @@ function RepoPicker({
   const listRef = useRef<HTMLDivElement>(null);
   // Viewport coords for the dropdown. It renders `fixed` so it escapes the
   // Areas panel's scroll container (which would otherwise clip it) and paints
-  // above the footer. Measured from the input on focus and on scroll/resize.
+  // above the footer. Measured when the input mounts, and kept fresh on
+  // focus / scroll / resize.
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const measure = () => {
+  const measure = useCallback(() => {
     const r = inputRef.current?.getBoundingClientRect();
     if (r) setCoords({ top: r.bottom + 4, left: r.left, width: r.width });
-  };
+  }, []);
+
+  // Stable ref callback: measure the moment the input attaches to the DOM, so
+  // `coords` is set on mount regardless of whether the autofocus focus event
+  // fires the onFocus handler. (Relying on onFocus alone left coords null and
+  // the dropdown never rendered.) A useCallback ref runs only on attach/detach,
+  // not every render, so this can't loop.
+  const attachInput = useCallback((node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    if (node) {
+      const r = node.getBoundingClientRect();
+      setCoords({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+  }, []);
 
   // Keep the dropdown pinned to the input while it's open (list scroll / resize).
   // The listeners fire measure() → setCoords in a callback, not synchronously in
@@ -422,7 +436,7 @@ function RepoPicker({
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
     };
-  }, []);
+  }, [measure]);
 
   const trimmed = draft.trim();
   const q = trimmed.toLowerCase();
@@ -471,7 +485,7 @@ function RepoPicker({
   return (
     <span className="inline-block shrink-0">
       <input
-        ref={inputRef}
+        ref={attachInput}
         autoFocus
         value={draft}
         onFocus={measure}
