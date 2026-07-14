@@ -4,6 +4,7 @@ import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { categoryInProject } from "@/lib/categories-core";
 import { snapshotThenWrite } from "@/lib/item-history";
+import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import {
   isItemStatus,
   isItemType,
@@ -104,6 +105,23 @@ export async function PATCH(req: Request, { params }: Ctx) {
     editSession,
   );
   if (!w.ok) return NextResponse.json({ error: w.error }, { status: w.status });
+
+  // Write-back (GH-5): a Done-boundary crossing on a GitHub-linked item closes /
+  // reopens the issue with the acting user's PAT. The status is already committed
+  // above and is NEVER rolled back; a skip/failure only records a retry-able flag.
+  if (current.github_issue) {
+    const sync = await writeBackOnStatusChange(
+      getSupabase(),
+      gate.email,
+      current.github_issue,
+      current.status,
+      w.data.status,
+    );
+    if (sync !== undefined) {
+      await getSupabase().from("items").update({ github_sync: sync }).eq("id", id);
+      w.data.github_sync = sync;
+    }
+  }
   return NextResponse.json(w.data);
 }
 

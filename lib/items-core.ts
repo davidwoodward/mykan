@@ -9,12 +9,14 @@ import {
   paragraphDoc,
   richDocImageSrcs,
   richDocText,
+  type GithubSync,
   type Item,
   type ItemStatus,
   type ItemType,
   type Project,
   type RichDoc,
 } from "@/lib/types";
+import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import { whitelist } from "@/lib/auth";
 import { ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
 import {
@@ -47,7 +49,7 @@ function refOf(key: string | null, number: number): string {
  * returning the row plus its project (for the key + visibility). A project the
  * actor can't see is reported as "not found".
  */
-async function loadVisibleItem(
+export async function loadVisibleItem(
   sb: SupabaseClient,
   actor: string,
   ref: string,
@@ -104,6 +106,14 @@ export type ItemDetail = ItemSummary & {
   project_id: string;
   body_text: string;
   attachments: Item["attachments"];
+  /** Backlink to the source GitHub issue (`owner/repo#number`), or null. */
+  github_issue: string | null;
+  /** The linked issue's creation time on GitHub (ISO), or null. */
+  github_issue_created_at: string | null;
+  /** When the item was pulled into mykan from GitHub (ISO), or null. */
+  github_imported_at: string | null;
+  /** Write-back sync flag for the linked issue (null when in sync). */
+  github_sync: GithubSync;
 };
 
 /** Shape a single item into the detailed view (resolves the area path). */
@@ -128,6 +138,10 @@ async function detailOf(
     assignees: it.assignees,
     area,
     attachments: it.attachments,
+    github_issue: it.github_issue,
+    github_issue_created_at: it.github_issue_created_at,
+    github_imported_at: it.github_imported_at,
+    github_sync: it.github_sync,
   };
 }
 
@@ -286,6 +300,24 @@ export async function setItemStatus(
   }
   const w = await snapshotThenWrite(sb, actor, it, patch, source);
   if (!w.ok) return w;
+
+  // Write-back (GH-5): a Done-boundary crossing on a GitHub-linked item closes /
+  // reopens the issue with the actor's PAT. Best-effort — the status change is
+  // already committed above and is NEVER rolled back; a skip/failure only records
+  // a retry-able flag. See docs/github-integration.md §Write-back.
+  if (it.github_issue) {
+    const sync = await writeBackOnStatusChange(
+      sb,
+      actor,
+      it.github_issue,
+      it.status,
+      w.data.status,
+    );
+    if (sync !== undefined) {
+      await sb.from("items").update({ github_sync: sync }).eq("id", it.id);
+      w.data.github_sync = sync;
+    }
+  }
   return coreOk(await detailOf(sb, project, w.data));
 }
 
@@ -310,6 +342,8 @@ export type CreateItemInput = {
    * (see lib/github-core.ts). Stored on the item as its dedupe/write-back key.
    */
   github_issue?: unknown;
+  /** The source issue's GitHub creation time (ISO), captured at import. */
+  github_issue_created_at?: unknown;
 };
 
 /** Create an item in a project (mirrors POST /api/projects/[id]/items). */
@@ -362,6 +396,12 @@ export async function createItem(
     typeof input.github_issue === "string" && input.github_issue.trim()
       ? input.github_issue.trim()
       : null;
+  const github_issue_created_at =
+    typeof input.github_issue_created_at === "string" && input.github_issue_created_at.trim()
+      ? input.github_issue_created_at.trim()
+      : null;
+  // A GitHub-linked item records when it was pulled into mykan (import time).
+  const github_imported_at = github_issue ? new Date().toISOString() : null;
   const { data, error } = await sb
     .from("items")
     .insert({
@@ -376,6 +416,8 @@ export async function createItem(
       updated_by: actor,
       category_id,
       github_issue,
+      github_issue_created_at,
+      github_imported_at,
     })
     .select()
     .single();

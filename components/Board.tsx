@@ -26,6 +26,7 @@ import { ItemHistory } from "@/components/ItemHistory";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
+import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import { computePosition } from "@/lib/position";
@@ -445,6 +446,7 @@ function Card({
         <div className="flex items-center gap-2">
           <RefBadge number={item.number} />
           <TypeBadge type={item.type} />
+          <GithubSyncBadge item={item} onItemChange={onItemChange} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
           <ItemHistory
             item={item}

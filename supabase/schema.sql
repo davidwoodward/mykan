@@ -213,6 +213,20 @@ alter table categories add column if not exists github_repo text;
 alter table items add column if not exists github_issue text;
 create index if not exists items_github_issue_idx on items (github_issue);
 
+-- Write-back sync flag (KANBAN-24): the linked issue could not be reconciled to the
+-- item's Done state. null = in sync; 'no_pat' = actor has no usable PAT; 'failed' =
+-- GitHub rejected/was unreachable (retry-able). A status change is never blocked or
+-- rolled back on write-back failure — this flag is how it surfaces instead.
+alter table items add column if not exists github_sync text
+  check (github_sync in ('no_pat', 'failed'));
+
+-- GitHub provenance shown on a linked item (KANBAN-24): when the source issue was
+-- opened on GitHub (github_issue_created_at) and when it was pulled into mykan
+-- (github_imported_at). A linked item only re-syncs from GitHub via a manual
+-- refresh, which re-captures github_issue_created_at.
+alter table items add column if not exists github_issue_created_at timestamptz;
+alter table items add column if not exists github_imported_at timestamptz;
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

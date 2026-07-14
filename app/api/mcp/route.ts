@@ -5,6 +5,7 @@ import { checkServiceKey } from "@/lib/service-auth";
 import { mcpActorEmail } from "@/lib/auth";
 import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
+import { refreshItemFromGithub } from "@/lib/github-core";
 import {
   appendItemNote,
   createItem,
@@ -200,6 +201,17 @@ const handler = createMcpHandler(
       },
       async (a) =>
         out(await setAreaGithubRepo(getSupabase(), actor(), a.project, a.area, a.repo || null)),
+    );
+
+    server.tool(
+      "refresh_item_from_github",
+      "Re-pull a GitHub-linked item from its source issue, OVERWRITING the item's title/body and tags with the issue's CURRENT title, body, and labels. This is the ONLY way a linked item re-syncs from GitHub — import never updates an existing item and nothing polls. Status, area, and assignees are mykan's and are left untouched. Uses your PAT for the item's account; the previous content is recoverable from item history. `item` is an id or KEY-N reference.",
+      { item: z.string().describe("item id or KEY-N reference") },
+      async (a) => {
+        const r = await refreshItemFromGithub(getSupabase(), actor(), a.item);
+        if (!r.ok) return json({ error: r.error });
+        return out(await getItem(getSupabase(), actor(), a.item));
+      },
     );
 
     server.tool(

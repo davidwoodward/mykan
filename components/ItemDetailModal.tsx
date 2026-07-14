@@ -6,6 +6,8 @@ import { TagEditor } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
 import { TypeBadge } from "@/components/TypeBadge";
 import { RefBadge } from "@/components/RefBadge";
+import { GithubItemMeta } from "@/components/GithubItemMeta";
+import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { STATUS_LABEL, type Item, type RichDoc } from "@/lib/types";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -126,6 +128,13 @@ export function ItemDetailModal({
         <div className="border-t border-[var(--color-line)] px-4 py-2.5">
           <Attachments item={item} onItemChange={onItemChange} />
         </div>
+
+        {item.github_issue ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--color-line)] px-4 py-2.5">
+            <GithubItemMeta item={item} onItemChange={onItemChange} />
+            <GithubSyncBadge item={item} onItemChange={onItemChange} />
+          </div>
+        ) : null}
 
         <footer className="flex items-center justify-between border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">
           <span>Paste or drop an image to embed it</span>

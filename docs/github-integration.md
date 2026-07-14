@@ -138,14 +138,41 @@ Rules:
   "not synced" state.
 - Closing an already-closed issue / reopening an already-open one is a harmless no-op.
 
+Failure surfaces as a per-item flag (`items.github_sync`): `no_pat` (the actor has no
+usable PAT for the account) or `failed` (GitHub rejected the token / was unreachable).
+Both render a retry-able **"not synced"** badge on the item; retry re-attempts the
+write-back against the item's *current* status. `null` = in sync. See KANBAN-24.
+
+## Manual refresh — issue → item (pull, on demand)
+
+A linked item does **not** auto-track its issue. Import brings an issue in **once**;
+after that the item and issue drift independently, and the **only** way an item
+re-syncs from GitHub is a human clicking **Refresh** on it. Nothing polls; there is
+no webhook (that's deferred GitHub-App territory). Refresh:
+
+- **Overwrites the item's content** — title/body (issue title + markdown body, via the
+  same basic markdown→Tiptap used at import) and **tags** (from labels) — with the
+  issue's *current* state. Status, area, and assignees are mykan's and are left
+  untouched (status flows the other way, via write-back). The previous content is
+  snapshotted to history, so the overwrite is recoverable.
+- Uses the acting user's own PAT; a missing/invalid PAT or a deleted issue surfaces a
+  clear error and changes nothing.
+
+Each linked item shows its **GitHub provenance** inline (far-right on the area/tags
+line, large screens; and in the detail modal): the issue link, when the issue was
+**opened** on GitHub (`items.github_issue_created_at`, captured at import and re-captured
+on refresh), when it was **imported** into mykan (`items.github_imported_at`), and the
+Refresh control. See KANBAN-24.
+
 ## MCP
 
 Per the standing rule, new surfaces ship with MCP parity — **with one deliberate carve-out:**
 
 - **Credential entry stays human-UI-only.** An agent must never be able to *set* a PAT. The
   Connect flow is not an MCP tool.
-- **Associations** (project→account, area→repo) and **import** and **status changes** (which
-  drive write-back) *do* get MCP tools / parity.
+- **Associations** (project→account, area→repo), **status changes** (which drive
+  write-back), and **manual refresh** (`refresh_item_from_github`) *do* get MCP tools /
+  parity. (UI import over MCP is Phase II — it needs per-user auth to pick whose PAT.)
 
 ### Per-user authentication — OAuth 2.0 for MCP
 
