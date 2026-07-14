@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -63,6 +64,22 @@ export function ProjectHeader({
   const canToggleVisibility =
     isOwner && project.created_by?.toLowerCase() === viewerEmail.toLowerCase();
 
+  // Load the connectable GitHub accounts for the picker. Keeps the last-good
+  // list on a transient failure (a lapsed session used to blank it, so the
+  // dropdown showed only "None" as if no account were connected).
+  const loadAccounts = useCallback(() => {
+    fetch("/api/github/accounts/all")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: { accounts: { id: string; login: string }[] }) => setGhAccounts(d.accounts ?? []))
+      .catch(() => {});
+  }, []);
+
+  // Prefetch on mount so the accounts are ready the moment the panel opens —
+  // one less thing depending on a well-timed request when you hit Edit.
+  useEffect(() => {
+    loadAccounts();
+  }, [loadAccounts]);
+
   function open() {
     setName(project.name);
     setDescription(project.description ?? "");
@@ -71,11 +88,7 @@ export function ProjectHeader({
     setGithubAccountId(project.github_account_id ?? null);
     setStatus("idle");
     setEditing(true);
-    // Load the connectable GitHub accounts for the picker (async — safe setState).
-    fetch("/api/github/accounts/all")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: { accounts: { id: string; login: string }[] }) => setGhAccounts(d.accounts))
-      .catch(() => setGhAccounts([]));
+    loadAccounts(); // refresh in case an account was just connected
   }
 
   // The set of fields that actually differ from the saved project. Drives both
