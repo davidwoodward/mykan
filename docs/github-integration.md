@@ -46,8 +46,9 @@ connected)*, holding *that user's* fine-grained PAT.
 
 - **`project → account`** (1:1). A project pulls from exactly one GitHub account. Multiple
   repos may live within that account.
-- **`area path → repo`** (within the project's account). This binding *is the import routing*:
-  issues from repo R become items under the area bound to R. No "which area?" ambiguity.
+- **`area path → repo name`** (within the project's single account — the owner is implied, so
+  only the repo name is stored). This binding *is the import routing*: issues from that repo
+  become items under the area bound to it. No "which area?" ambiguity.
 
 Both associations are global (shared pool) — everyone sees the same project↔account and
 area↔repo mappings.
@@ -230,6 +231,7 @@ to the `mykan` schema via the Management API and folded into `supabase/schema.sq
   (FK → `github_accounts`, cascade), `user_email`, `encrypted_pat` (AES-256-GCM ciphertext only),
   `status` (`active|invalid`), `expires_at?`, `created_at`, `updated_at`. Encrypted, write-only.
 - `projects.github_account_id` — nullable FK → `github_accounts` (on delete set null).
-- `categories.github_repo` — nullable `owner/repo` on the area node.
+- `categories.github_repo` — nullable **repo name** on the area node (the owner is
+  implied by the project's bound account; import composes `<account.login>/<github_repo>`).
 - `items.github_issue` — nullable backlink `owner/repo#number` (indexed); the dedupe key and the
   write-back target.

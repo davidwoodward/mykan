@@ -205,7 +205,7 @@ function CategoryRow({
           onChange={(e) => setRepoDraft(e.target.value)}
           onKeyDown={onRepoKeyDown}
           onBlur={commitRepo}
-          placeholder="owner/repo"
+          placeholder="repo name"
           aria-label={`GitHub repo for ${cat.name}`}
           className="w-40 shrink-0 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 font-mono text-[11px] outline-none"
         />

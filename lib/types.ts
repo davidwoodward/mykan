@@ -179,9 +179,10 @@ export interface Category {
   name: string;
   position: number;
   /**
-   * GitHub repo bound to this Area (owner/repo, or just the repo name within the
-   * project's account) — the import-routing target: issues from this repo land
-   * as items under this Area. Null when unbound.
+   * GitHub repo bound to this Area — just the repo NAME; the owner is implied by
+   * the project's single bound account (project.github_account_id). The
+   * import-routing target: issues from this repo land as items under this Area.
+   * Import composes the full ref as `<account.login>/<github_repo>`. Null unbound.
    */
   github_repo: string | null;
 }

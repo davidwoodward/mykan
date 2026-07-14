@@ -192,11 +192,11 @@ const handler = createMcpHandler(
 
     server.tool(
       "set_area_github_repo",
-      "Bind a GitHub repo to a project's Area (or unbind). `project` is a name or id; `area` is a '/'-separated path (created if missing); `repo` is 'owner/repo' (or just the repo name within the project's account), or empty to unbind. Issues from this repo import as items under this Area. Does NOT touch credentials.",
+      "Bind a GitHub repo to a project's Area (or unbind). `project` is a name or id; `area` is a '/'-separated path (created if missing); `repo` is just the repo NAME — the owner is implied by the project's bound GitHub account — or empty to unbind. Issues from this repo import as items under this Area. Does NOT touch credentials.",
       {
         project: z.string().describe("project name or id"),
         area: z.string().describe("Area path, e.g. 'coach / home' (created if missing)"),
-        repo: z.string().describe("owner/repo (or repo name); empty to unbind"),
+        repo: z.string().describe("repo name (owner implied by the project's account); empty to unbind"),
       },
       async (a) =>
         out(await setAreaGithubRepo(getSupabase(), actor(), a.project, a.area, a.repo || null)),
