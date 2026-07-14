@@ -227,6 +227,24 @@ alter table items add column if not exists github_sync text
 alter table items add column if not exists github_issue_created_at timestamptz;
 alter table items add column if not exists github_imported_at timestamptz;
 
+-- Per-user MCP tokens (KANBAN-30, Phase I.5a): a per-user bearer replaces the
+-- single shared MYKAN_SERVICE_API_KEY so each MCP call maps token → user → PAT.
+-- Only a SHA-256 hash of the token is stored (never the plaintext `mk_…` value,
+-- which is shown once at creation). Revocable (revoked_at) and expirable
+-- (expires_at); the verify path re-checks whitelist membership every call.
+-- Migration: supabase/migrations/2026-07-14-mcp-tokens.sql
+create table if not exists mcp_tokens (
+  id uuid primary key default uuid_generate_v4(),
+  user_email text not null,
+  token_hash text not null unique,
+  label text,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  expires_at timestamptz,
+  revoked_at timestamptz
+);
+create index if not exists mcp_tokens_user_idx on mcp_tokens (user_email);
+
 -- Auth is enforced at the app layer (Auth.js + email whitelist).
 -- Server-only API routes use the service-role key, bypassing RLS.
 -- RLS stays disabled on these tables; do NOT enable it without also adding

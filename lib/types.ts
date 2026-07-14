@@ -248,6 +248,35 @@ export interface GithubConnection {
   expires_at: string | null;
 }
 
+/**
+ * A per-user MCP token row (KANBAN-30) — server-only. `token_hash` is the
+ * SHA-256 of the plaintext `mk_…` value; the plaintext is never stored and is
+ * shown to the user exactly once at creation. See lib/mcp-tokens.ts.
+ */
+export interface McpToken {
+  id: string;
+  user_email: string;
+  token_hash: string;
+  label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+/**
+ * Client-safe view of one of the current user's MCP tokens. Deliberately omits
+ * `token_hash` — nothing token-secret ever reaches the browser after the
+ * one-time reveal at creation.
+ */
+export interface McpTokenSummary {
+  id: string;
+  label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+}
+
 /** Parse an `owner/repo#number` backlink into its parts, or null if malformed. */
 export function parseGithubIssue(
   backlink: string | null | undefined,

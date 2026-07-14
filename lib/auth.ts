@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { currentMcpActor } from "@/lib/mcp-actor-context";
 
 const DEFAULT_WHITELIST = [
   "dawoodward@gmail.com",
@@ -33,11 +34,23 @@ export function isOwner(email: string | null | undefined): boolean {
 }
 
 /**
- * The identity the MCP (service) caller acts as. Defaults to the owner so the
- * agent sees every project (incl. private) and stamps authorship as the owner.
- * Override with MCP_ACTOR_EMAIL.
+ * The identity the MCP caller acts as for the CURRENT request. With per-user
+ * tokens (KANBAN-30) the route gate resolves the token → user and runs the
+ * handler inside runAsMcpActor(), so this returns that user's email — every tool
+ * then uses that user's GitHub PAT (no credential borrowing).
+ *
+ * Falls back to the shared-key default (MCP_ACTOR_EMAIL, else the owner) when no
+ * per-request actor is set — i.e. the transitional shared MYKAN_SERVICE_API_KEY
+ * path, which still authenticates as the owner.
  */
 export function mcpActorEmail(): string {
+  const perRequest = currentMcpActor();
+  if (perRequest) return perRequest;
+  return defaultMcpActorEmail();
+}
+
+/** The identity the shared MYKAN_SERVICE_API_KEY authenticates as (owner). */
+export function defaultMcpActorEmail(): string {
   return (process.env.MCP_ACTOR_EMAIL ?? ownerEmail()).trim().toLowerCase();
 }
 

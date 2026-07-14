@@ -16,13 +16,17 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
+/** True when `presented` matches one of the active shared service keys. */
+export function matchesServiceKey(presented: string): boolean {
+  const keys = parseServiceKeys();
+  if (keys.length === 0) return false;
+  return keys.some((k) => safeEqual(presented, k));
+}
+
 /** True when the request carries a valid `Authorization: Bearer <key>` header. */
 export function checkServiceKey(req: Request): boolean {
   const header = req.headers.get("authorization") ?? "";
   const m = header.match(/^Bearer\s+(.+)$/i);
   if (!m) return false;
-  const presented = m[1];
-  const keys = parseServiceKeys();
-  if (keys.length === 0) return false;
-  return keys.some((k) => safeEqual(presented, k));
+  return matchesServiceKey(m[1]);
 }

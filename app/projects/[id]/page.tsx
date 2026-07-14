@@ -7,6 +7,7 @@ import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GithubConnect } from "@/components/GithubConnect";
+import { McpTokenSettings } from "@/components/McpTokenSettings";
 import { Brand } from "@/components/Brand";
 import type { Project } from "@/lib/types";
 
@@ -46,6 +47,7 @@ export default async function ProjectPage({
               {session.user.email}
             </span>
             <GithubConnect />
+            <McpTokenSettings />
             <ThemeToggle />
             <SignOutButton />
           </div>

@@ -278,11 +278,34 @@ Parecki, "OAuth for MCP" (2025-04) and client-registration update (2025-11).*
 
 ### Endpoint URL — `/mcp`
 
-The MCP endpoint is served at **`https://kanban.dbwoodward.com/mcp`** — a rewrite from the
-current `app/api/mcp` route (or the route moved to `app/mcp`). `/api/mcp` was only the Next.js
-default; the public connect URL is the cleaner **`/mcp`**. A subdomain (`mcp.dbwoodward.com/mcp`)
-is a possible alternative but **not** chosen. **Lock the final URL before onboarding additional
-users** — changing it later forces everyone to re-run `claude mcp add`.
+The MCP endpoint is served at **`https://kanban.dbwoodward.com/mcp`**. **LOCKED** — this is the
+canonical URL; do not change it (that would force everyone to re-run `claude mcp add`). A
+subdomain (`mcp.dbwoodward.com/mcp`) was considered and **not** chosen. Implemented (KANBAN-30) as
+a native App-Router route at `app/mcp/route.ts` (mcp-handler `basePath: ""`); the legacy
+`app/api/mcp` route is kept mounted (`basePath: "/api"`) for backward compatibility with existing
+registrations. Both share one handler (`lib/mcp-server.ts`).
+
+### I.5a — shipped (KANBAN-30, 2026-07-14)
+
+Per-user static tokens are live. Details:
+
+- **Token store:** `mykan.mcp_tokens` (id, user_email, `token_hash` = SHA-256 only, label,
+  created_at, last_used_at, expires_at, revoked_at). The plaintext `mk_…` value is shown once at
+  creation and never stored. `lib/mcp-tokens.ts` mints/hashes/verifies.
+- **Identity:** the route gate resolves the presented bearer → a per-user token's whitelisted
+  `user_email` (re-checked against the whitelist every call), else the transitional shared
+  `MYKAN_SERVICE_API_KEY` → owner (dual-accept). It then runs the MCP handler inside an
+  `AsyncLocalStorage` scope (`lib/mcp-actor-context.ts`) so every tool — and GitHub write-back /
+  refresh / (future) import over MCP — acts as that user's PAT. No credential borrowing.
+- **Settings UI (human-only):** a key icon in the top bar (`components/McpTokenSettings.tsx`)
+  generates / copies-once / labels / revokes personal tokens. Deliberately **not** an MCP tool — an
+  agent must never mint its own credential. API: `app/api/mcp-tokens` (GET list, POST mint) and
+  `[id]` (DELETE revoke); session-gated, scoped to the signed-in user.
+- **Transition:** the shared key still works (dual-accept) so nothing breaks mid-flight; retire it
+  once every user holds a personal token.
+- **Verified:** 401 without/with-bogus token; per-user attribution (owner sees a private project,
+  a second user's token does not — no borrowing); revoke blocks immediately; hashes-only at rest;
+  backward-compat `/api/mcp`; both light/dark UI.
 
 ## Phasing
 
@@ -291,8 +314,9 @@ users** — changing it later forces everyone to re-run `claude mcp add`.
   Needs **no** MCP change — the logged-in session *is* the identity.
 - **Phase I.5 — per-user MCP authentication (served at `/mcp`).** Foundational; unlocks the MCP
   half. Staged per the KANBAN-25 spike verdict above:
-  - **I.5a — per-user static token** (`verifyToken` maps a per-user bearer → user → PAT; reuses the
-    existing static-key machinery). Small; unblocks Phase II **and** headless agents. Do this first.
+  - **I.5a — per-user static token** — **SHIPPED (KANBAN-30, 2026-07-14).** A per-user bearer maps
+    token → user → PAT; served natively at `/mcp` (legacy `/api/mcp` kept for compat). See the
+    "I.5a — shipped" subsection above. Unblocks Phase II **and** headless agents now.
   - **I.5b — interactive browser OAuth** ("Authenticate → Google") via a managed AS (WorkOS/Clerk) or
     a minimal `jose` roll-your-own on the existing Auth.js session. Additive UX polish; deferrable.
 - **Phase II — MCP import + MCP write-back**, built on I.5a (per-user identity).
