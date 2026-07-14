@@ -1,9 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MAX_CATEGORY_DEPTH, type Category } from "@/lib/types";
-import { coreErr, coreOk, type CoreResult } from "@/lib/projects-core";
+import { coreErr, coreOk, resolveProject, type CoreResult } from "@/lib/projects-core";
 
-const COLS = "id,project_id,parent_id,name,position";
+const COLS = "id,project_id,parent_id,name,position,github_repo";
 
 /** All category nodes in a project, ordered by sibling position. */
 export async function listCategories(
@@ -132,6 +132,66 @@ export async function renameCategory(
     .single();
   if (error) return coreErr(error.message, 500);
   return coreOk(data as Category);
+}
+
+/** Bind (or unbind with null) a GitHub repo on a category node. */
+export async function setCategoryGithubRepo(
+  sb: SupabaseClient,
+  projectId: string,
+  id: string,
+  repo: string | null,
+  actor: string,
+): Promise<CoreResult<Category>> {
+  const value = repo && repo.trim() ? repo.trim() : null;
+  const { data, error } = await sb
+    .from("categories")
+    .update({ github_repo: value, updated_by: actor, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("project_id", projectId)
+    .select(COLS)
+    .single();
+  if (error) return coreErr(error.message, 500);
+  return coreOk(data as Category);
+}
+
+/**
+ * Bind a repo to the Area at `areaPath` in a project (creating the path if
+ * missing). For MCP: resolves the project (visibility-enforced), finds/creates
+ * the area, then sets its repo. `repo` empty/null unbinds.
+ */
+export async function setAreaGithubRepo(
+  sb: SupabaseClient,
+  actor: string,
+  projectRef: string,
+  areaPath: string,
+  repo: string | null,
+): Promise<CoreResult<Category>> {
+  const proj = await resolveProject(sb, actor, projectRef);
+  if (!proj.ok) return proj;
+  const path = (areaPath ?? "").trim();
+  if (!path) return coreErr("area path required", 400);
+  const cat = await findOrCreateByPath(sb, proj.data.id, path, actor);
+  if (!cat.ok) return cat;
+  return setCategoryGithubRepo(sb, proj.data.id, cat.data.id, repo, actor);
+}
+
+/**
+ * List a project's Areas as full paths with their bound repo — the read side of
+ * the area→repo association (for MCP parity). Visibility-enforced via the project.
+ */
+export async function listAreas(
+  sb: SupabaseClient,
+  actor: string,
+  projectRef: string,
+): Promise<CoreResult<{ id: string; path: string; github_repo: string | null }[]>> {
+  const proj = await resolveProject(sb, actor, projectRef);
+  if (!proj.ok) return proj;
+  const cats = await listCategories(sb, proj.data.id);
+  return coreOk(
+    cats
+      .map((c) => ({ id: c.id, path: pathOf(cats, c.id), github_repo: c.github_repo ?? null }))
+      .sort((a, b) => a.path.localeCompare(b.path)),
+  );
 }
 
 /**

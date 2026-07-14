@@ -22,6 +22,8 @@ type CategoriesValue = {
   ensure: (path: string) => Promise<Category | null>;
   /** Rename a node (ripples to every item via the id reference). */
   rename: (id: string, name: string) => void;
+  /** Bind (or clear with null) a GitHub repo on a node. */
+  setRepo: (id: string, repo: string | null) => void;
   /** Delete a node (children reparent up; items un-file). */
   remove: (id: string) => void;
 };

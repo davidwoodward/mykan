@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     description?: unknown;
     key?: unknown;
     sharedWith?: unknown;
+    github_account_id?: unknown;
   };
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -48,6 +49,10 @@ export async function POST(req: Request) {
     updated_by: gate.email,
     shared_with: sharedWith,
     is_private: sharedWith.length === 0,
+    github_account_id:
+      typeof body.github_account_id === "string" && body.github_account_id
+        ? body.github_account_id
+        : null,
   };
 
   const { data, error } = await getSupabase()

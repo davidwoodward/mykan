@@ -88,6 +88,7 @@ export function CategoryManager({ onClose }: { onClose: () => void }) {
                   cat={cat}
                   depth={depth}
                   onRename={(name) => ctx.rename(cat.id, name)}
+                  onSetRepo={(repo) => ctx.setRepo(cat.id, repo)}
                   onDelete={() => ctx.remove(cat.id)}
                 />
               ))}
@@ -122,15 +123,19 @@ function CategoryRow({
   cat,
   depth,
   onRename,
+  onSetRepo,
   onDelete,
 }: {
   cat: Category;
   depth: number;
   onRename: (name: string) => void;
+  onSetRepo: (repo: string | null) => void;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(cat.name);
+  const [repoEditing, setRepoEditing] = useState(false);
+  const [repoDraft, setRepoDraft] = useState(cat.github_repo ?? "");
 
   function commit() {
     const n = draft.trim();
@@ -147,6 +152,23 @@ function CategoryRow({
       e.preventDefault();
       setDraft(cat.name);
       setEditing(false);
+    }
+  }
+
+  function commitRepo() {
+    const next = repoDraft.trim() || null;
+    if (next !== (cat.github_repo ?? null)) onSetRepo(next);
+    setRepoEditing(false);
+  }
+
+  function onRepoKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitRepo();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setRepoDraft(cat.github_repo ?? "");
+      setRepoEditing(false);
     }
   }
 
@@ -174,6 +196,42 @@ function CategoryRow({
           className="flex-1 truncate text-left text-sm hover:text-[var(--color-accent)]"
         >
           {cat.name}
+        </button>
+      )}
+      {repoEditing ? (
+        <input
+          autoFocus
+          value={repoDraft}
+          onChange={(e) => setRepoDraft(e.target.value)}
+          onKeyDown={onRepoKeyDown}
+          onBlur={commitRepo}
+          placeholder="repo name"
+          aria-label={`GitHub repo for ${cat.name}`}
+          className="w-40 shrink-0 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 font-mono text-[11px] outline-none"
+        />
+      ) : cat.github_repo ? (
+        <button
+          type="button"
+          onClick={() => {
+            setRepoDraft(cat.github_repo ?? "");
+            setRepoEditing(true);
+          }}
+          title="Edit linked GitHub repo"
+          className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent-ink)] transition-opacity hover:opacity-80"
+        >
+          {cat.github_repo}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setRepoDraft("");
+            setRepoEditing(true);
+          }}
+          title="Link a GitHub repo"
+          className="invisible shrink-0 text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-accent-ink)] group-hover:visible"
+        >
+          + repo
         </button>
       )}
       <button
