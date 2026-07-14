@@ -208,6 +208,74 @@ agents (workflows, scheduled runs) can't complete an interactive OAuth flow, so 
 **non-interactive token path** (a service token, or a long-lived per-user token issued from
 settings) designed alongside the OAuth flow — otherwise automation gets locked out.
 
+### Feasibility verdict — KANBAN-25 spike (2026-07-14)
+
+**Verdict: GO — feasible, and lower-risk than first framed. Ship it staged: a per-user static
+token first, interactive browser OAuth second.** The spike's finding is that the *hard* part
+(the OAuth authorization server) is **not on the critical path** — a much cheaper mechanism
+solves the actual "whose PAT?" problem, and the polished OAuth flow becomes optional UX.
+
+**What's already free — the resource-server half.** Per the MCP spec (2025-06-18/2025-11-25) the
+MCP server is only an OAuth 2.1 **resource server**; the **authorization server may be a separate
+entity** the RS points to via RFC 9728 metadata. `mcp-handler@1.1.0` (already installed) gives the
+whole RS half: `withMcpAuth(handler, verifyToken, …)` gates the route (401 + `WWW-Authenticate`),
+and `protectedResourceHandler({ authServerUrls })` publishes `/.well-known/oauth-protected-resource`.
+`verifyToken` returns `AuthInfo { token, clientId, scopes, expiresAt?, resource?, extra? }` — `extra`
+is where we stash the mykan user (and reach their PAT). **token → user → PAT falls out for free.**
+
+**What costs — only the authorization server** (dynamic client registration + `/authorize` +
+`/token` + PKCE + consent). It is **not** in mcp-handler. The `@modelcontextprotocol/sdk` ships one
+(`mcpAuthRouter`, `OAuthServerProvider`, `ProxyOAuthServerProvider`) but it is **Express-only and
+now in the `server-legacy` package** — it does not drop into App Router's Web-`Request`/`Response`
+routes. So an in-app AS means porting those handlers to Web routes, or bringing a managed AS.
+
+**The de-risker — a per-user static token (Tier 1 / Phase I.5a).** Claude Code's
+`claude mcp add --transport http` accepts `--header "Authorization: Bearer <token>"`. So per-user
+attribution needs **no OAuth dance at all**: issue a per-user token from mykan settings, hash-store
+it keyed to the whitelisted email, and have `verifyToken` accept it → user → PAT. This is exactly
+how GitHub / Sentry / Atlassian / Linear MCP handle machine/non-interactive access — and **mykan
+already runs 80% of it**: the current `MYKAN_SERVICE_API_KEY` bearer on `/api/mcp` *is* this
+mechanism, working with Claude Code today; the only delta is making it **per-user**. It solves
+"whose PAT" for **both** interactive and headless/cron in one move. **Effort: S (hours).**
+
+**Interactive browser OAuth (Tier 2 / Phase I.5b) — the polish, deferrable.** The slick
+"`/mcp` → Authenticate → Google" flow needs the AS. Two viable routes:
+
+- **Managed AS — recommended when we want the browser flow: WorkOS AuthKit** (1M free MAU, so a
+  ~4-user tool never pays; DCR + PKCE included and un-gated; JWT+JWKS verification; Google upstream).
+  **Clerk** is a close second with the best native Next.js MCP guide (`@clerk/mcp-tools`, 50k free
+  MAU). **Effort: S–M** (adapt the sample to App Router). Tradeoff: identity lives in the managed
+  AS (it can sit on Google upstream, but it is not literally our Auth.js session).
+- **Roll-your-own minimal AS** — `jose`-signed, audience-bound JWTs + a stateless (signed)
+  `client_id` + JWT auth-codes + **auto-consent off the existing Auth.js Google session** (reuses
+  our whitelist; never passes Google's token through). This is the only option that *literally*
+  "delegates to the existing Auth.js/Google + whitelist" as originally specified. **Effort: M–L,
+  security-critical** — several exploitable-if-wrong invariants (PKCE recompute, exact redirect
+  match, single-use codes, audience validation). Keep it minimal or don't own it.
+
+**Two facts that shape the plan:**
+- **DCR is being deprecated.** The 2025-11-25 spec downgrades Dynamic Client Registration (RFC 7591)
+  from SHOULD to MAY and prefers **Client ID Metadata Documents (CIMD)**. Hand-rolling a heavy DCR
+  endpoint now builds the thing the spec is replacing — let a managed AS own it, or skip it via Tier 1.
+- **Claude Code's DCR has real rough edges** (documented `redirect_uri`/DCR bugs) — another reason
+  not to put a hand-rolled DCR flow on the critical path yet.
+
+**Recommended path:**
+- **Phase I.5a (next, small):** per-user static token + `verifyToken` dual-accept, served at `/mcp`.
+  Unblocks **Phase II** (MCP import + write-back) *and* headless agents immediately.
+- **Phase I.5b (later, when the browser-Authenticate UX is wanted):** interactive OAuth via WorkOS/
+  Clerk, or a minimal `jose` roll-your-own trampolining off Auth.js. The `/mcp` RS route + protected-
+  resource metadata are shared with I.5a, so I.5b is purely additive.
+
+**Proof-of-connect:** the static-bearer transport is **already proven in production** — mykan's MCP
+is registered at user scope today and Claude Code talks to `/api/mcp` over HTTP with a static
+bearer. Tier 1 is that mechanism made per-user; no new proof needed. A Tier-2 browser-flow proof is
+deferred with I.5b.
+
+*Sources: MCP authorization spec 2025-06-18 & 2025-11-25; `mcp-handler` AUTHORIZATION.md + Vercel
+changelog; `@modelcontextprotocol/sdk` `server/auth`; WorkOS AuthKit & Clerk MCP guides; Aaron
+Parecki, "OAuth for MCP" (2025-04) and client-registration update (2025-11).*
+
 ### Endpoint URL — `/mcp`
 
 The MCP endpoint is served at **`https://kanban.dbwoodward.com/mcp`** — a rewrite from the
@@ -221,9 +289,13 @@ users** — changing it later forces everyone to re-run `claude mcp add`.
 - **Phase I — UI, full loop.** Connect GitHub + encrypted per-user PAT store + associations
   (project→account, area→repo) + **UI import** + **UI write-back** (Done→close, un-done→reopen).
   Needs **no** MCP change — the logged-in session *is* the identity.
-- **Phase I.5 — per-user MCP authentication (OAuth 2.0 for MCP).** Foundational; unlocks the MCP
-  half; delegates login to mykan's existing Google/Auth.js, served at `/mcp`. Valuable on its own.
-- **Phase II — MCP import + MCP write-back**, built on I.5.
+- **Phase I.5 — per-user MCP authentication (served at `/mcp`).** Foundational; unlocks the MCP
+  half. Staged per the KANBAN-25 spike verdict above:
+  - **I.5a — per-user static token** (`verifyToken` maps a per-user bearer → user → PAT; reuses the
+    existing static-key machinery). Small; unblocks Phase II **and** headless agents. Do this first.
+  - **I.5b — interactive browser OAuth** ("Authenticate → Google") via a managed AS (WorkOS/Clerk) or
+    a minimal `jose` roll-your-own on the existing Auth.js session. Additive UX polish; deferrable.
+- **Phase II — MCP import + MCP write-back**, built on I.5a (per-user identity).
 
 Deliberately deferred: webhooks / live two-way sync (GitHub App territory), PR write-back,
 `Contents` scope for code-level agent operations, rich markdown fidelity.
