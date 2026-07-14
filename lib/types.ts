@@ -212,6 +212,15 @@ export interface GithubAccount {
 export type GithubCredentialStatus = "active" | "invalid";
 
 /**
+ * Write-back sync state for an item's linked GitHub issue (`items.github_sync`).
+ * `null` = in sync (nothing owed, or the last write-back succeeded); `'no_pat'` =
+ * the acting user has no usable PAT for the account so the write was skipped;
+ * `'failed'` = GitHub rejected/was unreachable — retry-able. A status change is
+ * never blocked or rolled back when this is set. See docs/github-integration.md.
+ */
+export type GithubSync = "no_pat" | "failed" | null;
+
+/**
  * One user's PAT for one account — a server-only row. `encrypted_pat` holds
  * AES-256-GCM ciphertext (see lib/github-crypto.ts) and MUST never be sent to the
  * client. Use {@link GithubConnection} for anything the browser sees.
@@ -237,6 +246,21 @@ export interface GithubConnection {
   login: string;
   status: GithubCredentialStatus;
   expires_at: string | null;
+}
+
+/** Parse an `owner/repo#number` backlink into its parts, or null if malformed. */
+export function parseGithubIssue(
+  backlink: string | null | undefined,
+): { owner: string; repo: string; number: number } | null {
+  const m = /^([^/\s]+)\/([^#\s]+)#(\d+)$/.exec((backlink ?? "").trim());
+  if (!m) return null;
+  return { owner: m[1], repo: m[2], number: Number(m[3]) };
+}
+
+/** The github.com issue URL for a backlink, or null if it can't be parsed. */
+export function githubIssueUrl(backlink: string | null | undefined): string | null {
+  const p = parseGithubIssue(backlink);
+  return p ? `https://github.com/${p.owner}/${p.repo}/issues/${p.number}` : null;
 }
 
 export interface Item {
@@ -268,6 +292,15 @@ export interface Item {
    * docs/github-integration.md §Import.
    */
   github_issue: string | null;
+  /**
+   * The linked GitHub issue's own creation time (ISO), captured at import and on
+   * refresh — shown on the item so it's clear when the upstream issue was opened.
+   */
+  github_issue_created_at: string | null;
+  /** When this item was pulled into mykan from GitHub (import time), or null. */
+  github_imported_at: string | null;
+  /** Write-back sync state for the linked issue; see {@link GithubSync}. */
+  github_sync: GithubSync;
   /**
    * When the item most recently entered the Done column (null otherwise).
    * Drives the Done ordering on the list and board; cleared when it leaves Done.

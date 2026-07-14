@@ -1,12 +1,13 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptPat, isGithubCryptoConfigured } from "@/lib/github-crypto";
-import { listAccessibleRepos, listOpenIssues } from "@/lib/github";
+import { getIssue, listAccessibleRepos, listOpenIssues } from "@/lib/github";
 import { githubIssueBody } from "@/lib/markdown-tiptap";
-import { createItem } from "@/lib/items-core";
+import { createItem, loadVisibleItem } from "@/lib/items-core";
 import { listCategories, pathOf } from "@/lib/categories-core";
+import { snapshotThenWrite } from "@/lib/item-history";
 import { coreErr, coreOk, resolveProject, type CoreResult } from "@/lib/projects-core";
-import type { Category, GithubCredentialStatus } from "@/lib/types";
+import { normalizeTags, parseGithubIssue, type Category, type GithubCredentialStatus, type Item } from "@/lib/types";
 
 /** Per-repo outcome line in an import summary. */
 export interface ImportRepoResult {
@@ -280,6 +281,7 @@ export async function importFromGithub(
         tags: issue.labels,
         category_id: area.id,
         github_issue: backlink,
+        github_issue_created_at: issue.created_at,
       });
       if (!created.ok) {
         error = created.error; // stop this repo; keep what imported so far
@@ -294,4 +296,66 @@ export async function importFromGithub(
   }
 
   return coreOk(summary);
+}
+
+/**
+ * Manual refresh (KANBAN-24): re-pull a linked item from its source issue and
+ * OVERWRITE the item's content (title/body + labels→tags) with the issue's
+ * current state. This is the ONLY path by which a linked item re-syncs from
+ * GitHub — import never touches an existing item, and nothing polls. The acting
+ * user's own PAT is used. Status/area/assignees are mykan's and left untouched
+ * (Done state flows the other way, via write-back). The previous content is
+ * snapshotted to history, so the overwrite is recoverable.
+ */
+export async function refreshItemFromGithub(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+): Promise<CoreResult<Item>> {
+  if (!isGithubCryptoConfigured()) {
+    return coreErr("GitHub isn’t configured on the server (missing encryption key).", 503);
+  }
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const { item } = r.data;
+  const parsed = parseGithubIssue(item.github_issue);
+  if (!parsed) return coreErr("This item isn’t linked to a GitHub issue.", 400);
+  const { owner, repo, number } = parsed;
+
+  const { data: acct } = await sb
+    .from("github_accounts")
+    .select("id")
+    .ilike("login", owner)
+    .maybeSingle();
+  if (!acct) return coreErr(`No connected GitHub account for “${owner}”.`, 400);
+  const accountId = (acct as { id: string }).id;
+
+  const auth = await loadAccountPat(sb, actor, accountId);
+  if (!auth.ok) {
+    if (auth.kind === "error") return coreErr(auth.error, auth.status);
+    return coreErr(
+      auth.reason === "invalid"
+        ? `Reconnect your GitHub account “${owner}” to refresh this item.`
+        : `Connect your GitHub account “${owner}” to refresh this item.`,
+      400,
+    );
+  }
+
+  const issue = await getIssue(auth.pat, owner, repo, number);
+  if (!issue.ok) {
+    if (issue.authFailed) {
+      await markCredentialInvalid(sb, actor, accountId);
+      return coreErr(`Reconnect your GitHub account “${owner}” to refresh this item.`, 401);
+    }
+    return coreErr(issue.error, issue.status || 502);
+  }
+
+  const patch = {
+    body: githubIssueBody(issue.issue.title, issue.issue.body),
+    tags: normalizeTags(issue.issue.labels),
+    github_issue_created_at: issue.issue.created_at,
+  };
+  const w = await snapshotThenWrite(sb, actor, item, patch, "web");
+  if (!w.ok) return w;
+  return coreOk(w.data);
 }

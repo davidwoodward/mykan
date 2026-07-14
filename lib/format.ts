@@ -32,6 +32,18 @@ export function displayName(email: string | null | undefined): string {
   return DISPLAY_NAMES[email.trim().toLowerCase()] ?? localPart(email);
 }
 
+/** Compact absolute date, e.g. "Jul 2, 2026". Empty string for null/invalid. */
+export function shortDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();

@@ -77,13 +77,15 @@ function parseExpiry(header: string | null): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/** One open GitHub issue, reduced to the fields import maps into an item. */
+/** One GitHub issue, reduced to the fields import / refresh map into an item. */
 export interface GithubIssue {
   number: number;
   title: string;
   body: string | null;
   labels: string[];
   html_url: string;
+  /** The issue's own creation time on GitHub (ISO), for display in mykan. */
+  created_at: string | null;
 }
 
 export type ListIssuesResult =
@@ -103,8 +105,23 @@ interface RawIssue {
   title: string;
   body: string | null;
   html_url: string;
+  created_at?: string;
   pull_request?: unknown;
   labels?: ({ name?: string } | string)[];
+}
+
+/** Reduce a raw issue payload to the {@link GithubIssue} fields we keep. */
+function toGithubIssue(raw: RawIssue): GithubIssue {
+  return {
+    number: raw.number,
+    title: raw.title ?? "",
+    body: raw.body ?? null,
+    html_url: raw.html_url ?? "",
+    created_at: raw.created_at ?? null,
+    labels: (raw.labels ?? [])
+      .map((l) => (typeof l === "string" ? l : l?.name ?? ""))
+      .filter(Boolean),
+  };
 }
 
 /**
@@ -153,19 +170,100 @@ export async function listOpenIssues(
     if (!Array.isArray(batch) || batch.length === 0) break;
     for (const raw of batch) {
       if (raw.pull_request) continue; // PRs share the issues endpoint — skip them
-      issues.push({
-        number: raw.number,
-        title: raw.title ?? "",
-        body: raw.body ?? null,
-        html_url: raw.html_url ?? "",
-        labels: (raw.labels ?? [])
-          .map((l) => (typeof l === "string" ? l : l?.name ?? ""))
-          .filter(Boolean),
-      });
+      issues.push(toGithubIssue(raw));
     }
     if (batch.length < PER_PAGE) break; // last page
   }
   return { ok: true, issues };
+}
+
+export type GetIssueResult =
+  | { ok: true; issue: GithubIssue }
+  | { ok: false; status: number; authFailed: boolean; error: string };
+
+/**
+ * Fetch a single issue by number — the source of truth for a manual refresh
+ * (docs/github-integration.md: a linked item only ever re-syncs from GitHub when
+ * a human triggers it). Read-only; uses the caller's PAT. A 401/403 sets
+ * `authFailed` so the caller can flip the credential to `invalid`.
+ */
+export async function getIssue(
+  pat: string,
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<GetIssueResult> {
+  const url =
+    `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+    `/issues/${number}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: githubHeaders(pat) });
+  } catch {
+    return { ok: false, status: 0, authFailed: false, error: "Couldn’t reach GitHub — try again." };
+  }
+  if (res.status === 401 || res.status === 403) {
+    return {
+      ok: false,
+      status: res.status,
+      authFailed: true,
+      error: "GitHub rejected your token — reconnect your account.",
+    };
+  }
+  if (res.status === 404) {
+    return {
+      ok: false,
+      status: 404,
+      authFailed: false,
+      error: `Issue ${owner}/${repo}#${number} no longer exists (or your token can’t see it).`,
+    };
+  }
+  if (!res.ok) {
+    return { ok: false, status: res.status, authFailed: false, error: `GitHub error (${res.status}).` };
+  }
+  const raw = (await res.json().catch(() => null)) as RawIssue | null;
+  if (!raw || typeof raw.number !== "number") {
+    return { ok: false, status: 502, authFailed: false, error: "Unexpected response from GitHub." };
+  }
+  return { ok: true, issue: toGithubIssue(raw) };
+}
+
+export type IssueStateResult =
+  | { ok: true }
+  | { ok: false; status: number; authFailed: boolean; error: string };
+
+/**
+ * Set an issue's open/closed state — the write half of the Done⇄issue loop
+ * (docs/github-integration.md §Write-back). Setting the state it already holds is
+ * a harmless GitHub no-op (returns 200). A 401/403 sets `authFailed`.
+ */
+export async function setIssueState(
+  pat: string,
+  owner: string,
+  repo: string,
+  number: number,
+  state: "open" | "closed",
+): Promise<IssueStateResult> {
+  const url =
+    `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+    `/issues/${number}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "PATCH",
+      headers: { ...githubHeaders(pat), "Content-Type": "application/json" },
+      body: JSON.stringify({ state }),
+    });
+  } catch {
+    return { ok: false, status: 0, authFailed: false, error: "Couldn’t reach GitHub — try again." };
+  }
+  if (res.status === 401 || res.status === 403) {
+    return { ok: false, status: res.status, authFailed: true, error: "GitHub rejected your token." };
+  }
+  if (!res.ok) {
+    return { ok: false, status: res.status, authFailed: false, error: `GitHub error (${res.status}).` };
+  }
+  return { ok: true };
 }
 
 export type ListReposResult =

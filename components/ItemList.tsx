@@ -28,6 +28,8 @@ import { Byline } from "@/components/Byline";
 import { InlineTags } from "@/components/InlineTags";
 import { InlineAttachments } from "@/components/InlineAttachments";
 import { ItemHistory } from "@/components/ItemHistory";
+import { GithubItemMeta } from "@/components/GithubItemMeta";
+import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
@@ -453,6 +455,13 @@ function ItemRow({
             />
             <ItemAssignees item={item} />
           </div>
+          {/* GitHub provenance for linked items: far-right on the area/tags line,
+              large screens only (small screens use the detail modal). */}
+          <GithubItemMeta
+            item={item}
+            onItemChange={onItemChange}
+            className="ml-auto hidden lg:flex"
+          />
         </div>
         <Byline
           createdBy={item.created_by}
@@ -471,6 +480,7 @@ function ItemRow({
           label={text || "item"}
           className="self-center sm:mt-0.5"
         />
+        <GithubSyncBadge item={item} onItemChange={onItemChange} />
         <InlineAttachments item={item} onItemChange={onItemChange} />
         <ItemHistory
           item={item}
