@@ -184,6 +184,47 @@ export interface Attachment {
   path: string;
 }
 
+/**
+ * A GitHub account/org, registered once and shared system-wide (KANBAN-19/20).
+ * Identified by its canonical `login`, captured from GitHub on connect.
+ */
+export interface GithubAccount {
+  id: string;
+  login: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export type GithubCredentialStatus = "active" | "invalid";
+
+/**
+ * One user's PAT for one account — a server-only row. `encrypted_pat` holds
+ * AES-256-GCM ciphertext (see lib/github-crypto.ts) and MUST never be sent to the
+ * client. Use {@link GithubConnection} for anything the browser sees.
+ */
+export interface GithubCredential {
+  id: string;
+  account_id: string;
+  user_email: string;
+  encrypted_pat: string;
+  status: GithubCredentialStatus;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Client-safe view of the current user's connection to an account. Deliberately
+ * omits `encrypted_pat` — the PAT is write-only and never leaves the server.
+ */
+export interface GithubConnection {
+  /** The GitHub account id (github_accounts.id). */
+  id: string;
+  login: string;
+  status: GithubCredentialStatus;
+  expires_at: string | null;
+}
+
 export interface Item {
   id: string;
   project_id: string;
