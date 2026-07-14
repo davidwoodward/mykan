@@ -6,6 +6,7 @@ import { ProjectHeader } from "@/components/ProjectHeader";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { GithubConnect } from "@/components/GithubConnect";
 import { Brand } from "@/components/Brand";
 import type { Project } from "@/lib/types";
 
@@ -44,6 +45,7 @@ export default async function ProjectPage({
             <span className="hidden text-[var(--color-faint)] sm:inline">
               {session.user.email}
             </span>
+            <GithubConnect />
             <ThemeToggle />
             <SignOutButton />
           </div>
