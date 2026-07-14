@@ -27,25 +27,40 @@ export function Tag({
   const base =
     "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs leading-4";
 
-  const inner = (
-    <>
-      <span>{label}</span>
-      {onRemove ? (
+  const removeBtn = onRemove ? (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onRemove();
+      }}
+      aria-label={`Remove tag ${label}`}
+      className="-mr-0.5 ml-0.5 leading-none opacity-60 transition-opacity hover:opacity-100"
+    >
+      ×
+    </button>
+  ) : null;
+
+  // Clickable AND removable: the container is a non-interactive span holding two
+  // SIBLING buttons (the label toggle + the ✕). A <button> must never nest inside
+  // another <button> — that's invalid HTML and triggers a hydration error.
+  if (onClick && onRemove) {
+    return (
+      <span style={style} className={`${base} ${className}`}>
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          aria-label={`Remove tag ${label}`}
-          className="-mr-0.5 ml-0.5 leading-none opacity-60 transition-opacity hover:opacity-100"
+          onClick={onClick}
+          aria-pressed={active}
+          className="leading-4 transition-colors"
         >
-          ×
+          {label}
         </button>
-      ) : null}
-    </>
-  );
+        {removeBtn}
+      </span>
+    );
+  }
 
+  // Clickable only: the whole chip is the toggle (no nested interactive content).
   if (onClick) {
     return (
       <button
@@ -55,13 +70,16 @@ export function Tag({
         style={style}
         className={`${base} transition-colors ${className}`}
       >
-        {inner}
+        <span>{label}</span>
       </button>
     );
   }
+
+  // Static (optionally removable).
   return (
     <span style={style} className={`${base} ${className}`}>
-      {inner}
+      <span>{label}</span>
+      {removeBtn}
     </span>
   );
 }
