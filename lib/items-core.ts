@@ -305,6 +305,11 @@ export type CreateItemInput = {
    * specific spot (e.g. right after a selected row).
    */
   position?: unknown;
+  /**
+   * Backlink to a source GitHub issue (`owner/repo#number`), set only by import
+   * (see lib/github-core.ts). Stored on the item as its dedupe/write-back key.
+   */
+  github_issue?: unknown;
 };
 
 /** Create an item in a project (mirrors POST /api/projects/[id]/items). */
@@ -353,6 +358,10 @@ export async function createItem(
       .maybeSingle();
     position = (tail?.position ?? 0) + 1024;
   }
+  const github_issue =
+    typeof input.github_issue === "string" && input.github_issue.trim()
+      ? input.github_issue.trim()
+      : null;
   const { data, error } = await sb
     .from("items")
     .insert({
@@ -366,6 +375,7 @@ export async function createItem(
       created_by: actor,
       updated_by: actor,
       category_id,
+      github_issue,
     })
     .select()
     .single();

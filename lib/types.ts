@@ -262,6 +262,13 @@ export interface Item {
   attachments: Attachment[];
   archived_at: string | null;
   /**
+   * Backlink to the source GitHub issue, as `owner/repo#number`, for items
+   * created by import (null otherwise). The dedupe key for re-import and the
+   * target for Done→close / un-done→reopen write-back. See
+   * docs/github-integration.md §Import.
+   */
+  github_issue: string | null;
+  /**
    * When the item most recently entered the Done column (null otherwise).
    * Drives the Done ordering on the list and board; cleared when it leaves Done.
    */

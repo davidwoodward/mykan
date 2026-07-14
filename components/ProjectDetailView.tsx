@@ -262,31 +262,58 @@ export function ProjectDetailView({
     [projectId],
   );
 
-  const renameCategory = useCallback((id: string, name: string) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, name } : c)),
-    );
-    void fetch(`/api/categories/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
-    }).catch((e) =>
-      setError(e instanceof Error ? e.message : "Failed to rename area"),
-    );
-  }, []);
+  // Rename an area. Optimistic, but the write is VERIFIED: on any non-ok
+  // response the optimistic name is rolled back and the failure surfaced —
+  // otherwise a failed save (e.g. a lapsed session) would silently revert only
+  // on the next reload, reading as "it didn't save and never told me".
+  const renameCategory = useCallback(
+    (id: string, name: string) => {
+      const before = categories;
+      setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
+      void (async () => {
+        try {
+          const res = await fetch(`/api/categories/${id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const updated = (await res.json()) as Category;
+          setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+        } catch (e) {
+          setCategories(before);
+          setError(e instanceof Error ? e.message : "Failed to rename area");
+        }
+      })();
+    },
+    [categories],
+  );
 
-  const setCategoryRepo = useCallback((id: string, repo: string | null) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, github_repo: repo } : c)),
-    );
-    void fetch(`/api/categories/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ github_repo: repo }),
-    }).catch((e) =>
-      setError(e instanceof Error ? e.message : "Failed to link repo"),
-    );
-  }, []);
+  // Bind/unbind an area's GitHub repo — same verified-optimistic pattern.
+  const setCategoryRepo = useCallback(
+    (id: string, repo: string | null) => {
+      const before = categories;
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, github_repo: repo } : c)),
+      );
+      void (async () => {
+        try {
+          const res = await fetch(`/api/categories/${id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ github_repo: repo }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const updated = (await res.json()) as Category;
+          setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+        } catch (e) {
+          setCategories(before);
+          setError(e instanceof Error ? e.message : "Failed to link repo");
+        }
+      })();
+    },
+    [categories],
+  );
 
   const removeCategory = useCallback(
     (id: string) => {
@@ -937,7 +964,11 @@ export function ProjectDetailView({
         />
       ) : null}
       {showCategoryManager ? (
-        <CategoryManager onClose={() => setShowCategoryManager(false)} />
+        <CategoryManager
+          projectId={projectId}
+          onImported={refetch}
+          onClose={() => setShowCategoryManager(false)}
+        />
       ) : null}
       </CategoryProvider>
       </AssigneeProvider>
