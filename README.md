@@ -19,16 +19,16 @@ A minimal project + item tracker with a kanban board. Two-user app, Google sign-
 - **Rich item bodies** — Tiptap rich-text with inline images and file attachments; free-form tags; soft-delete with an Archived view.
 - **Private projects** — the owner can mark a project private (visible only to them); everyone else sees only shared projects. See [`docs/mcp-setup.md`](./docs/mcp-setup.md) and the privacy spec under `docs/superpowers/specs/`.
 - **Dark mode** — light/dark theme with a moon/sun toggle; respects the OS preference, persists the choice.
-- **MCP / agent access** — an HTTP MCP server at `/api/mcp` lets Claude Code list projects/items and move them across the board. See [`docs/mcp-setup.md`](./docs/mcp-setup.md).
+- **MCP / agent access** — an HTTP MCP server at **`/mcp`** (legacy `/api/mcp` kept for compat) lets Claude Code list projects/items, move them across the board, and drive the GitHub integration. Each user connects with their **own** `mk_…` token (minted from the key icon in the top bar), so MCP actions are attributed to that user and use their GitHub PAT — no shared identity. One token covers interactive and headless/cron agents. See [`docs/mcp-setup.md`](./docs/mcp-setup.md).
 
 ## Architecture in one line
 
-Two callers, one core. The browser calls `/app/api/**` gated by an Auth.js session (whitelisted emails only); Claude Code calls `/api/mcp` gated by a bearer key. Both run through the same shared core (`lib/projects-core.ts`, `lib/items-core.ts`) so validation and visibility rules never drift. Every path holds the Supabase **service-role** key server-side.
+Two callers, one core. The browser calls `/app/api/**` gated by an Auth.js session (whitelisted emails only); Claude Code calls `/mcp` gated by a per-user bearer token. Both run through the same shared core (`lib/projects-core.ts`, `lib/items-core.ts`) so validation and visibility rules never drift. Every path holds the Supabase **service-role** key server-side.
 
 ```
 Browser ──fetch (session)──▶ /api/projects, /api/items, /api/auth/[...]
                                           │
-Claude Code ──bearer key──▶ /api/mcp ─────┤
+Claude Code ──user token──▶ /mcp ─────────┤   (token → user → their GitHub PAT)
                                           ▼
                           lib/projects-core.ts / lib/items-core.ts
                                           │
@@ -39,7 +39,7 @@ Claude Code ──bearer key──▶ /api/mcp ─────┤
                                   Supabase Postgres
 ```
 
-Session gating for browser routes/pages lives in `lib/auth.ts`; `/api/mcp` is excluded from the session middleware (`proxy.ts`) and self-gates with the constant-time bearer check in `lib/service-auth.ts`. No `NEXT_PUBLIC_SUPABASE_*` vars exist — `lib/supabase-server.ts` carries `import "server-only"`; if a client component imports it, the build fails.
+Session gating for browser routes/pages lives in `lib/auth.ts`; `/mcp` (and legacy `/api/mcp`) are excluded from the session middleware (`proxy.ts`) and self-gate in `lib/mcp-server.ts`, which resolves the acting user from the presented token (`lib/mcp-tokens.ts`, hashes-only; else the shared key → owner) and runs each tool as that user via an `AsyncLocalStorage` scope (`lib/mcp-actor-context.ts`). No `NEXT_PUBLIC_SUPABASE_*` vars exist — `lib/supabase-server.ts` carries `import "server-only"`; if a client component imports it, the build fails.
 
 ## Stack
 
@@ -48,7 +48,7 @@ Session gating for browser routes/pages lives in `lib/auth.ts`; `/api/mcp` is ex
 - `@supabase/supabase-js` v2 (server-side, service-role)
 - `@dnd-kit/core` + `@dnd-kit/sortable` for the board
 - Tiptap v3 (rich-text item bodies)
-- `mcp-handler` + `zod` for the MCP server at `/api/mcp`
+- `mcp-handler` + `zod` for the MCP server at `/mcp`
 - Deployed on Vercel
 
 ## Local setup
@@ -108,7 +108,8 @@ The `.github/workflows/ci.yml` workflow runs typecheck + lint + build on PRs as 
 app/
   api/
     auth/[...nextauth]/route.ts   ← Auth.js handler
-    mcp/route.ts                   ← MCP server (7 tools), bearer-gated
+    mcp/route.ts                   ← legacy MCP endpoint (basePath /api), token-gated
+    mcp-tokens/route.ts · [id]/route.ts ← per-user MCP token mint/list/revoke (session-gated)
     projects/route.ts              ← GET, POST
     projects/[id]/route.ts         ← GET, PATCH (name/desc/key/privacy), DELETE
     projects/[id]/items/route.ts   ← GET, POST
@@ -118,6 +119,7 @@ app/
     items/[id]/attachments/**      ← upload/sign/rename/remove/serve
     items/[id]/images/route.ts     ← inline image upload
     images/[...path]/route.ts      ← authed image serving
+  mcp/route.ts                     ← canonical MCP endpoint /mcp (basePath ""), token-gated
   projects/[id]/page.tsx           ← project detail (list + board)
   signin/page.tsx                  ← sign-in screen
   page.tsx                         ← projects list
@@ -137,7 +139,10 @@ components/
 lib/
   auth.ts                          ← Auth.js config + whitelist + ownerEmail/mcpActorEmail
   api-auth.ts                      ← requireSession() + project/item visibility guards
-  service-auth.ts                  ← constant-time bearer-key check for /api/mcp
+  service-auth.ts                  ← constant-time shared-key check (legacy dual-accept)
+  mcp-server.ts                    ← MCP tool registration + per-request auth gate (both routes)
+  mcp-tokens.ts                    ← per-user token mint/hash(SHA-256)/verify
+  mcp-actor-context.ts             ← AsyncLocalStorage carrying the request's MCP actor
   projects-core.ts · items-core.ts · categories-core.ts ← shared core (browser + MCP)
   position.ts                      ← computePosition (shared by board + list drag)
   format.ts                        ← localPart / timeAgo / itemRef helpers
