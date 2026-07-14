@@ -162,6 +162,13 @@ export interface Project {
    * Not a stored column.
    */
   last_activity?: string | null;
+  /** The GitHub account this project pulls from (github_accounts.id), if bound. */
+  github_account_id: string | null;
+  /**
+   * Computed in `listProjects`: the bound GitHub account's login (from
+   * github_accounts), or null. Not a stored column.
+   */
+  github_account?: string | null;
 }
 
 /** A node in a project's Area tree. Items reference one by id. */
@@ -171,6 +178,12 @@ export interface Category {
   parent_id: string | null;
   name: string;
   position: number;
+  /**
+   * GitHub repo bound to this Area (owner/repo, or just the repo name within the
+   * project's account) — the import-routing target: issues from this repo land
+   * as items under this Area. Null when unbound.
+   */
+  github_repo: string | null;
 }
 
 /** Max nesting depth for the category tree (root = depth 1). */

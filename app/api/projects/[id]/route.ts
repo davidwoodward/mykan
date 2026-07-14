@@ -29,6 +29,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     description?: unknown;
     key?: unknown;
     sharedWith?: unknown;
+    github_account_id?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (typeof body.name === "string") patch.name = body.name.trim();
@@ -41,6 +42,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
       typeof body.key === "string"
         ? body.key.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null
         : null;
+  }
+  // The GitHub account this project pulls from (github_accounts.id). Empty
+  // string clears it. A bad id is rejected by the FK at the DB level.
+  if (typeof body.github_account_id === "string" || body.github_account_id === null) {
+    patch.github_account_id = body.github_account_id || null;
   }
   // Sharing may be changed only by the project's owner (creator). The list is
   // normalized to whitelisted members, minus the owner (always implicit).

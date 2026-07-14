@@ -48,6 +48,10 @@ export function ProjectHeader({
   const [description, setDescription] = useState(initial.description ?? "");
   const [key, setKey] = useState(initial.key ?? "");
   const [sharedWith, setSharedWith] = useState<string[]>(initial.shared_with ?? []);
+  const [githubAccountId, setGithubAccountId] = useState<string | null>(
+    initial.github_account_id ?? null,
+  );
+  const [ghAccounts, setGhAccounts] = useState<{ id: string; login: string }[]>([]);
   const [status, setStatus] = useState<Status>("idle");
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -64,8 +68,14 @@ export function ProjectHeader({
     setDescription(project.description ?? "");
     setKey(project.key ?? "");
     setSharedWith(project.shared_with ?? []);
+    setGithubAccountId(project.github_account_id ?? null);
     setStatus("idle");
     setEditing(true);
+    // Load the connectable GitHub accounts for the picker (async — safe setState).
+    fetch("/api/github/accounts/all")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: { accounts: { id: string; login: string }[] }) => setGhAccounts(d.accounts))
+      .catch(() => setGhAccounts([]));
   }
 
   // The set of fields that actually differ from the saved project. Drives both
@@ -80,6 +90,9 @@ export function ProjectHeader({
     if (nextKey !== project.key) patch.key = nextKey;
     if (canToggleVisibility && !sameMembers(sharedWith, project.shared_with ?? [])) {
       patch.sharedWith = sharedWith;
+    }
+    if (githubAccountId !== (project.github_account_id ?? null)) {
+      patch.github_account_id = githubAccountId;
     }
     return patch;
   }
@@ -242,6 +255,31 @@ export function ProjectHeader({
               {(key.trim() || suggestedKey || "KEY")}-12 · prefixes item refs
             </span>
           </div>
+
+          <label className="mt-3 block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
+            GitHub account
+          </label>
+          <select
+            value={githubAccountId ?? ""}
+            onChange={(e) => setGithubAccountId(e.target.value || null)}
+            aria-label="GitHub account"
+            className="mt-1 w-full rounded border border-[var(--color-line)] bg-transparent px-2 py-1 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          >
+            <option value="">None</option>
+            {ghAccounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.login}
+              </option>
+            ))}
+            {githubAccountId && !ghAccounts.some((a) => a.id === githubAccountId) ? (
+              <option value={githubAccountId}>
+                {project.github_account ?? "connected account"}
+              </option>
+            ) : null}
+          </select>
+          <p className="mt-1 text-[11px] leading-snug text-[var(--color-faint)]">
+            Issues import into this project&rsquo;s areas that are mapped to repos in this account.
+          </p>
 
           {canToggleVisibility ? (
             <div className="mt-3 flex items-center justify-between gap-2">

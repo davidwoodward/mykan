@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { loadProjectForAccess, requireSession } from "@/lib/api-auth";
-import { deleteCategory, renameCategory } from "@/lib/categories-core";
+import { deleteCategory, renameCategory, setCategoryGithubRepo } from "@/lib/categories-core";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,11 +26,25 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const g = await gateCategory(id, gate.email);
   if ("error" in g) return g.error;
 
-  const body = (await req.json().catch(() => ({}))) as { name?: unknown };
-  if (typeof body.name !== "string") {
-    return NextResponse.json({ error: "name required" }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as {
+    name?: unknown;
+    github_repo?: unknown;
+  };
+  const sb = getSupabase();
+
+  // Bind/unbind a GitHub repo on this Area.
+  if (typeof body.github_repo === "string" || body.github_repo === null) {
+    const repo = typeof body.github_repo === "string" ? body.github_repo.trim() || null : null;
+    const r = await setCategoryGithubRepo(sb, g.projectId, id, repo, gate.email);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    return NextResponse.json(r.data);
   }
-  const r = await renameCategory(getSupabase(), g.projectId, id, body.name, gate.email);
+
+  // Otherwise a rename.
+  if (typeof body.name !== "string") {
+    return NextResponse.json({ error: "name or github_repo required" }, { status: 400 });
+  }
+  const r = await renameCategory(sb, g.projectId, id, body.name, gate.email);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
   return NextResponse.json(r.data);
 }

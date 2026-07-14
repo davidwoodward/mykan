@@ -275,6 +275,19 @@ export function ProjectDetailView({
     );
   }, []);
 
+  const setCategoryRepo = useCallback((id: string, repo: string | null) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, github_repo: repo } : c)),
+    );
+    void fetch(`/api/categories/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ github_repo: repo }),
+    }).catch((e) =>
+      setError(e instanceof Error ? e.message : "Failed to link repo"),
+    );
+  }, []);
+
   const removeCategory = useCallback(
     (id: string) => {
       // Optimistic: reparent children up, un-file items, drop the node.
@@ -409,6 +422,7 @@ export function ProjectDetailView({
       assign: changeItemCategory,
       ensure: ensureCategory,
       rename: renameCategory,
+      setRepo: setCategoryRepo,
       remove: removeCategory,
     }),
     [
@@ -418,6 +432,7 @@ export function ProjectDetailView({
       changeItemCategory,
       ensureCategory,
       renameCategory,
+      setCategoryRepo,
       removeCategory,
     ],
   );

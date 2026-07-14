@@ -33,12 +33,14 @@ export async function listProjects(
   // columns. (If the item count ever grows large enough that this transfer
   // matters, denormalise a `last_activity_at` column onto projects via a trigger
   // and select+order in one query.)
-  const [projectsRes, itemsRes] = await Promise.all([
+  const [projectsRes, itemsRes, accountsRes] = await Promise.all([
     sb.from("projects").select("*"),
     sb.from("items").select("project_id, updated_at"),
+    sb.from("github_accounts").select("id, login"),
   ]);
   if (projectsRes.error) return coreErr(projectsRes.error.message, 500);
   if (itemsRes.error) return coreErr(itemsRes.error.message, 500);
+  if (accountsRes.error) return coreErr(accountsRes.error.message, 500);
 
   const visible = (projectsRes.data ?? []).filter(
     (p) => p.created_by === actor || (p.shared_with ?? []).includes(actor),
@@ -53,9 +55,19 @@ export async function listProjects(
     if (!cur || row.updated_at > cur) lastActivity.set(row.project_id, row.updated_at);
   }
 
-  // Stamp each project's last activity, then order by it (most recent first).
+  // Bound GitHub account login per account id (for surfacing on each project).
+  const accountLogin = new Map<string, string>();
+  for (const a of (accountsRes.data ?? []) as { id: string; login: string }[]) {
+    accountLogin.set(a.id, a.login);
+  }
+
+  // Stamp each project's last activity + bound GitHub account, then order by
+  // activity (most recent first).
   for (const p of visible) {
     p.last_activity = lastActivity.get(p.id) ?? p.updated_at ?? p.created_at ?? null;
+    p.github_account = p.github_account_id
+      ? accountLogin.get(p.github_account_id) ?? null
+      : null;
   }
   visible.sort((a, b) => {
     const at = a.last_activity ?? "";
@@ -84,4 +96,47 @@ export async function resolveProject(
   if (named.length === 1) return coreOk(named[0]);
   if (named.length > 1) return coreErr(`Multiple projects named "${r}" — use the id`, 400);
   return coreErr(`Project not found: ${r}`, 404);
+}
+
+/**
+ * Bind (or unbind) a project to a GitHub account by the account's login.
+ * `accountLogin` empty/null unbinds. Enforces project visibility for `actor`.
+ * Does NOT touch credentials — only the shared project→account association.
+ */
+export async function setProjectGithubAccount(
+  sb: SupabaseClient,
+  actor: string,
+  projectRef: string,
+  accountLogin: string | null,
+): Promise<CoreResult<Project>> {
+  const proj = await resolveProject(sb, actor, projectRef);
+  if (!proj.ok) return proj;
+
+  let accountId: string | null = null;
+  const login = (accountLogin ?? "").trim();
+  if (login) {
+    const { data, error } = await sb
+      .from("github_accounts")
+      .select("id")
+      .ilike("login", login)
+      .maybeSingle();
+    if (error) return coreErr(error.message, 500);
+    if (!data) {
+      return coreErr(`No connected GitHub account "${login}" — connect it in mykan first.`, 400);
+    }
+    accountId = data.id as string;
+  }
+
+  const { error } = await sb
+    .from("projects")
+    .update({
+      github_account_id: accountId,
+      updated_by: actor,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", proj.data.id);
+  if (error) return coreErr(error.message, 500);
+
+  // Re-resolve so the returned project carries the enriched github_account login.
+  return resolveProject(sb, actor, proj.data.id);
 }

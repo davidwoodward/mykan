@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getSupabase } from "@/lib/supabase-server";
 import { checkServiceKey } from "@/lib/service-auth";
 import { mcpActorEmail } from "@/lib/auth";
-import { listProjects, type CoreResult } from "@/lib/projects-core";
+import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
+import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import {
   appendItemNote,
   createItem,
@@ -169,6 +170,36 @@ const handler = createMcpHandler(
         area: z.string().describe("Area path, e.g. 'coach / home'; empty to un-file"),
       },
       async (a) => out(await setItemArea(getSupabase(), actor(), a.item, a.area)),
+    );
+
+    server.tool(
+      "set_project_github_account",
+      "Bind a project to a GitHub account (or unbind). `project` is a name or id; `account` is the GitHub account/org login as connected in mykan, or empty to unbind. Issues import into the project's areas that are mapped to repos in this account. Does NOT touch credentials.",
+      {
+        project: z.string().describe("project name or id"),
+        account: z.string().describe("GitHub account/org login as connected in mykan; empty to unbind"),
+      },
+      async (a) =>
+        out(await setProjectGithubAccount(getSupabase(), actor(), a.project, a.account || null)),
+    );
+
+    server.tool(
+      "list_areas",
+      "List a project's Areas as full '/'-separated paths with any bound GitHub repo. `project` is a name or id.",
+      { project: z.string().describe("project name or id") },
+      async (a) => out(await listAreas(getSupabase(), actor(), a.project)),
+    );
+
+    server.tool(
+      "set_area_github_repo",
+      "Bind a GitHub repo to a project's Area (or unbind). `project` is a name or id; `area` is a '/'-separated path (created if missing); `repo` is 'owner/repo' (or just the repo name within the project's account), or empty to unbind. Issues from this repo import as items under this Area. Does NOT touch credentials.",
+      {
+        project: z.string().describe("project name or id"),
+        area: z.string().describe("Area path, e.g. 'coach / home' (created if missing)"),
+        repo: z.string().describe("owner/repo (or repo name); empty to unbind"),
+      },
+      async (a) =>
+        out(await setAreaGithubRepo(getSupabase(), actor(), a.project, a.area, a.repo || null)),
     );
 
     server.tool(
