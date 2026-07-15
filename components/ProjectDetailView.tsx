@@ -70,7 +70,7 @@ export function ProjectDetailView({
   const [rawSelectedId, setSelectedId] = useState<string | null>(null);
   // Per-viewer column collapse (Board + status List share one source of truth,
   // so both views tell the same story). Done ships collapsed.
-  const { isCollapsed, toggle: toggleCollapse } = useColumnCollapse();
+  const { isCollapsed, toggle: toggleCollapse } = useColumnCollapse(projectId);
   // Per-viewer opt-in for the vim-style board/list navigation (KANBAN-31).
   // Off by default; on for the owner. When off, no selection cursor and no key
   // handlers — the board/list is a plain pointer-first surface.
