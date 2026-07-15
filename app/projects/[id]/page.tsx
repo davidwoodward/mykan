@@ -9,7 +9,21 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { GithubConnect } from "@/components/GithubConnect";
 import { McpTokenSettings } from "@/components/McpTokenSettings";
 import { Brand } from "@/components/Brand";
+import type { Metadata } from "next";
 import type { Project } from "@/lib/types";
+
+// Put the open project in the browser tab/title (e.g. "Kanban · MyKan") so it's
+// distinguishable when several mykan tabs are open. Falls back to plain "MyKan"
+// when the project can't be resolved.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const project = await fetchProject(id);
+  return { title: project ? `${project.name} · MyKan` : "MyKan" };
+}
 
 export default async function ProjectPage({
   params,
