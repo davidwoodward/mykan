@@ -668,6 +668,34 @@ export function ProjectDetailView({
     el?.scrollIntoView({ block: "nearest" });
   }, [selectionActive, selectedId, selectedPos]);
 
+  // Click-off to deselect. A pointer-down anywhere that isn't a card row or an
+  // interactive control clears the selection — including the page margins (which
+  // sit OUTSIDE `main`) and the toolbar space ABOVE the grid, neither of which
+  // lives inside the board's own scroll box. That's why this is a document-level
+  // listener rather than an onClick on a wrapper: only the document spans those
+  // regions. Interactive targets (buttons, links, inputs, the add form, pickers)
+  // are skipped so their own clicks still fire and, e.g., "Add item" still reads
+  // the current selection.
+  useEffect(() => {
+    if (!selectionActive || !selectedId) return;
+    if (adding || openItemId || showCategoryManager) return;
+    function onDown(e: MouseEvent) {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (t.closest("[data-item-id]")) return; // a row — its own click selects it
+      if (
+        t.closest(
+          "button, a, input, textarea, select, label, [role='button'], [role='menuitem'], [role='option'], [contenteditable='true']",
+        )
+      ) {
+        return; // interactive control — leave its click alone
+      }
+      setSelectedId(null);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [selectionActive, selectedId, adding, openItemId, showCategoryManager]);
+
   const openItem = useMemo(
     () => (openItemId ? (items?.find((it) => it.id === openItemId) ?? null) : null),
     [openItemId, items],
@@ -891,16 +919,7 @@ export function ProjectDetailView({
           Only desktop (≥lg) gets this contained scroll; phones (both
           orientations — landscape is ~960px wide) and tablets keep plain
           full-page scroll, so only the pinned top bar stays put. */}
-      <div
-        className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
-        onClick={(e) => {
-          // Click on the empty background (not on a row) clears the selection.
-          if (!selectionActive) return;
-          if (!(e.target as HTMLElement).closest("[data-item-id]")) {
-            setSelectedId(null);
-          }
-        }}
-      >
+      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : view === "list" ? (
