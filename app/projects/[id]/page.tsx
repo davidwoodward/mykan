@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { ProjectDetailView } from "@/components/ProjectDetailView";
 import { ProjectHeader } from "@/components/ProjectHeader";
 import { ProjectSwitcher } from "@/components/ProjectSwitcher";
-import { SignOutButton } from "@/components/SignOutButton";
+import { ProfileMenu } from "@/components/ProfileMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GithubConnect } from "@/components/GithubConnect";
 import { McpTokenSettings } from "@/components/McpTokenSettings";
@@ -42,14 +42,15 @@ export default async function ProjectPage({
               allMembers={whitelist()}
             />
           </div>
-          <div className="flex shrink-0 items-center gap-4">
-            <span className="hidden text-[var(--color-faint)] sm:inline">
-              {session.user.email}
-            </span>
+          <div className="flex shrink-0 items-center gap-3">
             <GithubConnect />
             <McpTokenSettings />
             <ThemeToggle />
-            <SignOutButton />
+            <ProfileMenu
+              name={session.user.name}
+              email={session.user.email}
+              keyboardDefault={isOwner(session.user.email)}
+            />
           </div>
         </div>
       </header>
@@ -60,6 +61,7 @@ export default async function ProjectPage({
           projectKey={project.key}
           members={projectMembers(project)}
           isPrivate={project.is_private}
+          keyboardDefault={isOwner(session.user.email)}
         />
       </main>
     </div>
