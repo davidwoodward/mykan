@@ -1,7 +1,7 @@
-import { auth, whitelist } from "@/lib/auth";
+import { auth, isOwner, whitelist } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ProjectsView } from "@/components/ProjectsView";
-import { SignOutButton } from "@/components/SignOutButton";
+import { ProfileMenu } from "@/components/ProfileMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GithubConnect } from "@/components/GithubConnect";
 import { McpTokenSettings } from "@/components/McpTokenSettings";
@@ -23,12 +23,15 @@ export default async function Home({
       <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <Brand />
-          <div className="flex items-center gap-4">
-            <span className="text-[var(--color-faint)]">{session.user.email}</span>
+          <div className="flex items-center gap-3">
             <GithubConnect />
             <McpTokenSettings />
             <ThemeToggle />
-            <SignOutButton />
+            <ProfileMenu
+              name={session.user.name}
+              email={session.user.email}
+              keyboardDefault={isOwner(session.user.email)}
+            />
           </div>
         </div>
       </header>

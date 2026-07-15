@@ -31,6 +31,7 @@ import {
 } from "@/components/CategoryPicker";
 import { CategoryManager } from "@/components/CategoryManager";
 import { useColumnCollapse } from "@/components/useColumnCollapse";
+import { useKeyboardNav } from "@/components/useKeyboardNav";
 import { computePosition } from "@/lib/position";
 
 type View = "list" | "board";
@@ -40,11 +41,13 @@ export function ProjectDetailView({
   projectKey,
   members,
   isPrivate,
+  keyboardDefault,
 }: {
   projectId: string;
   projectKey: string | null;
   members: string[];
   isPrivate: boolean;
+  keyboardDefault: boolean;
 }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +71,10 @@ export function ProjectDetailView({
   // Per-viewer column collapse (Board + status List share one source of truth,
   // so both views tell the same story). Done ships collapsed.
   const { isCollapsed, toggle: toggleCollapse } = useColumnCollapse();
+  // Per-viewer opt-in for the vim-style board/list navigation (KANBAN-31).
+  // Off by default; on for the owner. When off, no selection cursor and no key
+  // handlers — the board/list is a plain pointer-first surface.
+  const { enabled: keyboardEnabled } = useKeyboardNav(keyboardDefault);
 
   useEffect(() => {
     let cancelled = false;
@@ -515,6 +522,7 @@ export function ProjectDetailView({
   // Selection + keyboard nav run on the status-grouped list and on the board
   // (which is always status-grouped). The model is entirely status-based.
   const selectionActive =
+    keyboardEnabled &&
     !showArchived &&
     ((view === "list" && groupBy === "status") || view === "board");
 
