@@ -492,6 +492,24 @@ export function ProjectDetailView({
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
+  // A column with zero (visible) entries always shows collapsed, regardless of
+  // the saved per-project setting — an empty column is just clutter. This is a
+  // DISPLAY-ONLY override: it never writes to the persisted collapse state, and
+  // toggling is suppressed while empty so a stray click on the rail can't
+  // silently save a preference. When the column gets items again it reverts to
+  // whatever the saved setting was.
+  const isColumnCollapsed = useCallback(
+    (status: ItemStatus) => grouped[status].length === 0 || isCollapsed(status),
+    [grouped, isCollapsed],
+  );
+  const onToggleColumnCollapse = useCallback(
+    (status: ItemStatus) => {
+      if (grouped[status].length === 0) return; // forced-collapsed; don't persist
+      toggleCollapse(status);
+    },
+    [grouped, toggleCollapse],
+  );
+
   // The flat, draggable list: every visible item by global position.
   const flatItems = useMemo(
     () => [...visibleItems].sort((a, b) => a.position - b.position),
@@ -940,8 +958,8 @@ export function ProjectDetailView({
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
           onItemChange={replaceItem}
-          isCollapsed={isCollapsed}
-          onToggleCollapse={toggleCollapse}
+          isCollapsed={isColumnCollapsed}
+          onToggleCollapse={onToggleColumnCollapse}
           areaGroups={
             groupBy === "area" && !showArchived ? groupedByArea : undefined
           }
@@ -965,8 +983,8 @@ export function ProjectDetailView({
           tagSuggestions={allTags}
           onTagsChange={changeItemTags}
           onItemChange={replaceItem}
-          isCollapsed={isCollapsed}
-          onToggleCollapse={toggleCollapse}
+          isCollapsed={isColumnCollapsed}
+          onToggleCollapse={onToggleColumnCollapse}
         />
       )}
       </div>
