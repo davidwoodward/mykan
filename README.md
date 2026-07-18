@@ -1,15 +1,15 @@
 # Mykan
 
-A minimal project + item tracker with a kanban board. Two-user app, Google sign-in restricted to a hardcoded whitelist. Built on Next.js 16, Auth.js v5, Supabase Postgres, deployed to Vercel.
+A minimal project + item tracker with a kanban board. Small-team app, Google sign-in restricted to a whitelist. Built on Next.js 16, Auth.js v5, Supabase Postgres, deployed to Vercel.
 
 ## What it does
 
 - **Projects** — a name, an optional description, a short **key** (e.g. `AMOS`), and a Shared/Private flag. Edit them inline from the pencil in the project nav.
-- **Items** — belong to one project; carry a name, a type (`feature` / `bug` / `idea`), a **status**, a stable **reference**, optional **assignees**, a **category (Area)**, and tags.
+- **Items** — belong to one project; carry a rich-text body (no separate title — the first line reads as one), a type (`feature` / `bug` / `task` / `idea`), a **status**, a stable **reference**, optional **assignees**, a **category (Area)**, and tags.
 - **Item references** — every item gets an immutable, per-project number shown with the project key as `AMOS-12` (or `#12` before a key is set). Stamped at creation, never reused.
-- **Status** — Not started / In Progress / **Blocked** / Done. Click the status pill to cycle.
+- **Status** — Not started / In Progress / **Blocked** / **Testing** / Done. Click the status pill to cycle. Testing is a *gate*, not a bucket: it passes to Done or bounces back to In Progress.
 - **List view** — group by **Status**, **Area**, or **Flat** (one ungrouped list, status as a pill). Every list section is **drag-reorderable** (grip per row), and the row columns (status · ref · content) align across items.
-- **Board view** — kanban with four columns (Not started / In Progress / Blocked / Done), drag-and-drop to reorder or change status; a refresh button reloads items in place without a full page reload.
+- **Board view** — kanban with five columns (Not started / In Progress / Blocked / Testing / Done), drag-and-drop to reorder or change status; columns are collapsible per project per viewer; a refresh button reloads items in place without a full page reload.
 - **One global order, many lenses** — `position` is a single per-project order (creation order by default); the board (per-status columns), the grouped lists, and the Flat list all read and edit it, so dragging anywhere stays in sync.
 - **Categories (Areas)** — a per-project **hierarchical** area tree (e.g. `coach / program / checkin`). File an item under a node; **renaming a node ripples** to every item; **filtering by a node includes its whole subtree**. Type a `/`-path to find-or-create nodes; manage the tree (rename / add / delete) in the **Areas** panel.
 - **Assignees** — multiple members per item (the whitelist), shown as avatar chips, on **shared** projects only.
