@@ -8,7 +8,9 @@ so a request can be triggered the way David already phrases it.
 
 ## 1. The problem this fixes
 
-mykan tasks have three columns: `new` → `in_progress` → `done`. In practice agents have been
+mykan tasks now have five columns: `new` → `in_progress` → `blocked` → `testing` → `done`
+(this doc was written when there were three; the lifecycle argument below is unchanged, and
+`testing` is a gate that passes to `done` or bounces back to `in_progress`). In practice agents have been
 **skipping `in_progress`** — a task jumps straight from `new` to `done` when the work ships.
 
 Why that matters: **In Progress is David's only live window into what's being worked on right now.**
