@@ -537,12 +537,19 @@ export function ProjectDetailView({
     }));
   }, [visibleItems, pathOf]);
 
-  // Selection + keyboard nav run on the status-grouped list and on the board
-  // (which is always status-grouped). The model is entirely status-based.
+  // Selection runs on the status-grouped list and on the board (which is always
+  // status-grouped). The model is entirely status-based.
+  //
+  // Selection is POINTER-FIRST and always available: clicking a card selects it,
+  // which is how you choose the anchor a newly added item is ordered right
+  // below. It is deliberately NOT behind the keyboard setting.
   const selectionActive =
-    keyboardEnabled &&
     !showArchived &&
     ((view === "list" && groupBy === "status") || view === "board");
+
+  // The vim-style keyboard navigation on top of that selection (j/k, g/G/0, u/d,
+  // Ctrl-f/b) is the part gated by the per-user setting (KANBAN-31).
+  const keyboardNavActive = selectionActive && keyboardEnabled;
 
   // The effective selection, derived at render (no state-sync effect): it only
   // exists while the status-grouped list/board is showing AND the item is
@@ -573,7 +580,7 @@ export function ProjectDetailView({
   // move the selected item forward/back one status; u/d move it one slot within
   // its own status section (never crossing into another status).
   useEffect(() => {
-    if (!selectionActive) return;
+    if (!keyboardNavActive) return;
     function onKey(e: globalThis.KeyboardEvent) {
       if (adding || openItemId || showCategoryManager) return;
       const t = e.target as HTMLElement | null;
@@ -664,7 +671,7 @@ export function ProjectDetailView({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
-    selectionActive,
+    keyboardNavActive,
     adding,
     openItemId,
     showCategoryManager,
