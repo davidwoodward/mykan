@@ -6,6 +6,7 @@ const DEFAULT_WHITELIST = [
   "dawoodward@gmail.com",
   "matthewl@experiencealign.com",
   "dwoody55@gmail.com",
+  "kenyon.congdon@permitsaige.com",
 ];
 const DEFAULT_OWNER = "dawoodward@gmail.com";
 
