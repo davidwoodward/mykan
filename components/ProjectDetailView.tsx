@@ -15,10 +15,11 @@ import { AddItemModal } from "@/components/AddItemModal";
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
-import { localPart } from "@/lib/format";
+import { itemRef, localPart } from "@/lib/format";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
+  richDocText,
   type Category,
   type Item,
   type ItemStatus,
@@ -62,6 +63,10 @@ export function ProjectDetailView({
   const [areaFilter, setAreaFilter] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">("status");
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
+  // Free-text search over card content (body text + ref number), AND-composed
+  // with the other filters. Transient: shared by List/Board, resets on reload.
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   // The row "selected" in the status-grouped list — drives the highlight, the
   // j/k/g/G/u/d keyboard model, and where a new item is inserted.
@@ -471,6 +476,18 @@ export function ProjectDetailView({
     ],
   );
 
+  // Per-item lowercased haystack for content search: the body's plain text plus
+  // the ref string (e.g. "amos-12" / "#12"), so a bare number like "12" matches
+  // both the ref and any body text. Precomputed so keystrokes are just includes.
+  const searchIndex = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const it of pool) {
+      const ref = itemRef(projectKey, it.number) ?? "";
+      map.set(it.id, `${richDocText(it.body)} ${ref}`.toLowerCase());
+    }
+    return map;
+  }, [pool, projectKey]);
+
   const visibleItems = useMemo(() => {
     let list = pool;
     if (creatorFilter) list = list.filter((it) => it.created_by === creatorFilter);
@@ -487,8 +504,13 @@ export function ProjectDetailView({
     if (statusFilter.length) {
       list = list.filter((it) => statusFilter.includes(it.status));
     }
+    // Content search: substring over body text + ref (see searchIndex).
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter((it) => (searchIndex.get(it.id) ?? "").includes(q));
+    }
     return list;
-  }, [pool, creatorFilter, tagFilter, areaFilter, statusFilter, categories]);
+  }, [pool, creatorFilter, tagFilter, areaFilter, statusFilter, categories, query, searchIndex]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
@@ -682,6 +704,27 @@ export function ProjectDetailView({
     patchItem,
   ]);
 
+  // "/" focuses the card search from anywhere on the page. Independent of the
+  // vim-nav toggle, and it yields when you're already typing in a field (so a
+  // literal "/" in an input/editor still types).
+  useEffect(() => {
+    function onSlash(e: globalThis.KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (adding || openItemId || showCategoryManager) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))
+      ) {
+        return;
+      }
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onSlash);
+    return () => window.removeEventListener("keydown", onSlash);
+  }, [adding, openItemId, showCategoryManager]);
+
   // Keep the selected row visible as j/k/g/G move the selection and u/d reorder
   // it. `block: "nearest"` only scrolls when the row is actually out of view.
   const selectedPos = selectedId
@@ -833,6 +876,61 @@ export function ProjectDetailView({
             />
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-[var(--color-faint)]">Filter</span>
+                <div className="relative inline-flex items-center">
+                  <svg
+                    className="pointer-events-none absolute left-2 h-[15px] w-[15px] text-[var(--color-faint)]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setQuery("");
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    placeholder="Search cards…"
+                    aria-label="Search cards"
+                    className="w-40 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] py-1 pl-7 pr-6 text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
+                  />
+                  {query ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        searchRef.current?.focus();
+                      }}
+                      aria-label="Clear search"
+                      title="Clear search"
+                      className="absolute right-1 grid h-5 w-5 place-items-center rounded text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
+                    >
+                      <svg
+                        className="h-3.5 w-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
                 <div className="inline-flex items-center gap-1">
                   {ITEM_STATUSES.map((s) => {
                     const on = statusFilter.includes(s);
@@ -947,6 +1045,10 @@ export function ProjectDetailView({
       <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
+      ) : query.trim() && visibleItems.length === 0 ? (
+        <p className="text-sm text-[var(--color-faint)]">
+          No cards match your search.
+        </p>
       ) : view === "list" ? (
         <ItemList
           grouped={grouped}
