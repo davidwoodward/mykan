@@ -68,12 +68,43 @@ cp .env.local.example .env.local
 # 3. apply the schema once, in the Supabase SQL editor:
 #    paste the contents of supabase/schema.sql and run
 
-# 4. start dev
+# 4. record that baseline so the migration runner doesn't replay it
+npm run db:migrate -- --baseline
+
+# 5. start dev
 npm run dev
 # → http://localhost:3000
 ```
 
 Sign in with one of the whitelisted Google accounts (see `lib/auth.ts`).
+
+## Database migrations
+
+`supabase/migrations/*.sql` are applied in filename order by `npm run db:migrate`, which
+records each one in `mykan.schema_migrations` — so which migrations have run is a fact in the
+database, not something to reconstruct from memory.
+
+```bash
+npm run db:migrate                 # apply everything pending
+npm run db:migrate -- --status     # what's applied, what's pending, any drift
+npm run db:migrate -- --dry-run    # show what would run, change nothing
+npm run db:migrate -- --baseline   # mark all current files applied WITHOUT running them
+```
+
+It needs `SUPABASE_ACCESS_TOKEN` (a Supabase **personal access token**, not the database
+password) in your environment or `.env.local`, and finds the project ref from
+`SUPABASE_PROJECT_REF` or `supabase/.temp/project-ref`. Local-only — the token must never
+reach Vercel runtime or git.
+
+Each file runs inside a transaction together with its ledger insert, so a failure rolls back
+whole and stays pending; nothing half-applied gets recorded as done. A file that opens its own
+transaction, or is marked `-- migrate:no-transaction` (for `CREATE INDEX CONCURRENTLY` and
+friends), is left unwrapped. Editing a migration after it has been applied is reported as
+checksum drift by `--status`.
+
+New migrations keep the `YYYY-MM-DD-name.sql` prefix so filename order stays chronological,
+and should also be folded into `supabase/schema.sql` — that file is what a fresh setup runs,
+so a change that lands only in `migrations/` will be missing from every new deployment.
 
 ## Deploying to Vercel
 
@@ -153,8 +184,8 @@ proxy.ts                           ← session gate for non-API/non-asset routes
 docs/mcp-setup.md · docs/DESIGN.md ← MCP registration · design & UX conventions
 supabase/
   schema.sql                       ← Postgres schema (paste into SQL editor)
-  migrations/                      ← incremental DDL/data migrations (applied via the
-                                     Supabase Management API; folded into schema.sql)
+  migrations/                      ← incremental DDL/data migrations, applied by
+                                     `npm run db:migrate`; also folded into schema.sql
 ```
 
 ## Editing the whitelist

@@ -245,7 +245,38 @@ create table if not exists mcp_tokens (
 );
 create index if not exists mcp_tokens_user_idx on mcp_tokens (user_email);
 
--- Auth is enforced at the app layer (Auth.js + email whitelist).
--- Server-only API routes use the service-role key, bypassing RLS.
--- RLS stays disabled on these tables; do NOT enable it without also adding
--- policies, or the server-role bypass will be the only access path anyway.
+-- Applied-migration ledger for `npm run db:migrate` (scripts/migrate.mjs). One
+-- row per file in supabase/migrations/ that has run, with a checksum so an
+-- edit-after-apply is detectable.
+create table if not exists schema_migrations (
+  filename text primary key,
+  checksum text not null,
+  applied_at timestamptz not null default now()
+);
+
+-- Row-Level Security ─────────────────────────────────────────────────────────
+-- Auth is enforced at the app layer (Auth.js + email whitelist), and every
+-- server-only API route reaches Supabase with the service-role key, which
+-- bypasses RLS. But `mykan` is an exposed PostgREST schema, so with RLS off
+-- these tables were readable and writable by anyone presenting the anon key —
+-- which is a public value by design, not a control. Supabase's Security Advisor
+-- flagged all 7 as `rls_disabled_in_public` (CRITICAL, 2026-07-26).
+--
+-- Enabled WITH NO POLICIES, deliberately: that is a deny-all for the anon and
+-- authenticated roles and a no-op for the app, since service_role is exempt.
+-- The advisor reports this as `rls_enabled_no_policy` (INFO) — that is the
+-- intended end state, matching the sibling cockpit/fin/helm schemas, not a
+-- finding to "fix" by adding permissive policies.
+--
+-- If a browser-side Supabase client using the anon key is ever added, each
+-- table needs real policies at that point. Enabling RLS now is what makes that
+-- a deliberate, additive step rather than a silent hole.
+-- Migration: supabase/migrations/2026-07-28-enable-rls.sql
+alter table projects           enable row level security;
+alter table items              enable row level security;
+alter table categories         enable row level security;
+alter table item_versions      enable row level security;
+alter table github_accounts    enable row level security;
+alter table github_credentials enable row level security;
+alter table mcp_tokens         enable row level security;
+alter table schema_migrations  enable row level security;
