@@ -42,8 +42,9 @@ export type ItemVersion = {
   source: HistorySource;
   /**
    * The editor session the following write belonged to (minted per editor
-   * open). Body autosaves coalesce only within one session, so dismissing the
-   * editor (Esc / click-off / close) seals the entry. Null for writers with no
+   * open). The web editor saves once per open; body-only saves coalesce only
+   * within one session, so a rare second save of the same open (a tab-close
+   * save, then the close) stays one entry. Null for writers with no
    * session (MCP, Telegram, recovery) — those never coalesce.
    */
   edit_session: string | null;
@@ -60,9 +61,9 @@ export type ItemVersion = {
  *  - no tracked field changes → write only (dedupe; covers no-op body flushes
  *    and untracked writes like position/archived).
  *  - body-only change within the SAME editor session as the latest body-only
- *    entry → write only. The editor mints `editSession` per open, so the
- *    debounced autosaves of one sitting collapse to one entry and dismissing
- *    the editor seals it — the next session gets its own entry.
+ *    entry → write only. The editor mints `editSession` per open and saves once
+ *    when editing finishes, so a sitting is one entry even if it saved twice
+ *    (tab-close save, then the close) — the next open gets its own entry.
  *  - otherwise insert a snapshot of the PREVIOUS state, then write.
  */
 export async function snapshotThenWrite(

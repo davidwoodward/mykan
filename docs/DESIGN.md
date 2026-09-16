@@ -4,7 +4,7 @@ These are the interaction patterns that define how mykan feels. They are **delib
 choices for this app** — not universal defaults. When building or changing UI here, match
 these unless explicitly told otherwise. (Project-specific; the cross-project defaults live
 in `~/.claude/CLAUDE.md` → "UI behavior standards". Where the two conflict, **this file wins
-for mykan** — see Autosave below.)
+for mykan** — see Save on finish below.)
 
 Verify any UI change by looking at the running app (screenshot), not just passing tests.
 
@@ -69,22 +69,59 @@ made tap-visible below `sm`, since touch has no hover.)
   `items-center` row; reserve baseline alignment for the *text* cluster (title + byline) only.
   Don't put an icon inside a baseline-aligned cluster — it ends up vertically off.
 
-## Autosave & dismiss (item editing)
+## Save on finish & dismiss (item editing)
 
-Editing in mykan is **implicit and forgiving** — you never hunt for a Save button, and
-leaving the editor always keeps your work. This is core to the app's feel; preserve it.
+Editing in mykan is **implicit and forgiving**: you never hunt for a Save button, and
+finishing the editor keeps your work. Since David's decision of 2026-09-16 (KANBAN-42)
+it is also **quiet while you type**: nothing is written to the card until you finish, so
+other sessions reading the card over MCP never see half-typed text, and a kept edit is one
+history entry.
 
-- **Debounced autosave, no Save button.** The rich-text body saves automatically ~700ms
-  after you stop typing (`RichTextEditor.tsx`). Each keystroke reschedules the timer.
-- **Flush on close.** Any pending save is flushed immediately on unmount/close, so dismissing
-  never loses the last edit.
-- **Esc and click-off both commit + dismiss.** The item modal closes on **Esc**, on
-  **backdrop click** (click outside the panel), or via the **✕** button — and because save is
-  autosave-on-pause + flush-on-close, all three routes save. Esc here means "I'm done," not
-  "discard."
-- **Live save status.** Show "Saving… / Saved / Save failed" so the implicit save is visible
-  (`ItemDetailModal.tsx` SaveIndicator). Don't remove this — it's what makes no-Save-button
-  trustworthy.
+- **Nothing is written while typing.** Changes live in a local draft in the browser. The
+  rich-text body (`RichTextEditor.tsx`) never saves; it reports its document to the
+  editor's draft (debounced ~250ms, local only).
+- **Finishing saves once.** **Esc**, a **click outside the panel**, the **✕**, or following
+  a link to another card sends **one** save with only the fields that changed (body and
+  tags together in one PATCH), so a kept edit is **one history entry**. **If nothing
+  changed, nothing is written.** Esc here means "I'm done," not "discard."
+- **A failed save keeps you editing.** The modal stays open with the text intact and says
+  "Save failed (reason). Still editing, nothing lost. Esc to retry." Esc or click-off
+  again retries.
+- **Honest status.** The footer says "Unsaved changes · Esc or click away to save" while the
+  draft differs, "Saving…" during the close save, and the failure message above. There is
+  no "Saved" line: the modal closes when the save lands, and nothing claims saved while it
+  isn't.
+- **Crash safety: the draft is kept in the browser.** As you type, the draft is mirrored to
+  `localStorage` under `mykan:draft:v1:item:<id>:<field>` (one key per field; every access
+  in try/catch, so private windows just don't persist). It is cleared after a successful
+  save and on abandon.
+- **Restore prompt.** Opening a card that has a leftover draft differing from what's
+  stored shows a small bar above the body: "You have unsaved changes to this card from
+  3:42 PM." with **Restore** (primary, focused) and **Discard**. **Enter** = Restore,
+  **Esc** = Discard; both buttons work by pointer/touch. Until you answer, the editing
+  area is inert, so nothing typed can overwrite the draft. Restore puts the draft back
+  as unsaved changes (the close then saves it); Discard forgets it without writing.
+  Closing the card without answering keeps the draft for next time. A leftover draft
+  that already matches the stored value (its save landed) is forgotten silently.
+- **Stale drafts say so.** Each field draft records the stored value it was edited from.
+  If that value has changed on the server since (another tab, an MCP write), the prompt
+  adds "The card's description changed since then. Restoring replaces the newer
+  description when you close." Compared per field, not by `updated_at`, which also moves on
+  status or drag changes that don't touch the draft.
+- **Leaving the page.** On `pagehide` (tab closed, reload, navigation) the modal sends a
+  best-effort save as a `fetch` **keepalive** PATCH to the normal item route (not
+  `sendBeacon`, which can only POST). Unmounting with unsaved changes for another reason
+  (client-side navigation) does the same. Switching tabs (`visibilitychange` → hidden)
+  only flushes the draft to storage; it doesn't write the card. If the keepalive save
+  doesn't land (keepalive bodies cap at ~64KB; images are URL references, so that's rare),
+  the local draft is offered back next time.
+- **Edit sessions still coalesce.** Each modal open mints an `edit_session` and sends it
+  with its save. Normally there is one save per open; in the rare case of two (a tab-close
+  save lands, the page comes back from the back/forward cache, then the modal is closed),
+  body-only saves of the same session fold into one history entry
+  (`coalescesWith`, `lib/item-snapshot.ts`).
+- **Two tabs on the same card:** last save wins, as before. The other tab's draft is
+  offered back as stale only if it didn't save.
 
 **Enter exception (overrides the global "Enter = primary action" rule).** Item text is
 multi-line: in the item-name input (`AutoGrowTextarea`) and the body editor, **Enter inserts
@@ -93,12 +130,13 @@ a newline**; **⌘/Ctrl+Enter** is the primary action (add/submit). Always show 
 
 ### Abandon changes (KANBAN-42, David 2026-09-16)
 
-Everything above stays exactly as it is: **autosave while editing, Esc saves and closes,
-leaving the editor (click-off, ✕, navigating away) saves.** On top of that, every editor has
-one explicit way back: the **Abandon changes** icon.
+Every editor has one explicit way out without saving: the **Abandon changes** icon.
 
-- **What it does:** restores the thing being edited to **exactly how it was when the editor
-  opened**, then closes the editor. If nothing had changed, it just closes.
+- **What it does:** discards the draft and closes the editor. **No write, no history
+  entry.** Because nothing is written while editing, there is nothing to revert. (The first
+  version, #118, wrote the as-opened value back after autosave, which left two history
+  entries per abandoned edit; that revert path, its `abandon: true` flag and the
+  "abandoned edit reverted" history label are gone.)
 - **The icon:** `AbandonButton` (`components/AbandonButton.tsx`), a counter-clockwise revert
   arrow, icon only, never a trash can and never red (it must not read as delete). `title` +
   `aria-label` "Abandon changes", plus a styled tooltip on keyboard focus (where a native title
@@ -107,56 +145,42 @@ one explicit way back: the **Abandon changes** icon.
   the ✕** in a modal header, in the action row of a panel, and **right after the field** for
   an inline editor. Its press doesn't take focus, so a blur-commits field (tags, area path,
   renames) doesn't save the very draft being abandoned.
-- **Autosave may already have written.** The body autosaves ~700ms after typing stops, so by
-  the time you abandon, some of the edit is saved. One mechanism handles every autosaving
-  editor: `useAbandonable` (`components/useAbandonable.ts`) over the pure, tested
-  `createAbandonSession` (`lib/abandon.ts`):
-  1. **Capture** the as-opened values of every field the editor can change, once, on open.
-  2. Every save goes through the session, which notes each field sent with a value different
-     from its as-opened value.
-  3. **Abandon** stops new saves (a late debounce or the editor's unmount flush is dropped),
-     **cancels the pending autosave** without firing it (`RichTextEditor` `cancelPendingRef`),
-     **waits for in-flight saves to land**, and only then writes the as-opened values back for
-     the fields that changed. A slow autosave can never land on top of the revert.
-  4. A revert that fails keeps the editor open ("Abandon failed, still editing") and autosave
-     carries on.
-- **History keeps the abandoned text.** The revert is an ordinary write through the history
-  chokepoint (`snapshotThenWrite`), so the abandoned state is snapshotted before the as-opened
-  values go back, and History's **Restore** brings it back. Body autosaves of one open coalesce
-  into one entry keyed by that open's `edit_session`; a revert under the same session would fold
-  into that entry and the abandoned text would vanish. So the revert is sent under a **fresh
-  edit session** (`itemRevertBody`), and with `abandon: true`, which annotates the snapshot
-  (`revert_reason: "abandoned"`) so History reads "body edited · abandoned edit reverted".
-- **Draft editors** (nothing is saved until an explicit commit): abandon discards the draft and
-  closes. No write.
-- **Keyboard:** Esc is unchanged everywhere. The icon is pointer/touch-first; in inline fields
-  that commit on blur, tabbing away commits (as before), so Esc remains the keyboard route to
-  cancel those.
+- **One mechanism for editors of saved data:** `useAbandonable`
+  (`components/useAbandonable.ts`) over the pure, tested draft session in `lib/abandon.ts`
+  (`createDraftSession`, `dirtyPatch`, `restoreDecision`, `readFieldDraft`). It captures the
+  as-opened values on mount, holds and persists the draft, `close(save)` sends the one save
+  (or none), `abandon()` drops the draft, and it surfaces the restore prompt's decision.
+  Entry editors (KANBAN-38) and the card page (KANBAN-44) reuse it.
+- **Keyboard:** Esc is unchanged everywhere (finish = save, in the item modal and the
+  assignee/sharing lists). The icon is pointer/touch-first; in inline fields that commit on
+  blur, tabbing away commits (as before), so Esc remains the keyboard route to cancel those.
 
 #### Editor audit (every place you edit something)
 
-| Editor | Icon | As opened / how abandon applies |
+| Editor | Icon | While editing → finish → abandon |
 |---|---|---|
-| Item detail modal (`ItemDetailModal`): rich-text body, tags (`TagEditor`), Parent epic row | Header, left of ✕ | The item's `body`, `tags` and `parent_id` at open. Reverts the ones this open changed, in one PATCH (fresh session, annotated). Pending body autosave cancelled, in-flight saves awaited. |
-| Epic's Child items in the modal (Add child, remove from epic) | Covered by the modal icon, but **not reverted** | These change *other* cards' `parent_id`, not the item being edited. Each link is its own recorded write on the child; undo by unlinking or relinking. Deliberate scope line. |
-| Attachments in the modal (upload, remove) | Not reverted | File operations, not field edits, and not tracked by item history, so a revert couldn't be recorded. |
-| Attachment rename (inline, in the modal) | After the field | Commits on Enter/blur; abandon keeps the old name. |
-| Add Item modal (`AddItemModal`): body, type, area, parent, tags | Header, left of ✕ | Nothing saved until Add: discard the draft and close. |
-| Project edit panel (`ProjectHeader`): name, description, key, GitHub account, sharing | Action row, beside ✓ | Drafts seeded on open, committed only by Esc/click-off/✓: abandon drops the drafts and closes. |
+| Item detail modal (`ItemDetailModal`): rich-text body, tags (`TagEditor`) | Header, left of ✕ | Draft only (was: body autosaved ~700ms after typing paused, each tag add/remove saved at once) → one PATCH of the changed fields on Esc/click-off/✕/following a link, none if unchanged; a typed-but-unconfirmed tag is included → abandon discards, no write. |
+| Parent epic row in the modal (`ParentRow`) | Not covered | A pick (or Remove parent) is its own immediate, recorded write, not part of the draft: the epic guards answer at pick time rather than at close. Undo by relinking. Deliberate scope line. |
+| Epic's Child items in the modal (Add child, remove from epic) | Not covered | These change *other* cards' `parent_id` through explicit actions (Add N, remove icon), each its own recorded write on the child. |
+| Attachments in the modal (upload, remove) | Not covered | File operations, not field edits, and not tracked by item history. Pasted body images upload at once (they need a URL) but only enter the card through the body save. |
+| Attachment rename (inline, in the modal) | After the field | Commits on Enter/blur; abandon keeps the old name. Nothing written mid-edit. |
+| Add Item modal (`AddItemModal`): body, type, area, parent, tags | Header, left of ✕ | Nothing saved until Add: discard the draft and close. No browser-storage draft (there is no card yet). |
+| Project edit panel (`ProjectHeader`): name, description, key, GitHub account, sharing | Action row, beside ✓ | Drafts seeded on open, committed once by Esc/click-off/✓: abandon drops the drafts and closes. |
 | New project form (`ProjectsView`) | Beside Create | Nothing saved until Create: discard and close. |
 | Areas manager: rename (`CategoryRow`) | After the field | Commits on Enter/blur; abandon keeps the old name. |
 | Areas manager: GitHub repo binding (`RepoPicker`) | After the field | Commits on Enter/pick/blur; abandon keeps the old binding. |
-| Areas manager: Add field (`PathInput` builder mode) | After the field, only while it has text | Always open; abandon clears the draft. |
+| Areas manager: Add field (`PathInput` builder mode) | After the field, only while it has text | Enter creates the area (an explicit add); abandon clears the draft. |
 | Area picker on a row/card and in Add Item (`ItemCategory`, `DraftCategory` → `PathInput`) | After the field | Commits on Enter/pick/blur; abandon closes without changing the area. |
-| Inline tag add on a row/card (`InlineTags`) | After the field | Commits on Enter/blur; abandon drops the draft tag. |
-| Assignees list on a row/card (`ItemAssignees`) | List header | Each toggle saves at once; abandon writes back the assignees as they were when the list opened (waits for in-flight toggles). |
-| Sharing checklist (`ProjectShareControl`), projects list and forms | List header | Each toggle saves (projects list) or stages (forms) at once; abandon puts back the list as it was when the checklist opened. |
+| Inline tag add on a row/card (`InlineTags`) | After the field | Commits on Enter/blur; abandon drops the draft tag. (A chip's ✕ is a one-click action, not an editor.) |
+| Assignees list on a row/card (`ItemAssignees`) | List header | Toggles change a local list (was: each toggle saved at once) → closing the list (Esc, click-off, the trigger) saves once if the set changed → abandon closes, no write. Buffered so abandon truly means no write and a session of toggles is one write. No browser-storage draft: losing a few unsaved clicks to a crash is cheap. |
+| Sharing checklist on the projects list (`ProjectShareControl saveOnClose`) | List header | Same as assignees (was: each toggle saved at once): one save on close if changed; abandon closes, no write. |
+| Sharing checklist inside the project panel and new-project form (`ProjectShareControl`) | List header | Toggles stage the form's own draft at once (no DB write; staging immediately lets the form's click-off commit see the last toggle); abandon puts back the list as it was when the checklist opened. The form saves once. |
 | Status picker and type picker on a row/card | None | One choice commits and closes the menu, so the menu never holds a change to abandon; choose the old value to undo (recorded in history). |
-| Parent epic picker and Add child picker (`ItemTypeahead`) | None of their own | Esc and click-off already close without picking; a pick is the commit. In the item modal, a parent change is reverted by the modal's icon. |
+| Parent epic picker and Add child picker (`ItemTypeahead`) | None of their own | Esc and click-off close without picking; a pick is the commit. |
 | MCP tokens and GitHub connect popovers | None | Action forms, not editors of saved data: nothing is written until Generate/Connect, and there is no saved value to revert to. |
 | History panel (Restore) | None | Restore is a confirmed action, itself recorded in history. |
 | Search, tag filter, area and status filters, view toggles | None | View state, not data. |
-| Item entry editors (KANBAN-38) | To come | Reuse `useAbandonable` + `AbandonButton`. |
+| Item entry editors (KANBAN-38) | To come | Reuse `useAbandonable` + `AbandonButton`: draft while editing, one save on finish, abandon discards. |
 
 ## Tags
 

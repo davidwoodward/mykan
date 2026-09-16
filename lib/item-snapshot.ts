@@ -36,19 +36,10 @@ export type ItemSnapshot = {
   parent_ref?: string;
   /** Annotation: why the following write cleared the parent. */
   parent_cleared_reason?: "epic_deleted";
-  /**
-   * Annotation: the write that followed this snapshot reverted an editor's
-   * changes because the user abandoned them (KANBAN-42). The snapshot itself is
-   * the abandoned state, so it stays restorable from History.
-   */
-  revert_reason?: "abandoned";
 };
 
 /** Extra annotation fields a writer may attach to the snapshot it records. */
-export type SnapshotAnnotations = Pick<
-  ItemSnapshot,
-  "parent_ref" | "parent_cleared_reason" | "revert_reason"
->;
+export type SnapshotAnnotations = Pick<ItemSnapshot, "parent_ref" | "parent_cleared_reason">;
 
 /**
  * The history-panel line for a write that changed the parent: from `before`

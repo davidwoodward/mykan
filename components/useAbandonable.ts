@@ -1,67 +1,111 @@
 "use client";
 
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  createAbandonSession,
-  type AbandonOutcome,
-  type AbandonSession,
+  browserDraftStore,
+  createDraftSession,
+  draftKey,
+  readFieldDraft,
+  restoreDecision,
+  type DraftSession,
   type EqualFn,
 } from "@/lib/abandon";
 
-export type AbandonState = "idle" | "abandoning" | "failed";
+export type DraftEditorStatus = "idle" | "saving" | "failed";
+
+export type PendingRestore<T> = {
+  values: Partial<T>;
+  stale: boolean;
+  staleFields: (keyof T & string)[];
+  startedAt: string;
+};
 
 /**
- * Lets a control nested inside an item editor (e.g. the Parent epic row in the
- * detail modal) route its write through the editor's abandon session, so
- * abandoning the editor reverts it too. Null outside such an editor.
- */
-type ItemSave = (
-  patch: { parent_id?: string | null },
-  run: () => Promise<unknown>,
-) => Promise<unknown>;
-const ItemEditSaveContext = createContext<ItemSave | null>(null);
-export const ItemEditSaveProvider = ItemEditSaveContext.Provider;
-export function useItemEditSave(): ItemSave | null {
-  return useContext(ItemEditSaveContext);
-}
-
-/**
- * Abandon changes for an editor that saves as you go (KANBAN-42). Captures the
- * as-opened values ON MOUNT (so mount the editor per open, e.g. keyed by the
- * thing it edits), routes the editor's saves through `save` so it knows what
- * has been written, and `abandon` restores the as-opened state:
+ * A draft editor (KANBAN-42): nothing is written while editing; finishing sends
+ * one save; abandoning writes nothing. The decisions are the pure, tested
+ * lib/abandon.ts; this hook adds React lifetimes and browser storage.
  *
- *   cancel the pending autosave → wait for in-flight saves → write the revert
- *   (only the fields actually changed) → `onDone` (close the editor).
+ * - Captures the as-opened values ON MOUNT (mount the editor per open, e.g.
+ *   keyed by the thing it edits).
+ * - `set` changes the draft and mirrors it to localStorage under
+ *   `mykan:draft:v1:<scope>:<id>:<field>` (try/catch'd; no storage, no crash).
+ * - `close(save)` resolves true when the editor may close: unchanged (no
+ *   write) or saved. On failure it resolves false, keeps the draft, and sets
+ *   `status: "failed"` + `error` so the editor stays open without losing text.
+ * - `abandon()` drops the draft. The caller closes.
+ * - `restore` is a leftover draft from an earlier open that differs from the
+ *   stored value (crash, or a tab-close save that didn't land), for the
+ *   editor to offer: `applyRestore()` puts it back as unsaved changes and bumps
+ *   `revision` (remount uncontrolled inputs with it), `discardRestore()` forgets it.
  *
- * With nothing to revert it just calls `onDone`. A failing revert leaves the
- * editor open with `state === "failed"`, and saving resumes. The decision logic
- * is the pure lib/abandon.ts (tested); this hook only adds React lifetimes.
- * Reusable by any autosaving editor (the item modal today; entry editors next).
+ * Reused by any editor of saved data: the item modal today; entry editors
+ * (KANBAN-38) and the card page (KANBAN-44) next.
  */
-export function useAbandonable<T extends Record<string, unknown>>(
-  opened: T,
-  options: { equal?: EqualFn } = {},
-): {
-  session: AbandonSession<T>;
-  save: AbandonSession<T>["save"];
-  state: AbandonState;
-  abandon: (opts: {
-    cancelPending?: () => void;
-    revert: (patch: Partial<T>) => Promise<void>;
-    onDone: (outcome: AbandonOutcome<T>) => void;
-  }) => Promise<void>;
+export function useAbandonable<T extends Record<string, unknown>>({
+  opened,
+  scope,
+  id,
+  equal,
+  baseUpdatedAt = null,
+}: {
+  opened: T;
+  scope: string;
+  id: string;
+  equal?: EqualFn;
+  baseUpdatedAt?: string | null;
+}): {
+  session: DraftSession<T>;
+  values: Readonly<T>;
+  dirty: boolean;
+  set: <K extends keyof T & string>(key: K, value: T[K]) => void;
+  status: DraftEditorStatus;
+  error: string | null;
+  close: (save: (patch: Partial<T>) => Promise<void>) => Promise<boolean>;
+  abandon: () => void;
+  restore: PendingRestore<T> | null;
+  applyRestore: () => void;
+  discardRestore: () => void;
+  revision: number;
 } {
-  // Lazy state initialiser: the snapshot is taken once, when the editor opens.
-  const [session] = useState(() => createAbandonSession(opened, options));
-  const [state, setState] = useState<AbandonState>("idle");
+  // Lazy initialisers: the snapshot and the leftover-draft check happen once,
+  // when the editor opens.
+  const [store] = useState(browserDraftStore);
+  const [session] = useState(() =>
+    createDraftSession<T>({
+      opened,
+      store,
+      keyOf: (f) => draftKey(scope, id, f),
+      equal,
+      baseUpdatedAt,
+    }),
+  );
+  const [initialDecision] = useState(() => {
+    const drafts: Partial<Record<keyof T & string, ReturnType<typeof readFieldDraft>>> = {};
+    for (const f of Object.keys(opened) as (keyof T & string)[]) {
+      drafts[f] = readFieldDraft(store, draftKey(scope, id, f));
+    }
+    return restoreDecision<T>(drafts, opened, equal);
+  });
+  const [restore, setRestore] = useState<PendingRestore<T> | null>(() =>
+    initialDecision.kind === "offer"
+      ? {
+          values: initialDecision.values,
+          stale: initialDecision.stale,
+          staleFields: initialDecision.staleFields,
+          startedAt: initialDecision.startedAt,
+        }
+      : null,
+  );
+  const [status, setStatus] = useState<DraftEditorStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+
+  // Drafts that match what's stored (their save landed) are just forgotten.
+  useEffect(() => {
+    if (initialDecision.kind === "clear") session.clearStored();
+  }, [initialDecision, session]);
+
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -70,37 +114,68 @@ export function useAbandonable<T extends Record<string, unknown>>(
     };
   }, []);
 
-  const save = useCallback<AbandonSession<T>["save"]>(
-    (patch, run) => session.save(patch, run),
-    [session],
-  );
-
-  const abandon = useCallback(
-    async ({
-      cancelPending,
-      revert,
-      onDone,
-    }: {
-      cancelPending?: () => void;
-      revert: (patch: Partial<T>) => Promise<void>;
-      onDone: (outcome: AbandonOutcome<T>) => void;
-    }) => {
-      if (session.abandoning) return;
-      setState("abandoning");
-      try {
-        const outcome = await session.abandon({ cancelPending, revert });
-        // If the editor was dismissed meanwhile (Esc, click-off), it's already
-        // closed: don't close whatever is open now.
-        if (mounted.current) {
-          setState("idle");
-          onDone(outcome);
-        }
-      } catch {
-        if (mounted.current) setState("failed");
-      }
+  const set = useCallback(
+    <K extends keyof T & string>(key: K, value: T[K]) => {
+      session.set(key, value);
+      rerender();
     },
     [session],
   );
 
-  return { session, save, state, abandon };
+  const close = useCallback(
+    async (save: (patch: Partial<T>) => Promise<void>) => {
+      // Closed before answering the restore prompt: nothing was edited, and the
+      // leftover draft stays for next time (session.close would forget it).
+      if (restore && !session.dirty) return true;
+      if (session.patch()) setStatus("saving");
+      const outcome = await session.close(save);
+      if (outcome.kind === "failed") {
+        if (mounted.current) {
+          setStatus("failed");
+          setError(outcome.error);
+        }
+        return false;
+      }
+      if (mounted.current) {
+        setStatus("idle");
+        setError(null);
+        rerender();
+      }
+      return true;
+    },
+    [restore, session],
+  );
+
+  const abandon = useCallback(() => {
+    session.abandon();
+    setRestore(null);
+    rerender();
+  }, [session]);
+
+  const applyRestore = useCallback(() => {
+    if (!restore) return;
+    session.restore(restore.values);
+    setRestore(null);
+    setRevision((r) => r + 1);
+  }, [restore, session]);
+
+  const discardRestore = useCallback(() => {
+    session.clearStored();
+    setRestore(null);
+  }, [session]);
+
+  return {
+    session,
+    values: session.values,
+    dirty: session.dirty,
+    set,
+    status,
+    error,
+    close,
+    abandon,
+    restore,
+    applyRestore,
+    discardRestore,
+    revision,
+  };
 }

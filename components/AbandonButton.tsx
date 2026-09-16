@@ -3,10 +3,10 @@
 /**
  * The "Abandon changes" icon (KANBAN-42), one component for every editor.
  *
- * Editing saves implicitly (autosave, Esc and leaving the editor all keep your
- * work); this is the explicit way back: the editor restores what it was editing
- * to how it was when it opened, then closes. What "as opened" means is the
- * editor's call (see docs/DESIGN.md "Abandon changes"); this button only asks.
+ * Nothing is written while editing, and finishing (Esc, click-off, leaving)
+ * saves once; this is the explicit way out without saving: the editor discards
+ * its draft and closes, writing nothing. What the draft covers is the editor's
+ * call (see docs/DESIGN.md "Abandon changes"); this button only asks.
  *
  * - Icon only: a counter-clockwise arrow (revert), never a trash can or red, so
  *   it doesn't read as delete.

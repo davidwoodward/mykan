@@ -19,7 +19,6 @@ import {
   type ItemStatus,
 } from "@/lib/types";
 import { useProjectKey } from "@/components/RefBadge";
-import { useItemEditSave } from "@/components/useAbandonable";
 import { linkSequentially, sortByStatusThenNumber, type LinkFailure } from "@/lib/epic-order";
 
 /**
@@ -591,15 +590,14 @@ export function ParentChip({ item, className = "" }: { item: Item; className?: s
  */
 export function ParentRow({ item }: { item: Item }) {
   const ctx = useEpics();
-  // Inside the detail modal, the link write goes through the modal's abandon
-  // session, so "Abandon changes" reverts a parent changed during this open.
-  const editSave = useItemEditSave();
   const [editing, setEditing] = useState(false);
   if (!ctx || item.type === "epic") return null;
 
+  // A parent pick is its own immediate, recorded write, not part of the modal's
+  // draft: the epic guards answer at pick time, and Abandon changes doesn't
+  // undo it (relink to undo). See docs/DESIGN.md "Abandon changes".
   function setParent(parentId: string | null) {
-    const run = () => ctx!.setParent(item.id, parentId);
-    void (editSave ? editSave({ parent_id: parentId }, run) : run());
+    void ctx!.setParent(item.id, parentId);
   }
 
   function pick(id: string) {

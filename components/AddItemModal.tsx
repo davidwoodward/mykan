@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RichTextEditor } from "@/components/RichTextEditor";
+import { RichTextEditor, type EditorRead } from "@/components/RichTextEditor";
 import { AbandonButton } from "@/components/AbandonButton";
 import { TagEditor } from "@/components/TagEditor";
 import { TypeSegmented } from "@/components/TypeSegmented";
@@ -13,8 +13,8 @@ const EMPTY_DOC: RichDoc = { type: "doc", content: [] };
 
 /**
  * Create a new item through the same surface as the edit popup — a rich-text
- * body editor in a modal. Unlike the edit modal there is no row to autosave
- * against yet, so the item is POSTed once on a commit — the Add button,
+ * body editor in a modal. Nothing is written while typing (as in the edit
+ * modal); the item is POSTed once on a commit — the Add button,
  * ⌘/Ctrl+Enter, or Esc when the draft has content (Esc on an empty draft just
  * closes). Click-off and ✕ are the explicit discard paths. Inline images need
  * an item id, so they are added after creating (open the item).
@@ -48,20 +48,20 @@ export function AddItemModal({
     if (t === "epic") setParentId(null);
   }, []);
   const bodyRef = useRef<RichDoc>(EMPTY_DOC);
-  // Live getter for the editor's current doc — bypasses the editor's 700ms
-  // onChange debounce so an immediate Esc still sees what was just typed.
-  const getDoc = useRef<(() => RichDoc) | null>(null);
+  // Live read of the editor's current doc — bypasses the editor's onChange
+  // debounce so an immediate submit still sees what was just typed.
+  const readDoc = useRef<(() => EditorRead) | null>(null);
   const [hasContent, setHasContent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onBodyChange = useCallback((doc: RichDoc) => {
+  const onBodyChange = useCallback(({ doc }: EditorRead) => {
     bodyRef.current = doc;
     setHasContent(richDocText(doc).trim().length > 0);
   }, []);
 
   const currentDoc = useCallback(
-    (): RichDoc => getDoc.current?.() ?? bodyRef.current,
+    (): RichDoc => readDoc.current?.().doc ?? bodyRef.current,
     [],
   );
 
@@ -160,7 +160,7 @@ export function AddItemModal({
           value={null}
           onChange={onBodyChange}
           onUploadImage={uploadImage}
-          getDocRef={getDoc}
+          readRef={readDoc}
           autoFocus
         />
 

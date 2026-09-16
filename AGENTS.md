@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # Design & UX
 
 Before building or changing any UI, read **`docs/DESIGN.md`** and follow it — it captures
-mykan's deliberate interaction patterns (implicit autosave + Esc/click-off dismiss, inline
+mykan's deliberate interaction patterns (nothing written while typing, one save on Esc/click-off, inline
 keyboard-first tags, token-based light/dark theming, labeled inline-SVG icons). These are
 app-specific choices and override the cross-project UI defaults where they differ.
 

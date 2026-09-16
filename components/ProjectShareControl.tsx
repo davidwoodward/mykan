@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { displayName } from "@/lib/format";
-import { createAbandonSession, type AbandonSession } from "@/lib/abandon";
+import { sameMembers } from "@/lib/abandon";
 import { AbandonButton } from "@/components/AbandonButton";
 
 /** A small circular initial for a shared member (mirrors the assignee avatar). */
@@ -38,74 +38,72 @@ export function ProjectShareControl({
   ownerEmail,
   canEdit,
   onChange,
+  saveOnClose = false,
   className = "",
 }: {
   sharedWith: string[];
   candidates: string[];
   ownerEmail: string | null;
   canEdit: boolean;
-  /** May return the save's promise, so Abandon can wait for it. */
-  onChange: (next: string[]) => void | Promise<unknown>;
+  onChange: (next: string[]) => void;
+  /**
+   * True when `onChange` writes to the database (the projects list): toggles
+   * then only change a local draft, and closing the checklist calls `onChange`
+   * once if it changed; Abandon changes closes without writing. False inside a
+   * draft form (project panel, new project), where `onChange` only stages the
+   * form's own draft: each toggle stages at once (so the form's click-off
+   * commit sees it), and Abandon puts back the list as it was on open.
+   */
+  saveOnClose?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  // Abandon changes (KANBAN-42): the sharing as it was when the checklist
-  // opened. Each toggle is saved (or, inside a draft form, staged) at once, so
-  // abandoning writes the as-opened list back through onChange.
-  const session = useRef<AbandonSession<{ sharedWith: string[] }> | null>(null);
-  const [reverting, setReverting] = useState(false);
+  const [draft, setDraft] = useState<string[]>([]);
+  const opened = useRef<string[]>([]);
+  const finishRef = useRef<() => void>(() => {});
   const wrapRef = useRef<HTMLDivElement>(null);
   const owner = (ownerEmail ?? "").toLowerCase();
   const options = candidates.filter((e) => e.toLowerCase() !== owner);
+  const shown = open && saveOnClose ? draft : sharedWith;
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) finishRef.current();
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  useEffect(() => {
+    finishRef.current = finish;
+  });
+
   function toggle(email: string) {
-    const next = sharedWith.includes(email)
-      ? sharedWith.filter((e) => e !== email)
-      : [...sharedWith, email];
-    const run = async () => {
-      await onChange(next);
-    };
-    if (session.current) void session.current.save({ sharedWith: next }, run).catch(() => {});
-    else void run();
+    const next = shown.includes(email) ? shown.filter((e) => e !== email) : [...shown, email];
+    if (saveOnClose) setDraft(next);
+    else onChange(next);
   }
 
   function openChecklist() {
-    session.current = createAbandonSession(
-      { sharedWith: [...sharedWith] },
-      { equal: (_k, a, b) => sameSet(a as string[], b as string[]) },
-    );
+    opened.current = [...sharedWith];
+    setDraft([...sharedWith]);
     setOpen(true);
   }
 
-  async function abandon() {
-    const s = session.current;
-    if (!s || reverting) return;
-    setReverting(true);
-    try {
-      await s.abandon({
-        revert: async (patch) => {
-          await onChange(patch.sharedWith ?? []);
-        },
-      });
-      setOpen(false);
-    } catch {
-      // The revert failed; keep the checklist open (the parent surfaces errors).
-    } finally {
-      setReverting(false);
-    }
+  // Close; with saveOnClose, one write if the list changed.
+  function finish() {
+    setOpen(false);
+    if (saveOnClose && !sameMembers(draft, opened.current)) onChange(draft);
+  }
+
+  function abandon() {
+    setOpen(false);
+    if (!saveOnClose && !sameMembers(sharedWith, opened.current)) onChange(opened.current);
   }
 
   const label =
-    sharedWith.length === 0 ? (
+    shown.length === 0 ? (
       <span className="inline-flex items-center gap-1 text-[var(--color-muted)]">
         <LockIcon /> Private
       </span>
@@ -113,7 +111,7 @@ export function ProjectShareControl({
       <span className="inline-flex items-center gap-1">
         <span className="text-[var(--color-muted)]">Shared</span>
         <span className="flex -space-x-1">
-          {sharedWith.map((e) => (
+          {shown.map((e) => (
             <ShareAvatar key={e} email={e} />
           ))}
         </span>
@@ -128,10 +126,19 @@ export function ProjectShareControl({
   }
 
   return (
-    <div ref={wrapRef} className={`relative ${className}`}>
+    <div
+      ref={wrapRef}
+      className={`relative ${className}`}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          e.stopPropagation();
+          finish();
+        }
+      }}
+    >
       <button
         type="button"
-        onClick={() => (open ? setOpen(false) : openChecklist())}
+        onClick={() => (open ? finish() : openChecklist())}
         aria-haspopup="listbox"
         aria-expanded={open}
         title="Manage who this project is shared with"
@@ -147,7 +154,7 @@ export function ProjectShareControl({
         >
           <div className="flex items-center justify-between gap-2 pl-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
             Shared with
-            <AbandonButton size="sm" onAbandon={() => void abandon()} disabled={reverting} />
+            <AbandonButton size="sm" onAbandon={abandon} />
           </div>
           {options.length === 0 ? (
             <div className="px-2 py-1 text-xs text-[var(--color-faint)]">
@@ -155,7 +162,7 @@ export function ProjectShareControl({
             </div>
           ) : (
             options.map((m) => {
-              const checked = sharedWith.includes(m);
+              const checked = shown.includes(m);
               return (
                 <button
                   key={m}
@@ -178,11 +185,4 @@ export function ProjectShareControl({
       ) : null}
     </div>
   );
-}
-
-/** Order-insensitive equality for two email lists. */
-function sameSet(a: string[] = [], b: string[] = []): boolean {
-  if (a.length !== b.length) return false;
-  const sb = new Set(b.map((e) => e.toLowerCase()));
-  return a.every((e) => sb.has(e.toLowerCase()));
 }

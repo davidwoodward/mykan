@@ -309,7 +309,8 @@ export function ProjectsView({
                     candidates={members}
                     ownerEmail={p.created_by}
                     canEdit={p.created_by?.toLowerCase() === viewerEmail.toLowerCase()}
-                    onChange={(next) => shareProject(p.id, next)}
+                    onChange={(next) => void shareProject(p.id, next)}
+                    saveOnClose
                   />
                   <button
                     type="button"

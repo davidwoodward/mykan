@@ -10,7 +10,7 @@ import {
 } from "react";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
-import { ItemDetailModal } from "@/components/ItemDetailModal";
+import { ItemDetailModal, type ItemEditPatch } from "@/components/ItemDetailModal";
 import { AddItemModal } from "@/components/AddItemModal";
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import { AssigneeProvider } from "@/components/AssigneePicker";
@@ -23,7 +23,6 @@ import {
   type Category,
   type Item,
   type ItemStatus,
-  type RichDoc,
 } from "@/lib/types";
 import {
   CategoryProvider,
@@ -158,8 +157,7 @@ export function ProjectDetailView({
 
   // Link (or clear with null) an item's parent epic. Optimistic + PATCH; the
   // server applies the epic rules and its message is shown on refusal.
-  // Resolves once the write settles (it never rejects), so an editor can wait
-  // for it (Abandon changes waits for in-flight saves before reverting).
+  // Resolves once the write settles (it never rejects).
   const setItemParent = useCallback((id: string, parentId: string | null): Promise<void> => {
     let before: Item | undefined;
     setItems((prev) =>
@@ -217,20 +215,31 @@ export function ProjectDetailView({
     },
     [],
   );
-  const openItemById = useCallback((id: string) => setOpenItemId(id), []);
+  // Following a link from the open modal to another card finishes the current
+  // edit first (one save); a failed save keeps the current card open.
+  const leaveItemGuard = useRef<(() => Promise<boolean>) | null>(null);
+  const openItemById = useCallback((id: string) => {
+    void (async () => {
+      const guard = leaveItemGuard.current;
+      if (guard && !(await guard())) return;
+      setOpenItemId(id);
+    })();
+  }, []);
   const epicCtx = useEpicValue(items, openItemById, setItemParent, linkItemParent, refetch);
 
-  // Rich-text body saves go through the same optimistic PATCH path. Re-thrown so
-  // the modal can show a save-failed state. `editSession` (minted per modal
-  // open) makes one editing session read as one history entry.
-  const saveBody = useCallback(
-    async (id: string, body: RichDoc, editSession?: string) => {
+  // The item modal's one save when editing finishes (KANBAN-42): body and/or
+  // tags in a single PATCH, so a kept edit is one history entry. Throws the
+  // server's message so the modal stays open with the draft intact.
+  // `editSession` (minted per modal open) keeps a rare second save of the same
+  // open (a tab-close save, then the close) in that one entry.
+  const saveItemEdit = useCallback(
+    async (id: string, patch: ItemEditPatch, editSession: string) => {
       const res = await fetch(`/api/items/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body, edit_session: editSession }),
+        body: JSON.stringify({ ...patch, edit_session: editSession }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(await responseError(res));
       const updated = (await res.json()) as Item;
       setItems((prev) =>
         prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
@@ -261,9 +270,8 @@ export function ProjectDetailView({
     );
   }, []);
 
-  // Fire-and-forget inline assignee edits from rows/cards (optimistic).
-  // Resolves once the write settles (never rejects), so the picker's Abandon
-  // can wait for in-flight toggles before reverting.
+  // Inline assignee edits from rows/cards (optimistic): the picker calls this
+  // once, when its list closes with a changed selection. Never rejects.
   const changeItemAssignees = useCallback((id: string, assignees: string[]): Promise<void> => {
     setItems((prev) =>
       prev ? prev.map((it) => (it.id === id ? { ...it, assignees } : it)) : prev,
@@ -1200,15 +1208,15 @@ export function ProjectDetailView({
       {openItem ? (
         <ItemDetailModal
           // Keyed by item: following a parent/child link swaps the open item,
-          // which must remount the editor (flushing the previous item's save
-          // and minting a fresh edit session).
+          // which must remount the editor (a fresh draft and edit session; the
+          // previous item's edit was saved by the leave guard first).
           key={openItem.id}
           item={openItem}
           allTags={allTags}
           onClose={() => setOpenItemId(null)}
-          onSaveBody={saveBody}
-          onSaveTags={saveTags}
+          onSave={saveItemEdit}
           onItemChange={replaceItem}
+          leaveGuardRef={leaveItemGuard}
         />
       ) : null}
       {showCategoryManager ? (
