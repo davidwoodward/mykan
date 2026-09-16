@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { AbandonButton } from "@/components/AbandonButton";
+import { ItemEditSaveProvider, useAbandonable } from "@/components/useAbandonable";
+import { itemRevertBody } from "@/lib/abandon";
+import { fieldEqual, type TrackedField } from "@/lib/item-snapshot";
 import { TagEditor } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
 import { TypeBadge } from "@/components/TypeBadge";
@@ -33,6 +37,15 @@ export function ItemDetailModal({
   // a single history entry, and closing the modal seals it.
   const [editSession] = useState(() => crypto.randomUUID());
 
+  // Abandon changes (KANBAN-42): the as-opened values of every field this modal
+  // can change on the item (captured once — the modal is keyed by item id), and
+  // the session its saves go through so abandon knows what to write back.
+  const { save, abandon, state: abandonState } = useAbandonable(
+    { body: item.body, tags: item.tags ?? [], parent_id: item.parent_id ?? null },
+    { equal: (key, a, b) => fieldEqual(key as TrackedField, a, b) },
+  );
+  const cancelPendingBody = useRef<(() => void) | null>(null);
+
   // Close on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -46,26 +59,51 @@ export function ItemDetailModal({
     async (body: RichDoc) => {
       setStatus("saving");
       try {
-        await onSaveBody(item.id, body, editSession);
+        await save({ body }, () => onSaveBody(item.id, body, editSession));
         setStatus("saved");
       } catch {
         setStatus("error");
       }
     },
-    [item.id, onSaveBody, editSession],
+    [item.id, onSaveBody, editSession, save],
   );
 
   const handleTags = useCallback(
     async (tags: string[]) => {
       setStatus("saving");
       try {
-        await onSaveTags(item.id, tags);
+        await save({ tags }, () => onSaveTags(item.id, tags));
         setStatus("saved");
       } catch {
         setStatus("error");
       }
     },
-    [item.id, onSaveTags],
+    [item.id, onSaveTags, save],
+  );
+
+  // Abandon: cancel the pending body autosave, wait for in-flight saves, write
+  // the as-opened values back for whatever changed (one PATCH, under a fresh
+  // edit session so the abandoned text keeps its own history entry), close.
+  const onAbandon = useCallback(() => {
+    void abandon({
+      cancelPending: () => cancelPendingBody.current?.(),
+      revert: async (patch) => {
+        const res = await fetch(`/api/items/${item.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(itemRevertBody(patch, editSession, () => crypto.randomUUID())),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        onItemChange((await res.json()) as Item);
+      },
+      onDone: onClose,
+    });
+  }, [abandon, item.id, editSession, onItemChange, onClose]);
+
+  // Parent epic changes made in this modal go through the same session.
+  const saveParent = useCallback(
+    (patch: { parent_id?: string | null }, run: () => Promise<unknown>) => save(patch, run),
+    [save],
   );
 
   const uploadImage = useCallback(
@@ -106,20 +144,27 @@ export function ItemDetailModal({
               {STATUS_LABEL[item.status]}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <AbandonButton
+              onAbandon={onAbandon}
+              disabled={abandonState === "abandoning"}
+            />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              ✕
+            </button>
+          </div>
         </header>
 
         <RichTextEditor
           value={item.body}
           onChange={handleChange}
           onUploadImage={uploadImage}
+          cancelPendingRef={cancelPendingBody}
           autoFocus
         />
 
@@ -128,7 +173,9 @@ export function ItemDetailModal({
             <EpicChildren item={item} />
           </div>
         ) : (
-          <ParentRow item={item} />
+          <ItemEditSaveProvider value={saveParent}>
+            <ParentRow item={item} />
+          </ItemEditSaveProvider>
         )}
 
         <div className="border-t border-[var(--color-line)] px-4 py-2.5">
@@ -148,7 +195,13 @@ export function ItemDetailModal({
 
         <footer className="flex items-center justify-between border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">
           <span>Paste or drop an image to embed it</span>
-          <SaveIndicator status={status} />
+          {abandonState === "abandoning" ? (
+            <span>Reverting…</span>
+          ) : abandonState === "failed" ? (
+            <span className="text-[var(--color-bug)]">Abandon failed, still editing</span>
+          ) : (
+            <SaveIndicator status={status} />
+          )}
         </footer>
       </div>
     </div>

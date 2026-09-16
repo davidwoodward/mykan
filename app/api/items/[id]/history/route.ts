@@ -132,7 +132,12 @@ export async function GET(_req: Request, { params }: Ctx) {
       created_at: v.created_at,
       created_by: v.created_by,
       source: v.source,
-      changes: summarize(v.fields_changed, v.snapshot, after, cats, refOf),
+      changes: [
+        ...summarize(v.fields_changed, v.snapshot, after, cats, refOf),
+        // The write after this snapshot was an abandon revert (KANBAN-42):
+        // this entry holds the abandoned edit, and Restore brings it back.
+        ...(v.snapshot.revert_reason === "abandoned" ? ["abandoned edit reverted"] : []),
+      ],
       body_text: richDocText(v.snapshot.body),
     };
   });

@@ -15,6 +15,7 @@ export function RichTextEditor({
   onUploadImage,
   autoFocus = false,
   getDocRef,
+  cancelPendingRef,
 }: {
   value: RichDoc | null;
   /** Fired (debounced) with the latest document whenever it changes. */
@@ -28,6 +29,12 @@ export function RichTextEditor({
    * yet (e.g. deciding what to do on an immediate Esc). Null while unmounted.
    */
   getDocRef?: MutableRefObject<(() => RichDoc) | null>;
+  /**
+   * Populated with a function that cancels the pending debounced save WITHOUT
+   * firing it, and without the unmount flush firing it later either. Used by
+   * Abandon changes, which must drop the unsaved edit rather than save it.
+   */
+  cancelPendingRef?: MutableRefObject<(() => void) | null>;
 }) {
   // Keep the latest callbacks in refs so the editor's static editorProps
   // closures always call through to current values without re-initialising.
@@ -92,6 +99,18 @@ export function RichTextEditor({
       getDocRef.current = null;
     };
   }, [editor, getDocRef]);
+
+  // Expose "cancel the pending save" (nulling the timer also skips the flush).
+  useEffect(() => {
+    if (!cancelPendingRef) return;
+    cancelPendingRef.current = () => {
+      if (debounce.current) clearTimeout(debounce.current);
+      debounce.current = null;
+    };
+    return () => {
+      cancelPendingRef.current = null;
+    };
+  }, [cancelPendingRef]);
 
   // Flush any pending debounced save when unmounting (e.g. modal close).
   useEffect(() => {

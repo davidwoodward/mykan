@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { Byline } from "@/components/Byline";
+import { AbandonButton } from "@/components/AbandonButton";
 import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
 
@@ -252,6 +253,9 @@ export function ProjectsView({
             <span className="text-xs text-[var(--color-faint)]">
               Enter for newline · ⌘/Ctrl+Enter to create · Esc to cancel
             </span>
+            <span className="flex items-center gap-2">
+            {/* Nothing is saved until Create, so abandoning discards the draft. */}
+            <AbandonButton onAbandon={closeAdd} disabled={busy} />
             <button
               type="button"
               onClick={createProject}
@@ -260,6 +264,7 @@ export function ProjectsView({
             >
               Create
             </button>
+            </span>
           </div>
         </section>
       ) : null}

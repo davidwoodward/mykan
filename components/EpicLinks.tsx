@@ -19,6 +19,7 @@ import {
   type ItemStatus,
 } from "@/lib/types";
 import { useProjectKey } from "@/components/RefBadge";
+import { useItemEditSave } from "@/components/useAbandonable";
 import { linkSequentially, sortByStatusThenNumber, type LinkFailure } from "@/lib/epic-order";
 
 /**
@@ -44,7 +45,7 @@ type EpicValue = {
   /** Open an item's detail modal. */
   open: (id: string) => void;
   /** Link (or clear with null) an item's parent epic. */
-  setParent: (id: string, parentId: string | null) => void;
+  setParent: (id: string, parentId: string | null) => Promise<void>;
   /** Awaited link for batches: resolves to null on success, else the error. */
   linkParent: (id: string, parentId: string | null) => Promise<string | null>;
   /** Re-fetch the project's items so the UI shows the real state. */
@@ -58,7 +59,7 @@ export const EpicProvider = EpicContext.Provider;
 export function useEpicValue(
   items: Item[] | null,
   open: (id: string) => void,
-  setParent: (id: string, parentId: string | null) => void,
+  setParent: (id: string, parentId: string | null) => Promise<void>,
   linkParent: (id: string, parentId: string | null) => Promise<string | null>,
   refresh: () => Promise<void>,
 ): EpicValue {
@@ -590,12 +591,20 @@ export function ParentChip({ item, className = "" }: { item: Item; className?: s
  */
 export function ParentRow({ item }: { item: Item }) {
   const ctx = useEpics();
+  // Inside the detail modal, the link write goes through the modal's abandon
+  // session, so "Abandon changes" reverts a parent changed during this open.
+  const editSave = useItemEditSave();
   const [editing, setEditing] = useState(false);
   if (!ctx || item.type === "epic") return null;
 
+  function setParent(parentId: string | null) {
+    const run = () => ctx!.setParent(item.id, parentId);
+    void (editSave ? editSave({ parent_id: parentId }, run) : run());
+  }
+
   function pick(id: string) {
     setEditing(false);
-    if (id !== item.parent_id) ctx!.setParent(item.id, id);
+    if (id !== item.parent_id) setParent(id);
   }
 
   return (
@@ -622,7 +631,7 @@ export function ParentRow({ item }: { item: Item }) {
           </button>
           <button
             type="button"
-            onClick={() => ctx.setParent(item.id, null)}
+            onClick={() => setParent(null)}
             title="Remove parent"
             aria-label="Remove parent epic"
             className={`${iconBtn} hover:text-[var(--color-bug)]`}

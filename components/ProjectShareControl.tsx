@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { displayName } from "@/lib/format";
+import { createAbandonSession, type AbandonSession } from "@/lib/abandon";
+import { AbandonButton } from "@/components/AbandonButton";
 
 /** A small circular initial for a shared member (mirrors the assignee avatar). */
 function ShareAvatar({ email }: { email: string }) {
@@ -42,10 +44,16 @@ export function ProjectShareControl({
   candidates: string[];
   ownerEmail: string | null;
   canEdit: boolean;
-  onChange: (next: string[]) => void;
+  /** May return the save's promise, so Abandon can wait for it. */
+  onChange: (next: string[]) => void | Promise<unknown>;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Abandon changes (KANBAN-42): the sharing as it was when the checklist
+  // opened. Each toggle is saved (or, inside a draft form, staged) at once, so
+  // abandoning writes the as-opened list back through onChange.
+  const session = useRef<AbandonSession<{ sharedWith: string[] }> | null>(null);
+  const [reverting, setReverting] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const owner = (ownerEmail ?? "").toLowerCase();
   const options = candidates.filter((e) => e.toLowerCase() !== owner);
@@ -60,11 +68,40 @@ export function ProjectShareControl({
   }, [open]);
 
   function toggle(email: string) {
-    onChange(
-      sharedWith.includes(email)
-        ? sharedWith.filter((e) => e !== email)
-        : [...sharedWith, email],
+    const next = sharedWith.includes(email)
+      ? sharedWith.filter((e) => e !== email)
+      : [...sharedWith, email];
+    const run = async () => {
+      await onChange(next);
+    };
+    if (session.current) void session.current.save({ sharedWith: next }, run).catch(() => {});
+    else void run();
+  }
+
+  function openChecklist() {
+    session.current = createAbandonSession(
+      { sharedWith: [...sharedWith] },
+      { equal: (_k, a, b) => sameSet(a as string[], b as string[]) },
     );
+    setOpen(true);
+  }
+
+  async function abandon() {
+    const s = session.current;
+    if (!s || reverting) return;
+    setReverting(true);
+    try {
+      await s.abandon({
+        revert: async (patch) => {
+          await onChange(patch.sharedWith ?? []);
+        },
+      });
+      setOpen(false);
+    } catch {
+      // The revert failed; keep the checklist open (the parent surfaces errors).
+    } finally {
+      setReverting(false);
+    }
   }
 
   const label =
@@ -94,7 +131,7 @@ export function ProjectShareControl({
     <div ref={wrapRef} className={`relative ${className}`}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openChecklist())}
         aria-haspopup="listbox"
         aria-expanded={open}
         title="Manage who this project is shared with"
@@ -108,8 +145,9 @@ export function ProjectShareControl({
           aria-label="Share with"
           className="absolute right-0 z-30 mt-1 min-w-48 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg"
         >
-          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+          <div className="flex items-center justify-between gap-2 pl-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
             Shared with
+            <AbandonButton size="sm" onAbandon={() => void abandon()} disabled={reverting} />
           </div>
           {options.length === 0 ? (
             <div className="px-2 py-1 text-xs text-[var(--color-faint)]">
@@ -140,4 +178,11 @@ export function ProjectShareControl({
       ) : null}
     </div>
   );
+}
+
+/** Order-insensitive equality for two email lists. */
+function sameSet(a: string[] = [], b: string[] = []): boolean {
+  if (a.length !== b.length) return false;
+  const sb = new Set(b.map((e) => e.toLowerCase()));
+  return a.every((e) => sb.has(e.toLowerCase()));
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { AbandonButton } from "@/components/AbandonButton";
 import { TagEditor } from "@/components/TagEditor";
 import { TypeSegmented } from "@/components/TypeSegmented";
 import { DraftCategory } from "@/components/CategoryPicker";
@@ -141,14 +142,18 @@ export function AddItemModal({
             </span>
             <TypeSegmented value={type} onChange={chooseType} />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Nothing is saved until Add, so abandoning discards the draft. */}
+            <AbandonButton onAbandon={onClose} disabled={busy} />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              ✕
+            </button>
+          </div>
         </header>
 
         <RichTextEditor

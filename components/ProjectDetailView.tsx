@@ -158,7 +158,9 @@ export function ProjectDetailView({
 
   // Link (or clear with null) an item's parent epic. Optimistic + PATCH; the
   // server applies the epic rules and its message is shown on refusal.
-  const setItemParent = useCallback((id: string, parentId: string | null) => {
+  // Resolves once the write settles (it never rejects), so an editor can wait
+  // for it (Abandon changes waits for in-flight saves before reverting).
+  const setItemParent = useCallback((id: string, parentId: string | null): Promise<void> => {
     let before: Item | undefined;
     setItems((prev) =>
       prev
@@ -169,7 +171,7 @@ export function ProjectDetailView({
           })
         : prev,
     );
-    void (async () => {
+    return (async () => {
       try {
         const res = await fetch(`/api/items/${id}`, {
           method: "PATCH",
@@ -260,11 +262,13 @@ export function ProjectDetailView({
   }, []);
 
   // Fire-and-forget inline assignee edits from rows/cards (optimistic).
-  const changeItemAssignees = useCallback((id: string, assignees: string[]) => {
+  // Resolves once the write settles (never rejects), so the picker's Abandon
+  // can wait for in-flight toggles before reverting.
+  const changeItemAssignees = useCallback((id: string, assignees: string[]): Promise<void> => {
     setItems((prev) =>
       prev ? prev.map((it) => (it.id === id ? { ...it, assignees } : it)) : prev,
     );
-    void (async () => {
+    return (async () => {
       try {
         const res = await fetch(`/api/items/${id}`, {
           method: "PATCH",

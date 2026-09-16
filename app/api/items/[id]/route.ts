@@ -48,6 +48,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     category_id?: unknown;
     parent_id?: unknown;
     edit_session?: unknown;
+    abandon?: unknown;
   };
   const patch: Record<string, unknown> = {};
   if (isItemType(body.type)) patch.type = body.type;
@@ -110,6 +111,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
       ? body.edit_session
       : null;
 
+  // Abandon (KANBAN-42): an editor writing its as-opened values back. The
+  // snapshot of the state being reverted is annotated, so History shows the
+  // abandoned edit and can restore it.
+  const annotations = body.abandon === true ? { revert_reason: "abandoned" as const } : {};
+
   // The chokepoint records history (when tracked fields change) and stamps
   // updated_at/updated_by.
   const w = await snapshotThenWrite(
@@ -119,6 +125,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     patch,
     "web",
     editSession,
+    annotations,
   );
   if (!w.ok) return NextResponse.json({ error: w.error }, { status: w.status });
 

@@ -2,6 +2,7 @@
 
 import { useId, useState, type KeyboardEvent } from "react";
 import { Tag } from "@/components/Tag";
+import { AbandonButton } from "@/components/AbandonButton";
 import { normalizeTags } from "@/lib/types";
 
 /**
@@ -77,6 +78,15 @@ export function InlineTags({
             placeholder="tag…"
             aria-label="Add tag"
             className="h-5 w-20 rounded border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
+          />
+          {/* The draft commits on Enter/blur; abandoning drops it. */}
+          <AbandonButton
+            size="sm"
+            tooltipAlign="left"
+            onAbandon={() => {
+              setDraft("");
+              setAdding(false);
+            }}
           />
           <datalist id={listId}>
             {suggestions

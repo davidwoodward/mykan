@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useCategories, PathInput } from "@/components/CategoryPicker";
+import { AbandonButton } from "@/components/AbandonButton";
 import type { Category } from "@/lib/types";
 
 /** Depth of a node (root = 0) for indenting the tree. */
@@ -256,15 +257,25 @@ function CategoryRow({
       <div className="flex items-center gap-2">
       <span style={{ width: depth * 14 }} className="shrink-0" aria-hidden="true" />
       {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKeyDown}
-          onBlur={commit}
-          aria-label={`Rename ${cat.name}`}
-          className="flex-1 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 text-sm outline-none"
-        />
+        <>
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={commit}
+            aria-label={`Rename ${cat.name}`}
+            className="min-w-0 flex-1 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 text-sm outline-none"
+          />
+          {/* Rename commits on Enter/blur; abandoning keeps the old name. */}
+          <AbandonButton
+            size="sm"
+            onAbandon={() => {
+              setDraft(cat.name);
+              setEditing(false);
+            }}
+          />
+        </>
       ) : (
         <button
           type="button"
@@ -483,7 +494,7 @@ function RepoPicker({
   }
 
   return (
-    <span className="inline-block shrink-0">
+    <span className="inline-flex shrink-0 items-center gap-0.5">
       <input
         ref={attachInput}
         autoFocus
@@ -501,6 +512,8 @@ function RepoPicker({
         aria-label={label}
         className="w-44 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 font-mono text-[11px] outline-none placeholder:text-[var(--color-faint)]"
       />
+      {/* Binding commits on Enter/pick/blur; abandoning keeps the old repo. */}
+      <AbandonButton size="sm" onAbandon={onCancel} />
       {open && coords ? (
         <div
           ref={listRef}

@@ -36,10 +36,19 @@ export type ItemSnapshot = {
   parent_ref?: string;
   /** Annotation: why the following write cleared the parent. */
   parent_cleared_reason?: "epic_deleted";
+  /**
+   * Annotation: the write that followed this snapshot reverted an editor's
+   * changes because the user abandoned them (KANBAN-42). The snapshot itself is
+   * the abandoned state, so it stays restorable from History.
+   */
+  revert_reason?: "abandoned";
 };
 
 /** Extra annotation fields a writer may attach to the snapshot it records. */
-export type SnapshotAnnotations = Pick<ItemSnapshot, "parent_ref" | "parent_cleared_reason">;
+export type SnapshotAnnotations = Pick<
+  ItemSnapshot,
+  "parent_ref" | "parent_cleared_reason" | "revert_reason"
+>;
 
 /**
  * The history-panel line for a write that changed the parent: from `before`
@@ -76,12 +85,43 @@ export function snapshotOf(item: Item): ItemSnapshot {
 }
 
 /** Value equality per tracked field (arrays/docs compared structurally). */
-function fieldEqual(field: TrackedField, a: unknown, b: unknown): boolean {
+export function fieldEqual(field: TrackedField, a: unknown, b: unknown): boolean {
   if (field === "body") return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   if (field === "tags" || field === "assignees") {
     return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
   }
   return (a ?? null) === (b ?? null);
+}
+
+/**
+ * Body-burst coalescing: whether a write folds into the latest history entry
+ * instead of recording its own snapshot. Only a body-only write from the SAME
+ * editor session (and actor + source) as a latest body-only entry coalesces;
+ * no session, no coalescing.
+ */
+export function coalescesWith(
+  latest: {
+    fields_changed: readonly string[];
+    source: string;
+    edit_session: string | null;
+    created_by: string | null;
+  } | null,
+  write: {
+    actor: string;
+    source: string;
+    changed: readonly string[];
+    editSession: string | null;
+  },
+): boolean {
+  if (!write.editSession || !latest) return false;
+  if (!(write.changed.length === 1 && write.changed[0] === "body")) return false;
+  return (
+    latest.edit_session === write.editSession &&
+    latest.created_by === write.actor &&
+    latest.source === write.source &&
+    latest.fields_changed.length === 1 &&
+    latest.fields_changed[0] === "body"
+  );
 }
 
 /** The tracked fields a patch would actually change on the current row. */
