@@ -314,7 +314,7 @@ create table if not exists item_entries (
   ),
   constraint item_entries_source_check
     check (source in ('web', 'mcp', 'telegram', 'recovery')),
-  constraint item_entries_body_not_blank check (length(btrim(body)) > 0),
+  constraint item_entries_body_not_blank check (body ~ '[^[:space:]]'),
   constraint item_entries_supersedes_check check (
     supersedes_id is null
     or (kind in ('progress', 'decision') and supersedes_id <> id)
