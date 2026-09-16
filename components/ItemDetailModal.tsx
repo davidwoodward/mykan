@@ -101,12 +101,20 @@ export function ItemDetailModal({
     if (!restorePending.current) tagEditor.current?.flush();
   }, [takeBody]);
 
-  const finish = useCallback(async (): Promise<boolean> => {
-    if (ended.current) return true;
+  // A close save in flight: a second Esc/click-off joins it without re-syncing
+  // (which could leave a newer field in storage after the first save lands).
+  const closing = useRef<Promise<boolean> | null>(null);
+  const finish = useCallback((): Promise<boolean> => {
+    if (ended.current) return Promise.resolve(true);
+    if (closing.current) return closing.current;
     syncDraft();
-    const ok = await close((patch) => onSave(item.id, patch, editSession));
-    if (ok) ended.current = true;
-    return ok;
+    const p = close((patch) => onSave(item.id, patch, editSession)).then((ok) => {
+      closing.current = null;
+      if (ok) ended.current = true;
+      return ok;
+    });
+    closing.current = p;
+    return p;
   }, [syncDraft, close, onSave, item.id, editSession]);
 
   const requestClose = useCallback(async () => {

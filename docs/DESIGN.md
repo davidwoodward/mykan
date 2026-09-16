@@ -120,8 +120,9 @@ history entry.
   save lands, the page comes back from the back/forward cache, then the modal is closed),
   body-only saves of the same session fold into one history entry
   (`coalescesWith`, `lib/item-snapshot.ts`).
-- **Two tabs on the same card:** last save wins, as before. The other tab's draft is
-  offered back as stale only if it didn't save.
+- **Two tabs on the same card:** last close wins for the card, as before. The browser draft
+  is per item and field, not per tab, so two tabs on one card in the same browser share it:
+  the last keystroke owns the draft, and one tab's successful save clears it.
 
 **Enter exception (overrides the global "Enter = primary action" rule).** Item text is
 multi-line: in the item-name input (`AutoGrowTextarea`) and the body editor, **Enter inserts

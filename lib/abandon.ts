@@ -108,7 +108,10 @@ export type FieldDraft = {
   value: unknown;
   /** The stored value when the draft started (what it was edited from). */
   base: unknown;
-  /** The item's updated_at when the draft started (for the prompt's wording). */
+  /**
+   * The item's updated_at when the draft started. Informational only (kept for
+   * debugging a report): staleness is decided per field from `base`.
+   */
   baseUpdatedAt: string | null;
   /** When the draft started (ISO). */
   startedAt: string;
