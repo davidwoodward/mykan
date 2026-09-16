@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { displayName } from "@/lib/format";
-import { createAbandonSession, type AbandonSession } from "@/lib/abandon";
+import { sameMembers } from "@/lib/abandon";
 import { AbandonButton } from "@/components/AbandonButton";
 import type { Item } from "@/lib/types";
 
@@ -18,7 +18,7 @@ type AssigneeConfig = {
   members: string[];
   /** Assignees are only meaningful on shared projects. */
   enabled: boolean;
-  /** Resolves once the save settles, so Abandon can wait for it. */
+  /** Called once when the list closes with a changed selection. */
   onChange: (id: string, assignees: string[]) => void | Promise<unknown>;
 };
 
@@ -62,63 +62,56 @@ export function ItemAssignees({
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
-  // Abandon changes (KANBAN-42): the assignees as they were when the list
-  // opened. Each toggle saves at once, so abandoning writes that list back.
-  const session = useRef<AbandonSession<{ assignees: string[] }> | null>(null);
-  const [reverting, setReverting] = useState(false);
+  // Draft model (KANBAN-42): toggles change a local list while it's open;
+  // closing it (Esc, click-off, the trigger) saves once if the list changed,
+  // and Abandon changes closes without writing.
+  const [draft, setDraft] = useState<string[]>([]);
+  const opened = useRef<string[]>([]);
+  const finishRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        finishRef.current();
       }
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  useEffect(() => {
+    finishRef.current = finish;
+  });
+
   if (!cfg || !cfg.enabled || cfg.members.length === 0) return null;
-  const { members, onChange } = cfg;
-  const assignees = item.assignees ?? [];
+  const { members } = cfg;
+  const assignees = open ? draft : (item.assignees ?? []);
 
   function toggle(email: string) {
-    const next = assignees.includes(email)
-      ? assignees.filter((e) => e !== email)
-      : [...assignees, email];
-    const run = async () => {
-      await onChange(item.id, next);
-    };
-    if (session.current) void session.current.save({ assignees: next }, run).catch(() => {});
-    else void run();
+    setDraft((cur) => (cur.includes(email) ? cur.filter((e) => e !== email) : [...cur, email]));
   }
 
   function openList() {
-    session.current = createAbandonSession({ assignees: [...assignees] });
+    const current = item.assignees ?? [];
+    opened.current = [...current];
+    setDraft([...current]);
     setOpen(true);
   }
 
-  async function abandon() {
-    const s = session.current;
-    if (!s || reverting) return;
-    setReverting(true);
-    try {
-      await s.abandon({
-        revert: async (patch) => {
-          await onChange(item.id, patch.assignees ?? []);
-        },
-      });
-      setOpen(false);
-    } catch {
-      // Keep the list open; the board surfaces the save error.
-    } finally {
-      setReverting(false);
-    }
+  // One save when the list closes, only if it changed.
+  function finish() {
+    setOpen(false);
+    if (!sameMembers(draft, opened.current)) void cfg?.onChange(item.id, draft);
+  }
+
+  function abandon() {
+    setOpen(false);
   }
 
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === "Escape") {
-      setOpen(false);
+      finish();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setHi((h) => Math.min(members.length - 1, h + 1));
@@ -135,7 +128,7 @@ export function ItemAssignees({
     <div ref={wrapRef} className={`relative ${className}`}>
       <button
         type="button"
-        onClick={() => (open ? setOpen(false) : openList())}
+        onClick={() => (open ? finish() : openList())}
         onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -156,7 +149,7 @@ export function ItemAssignees({
         <div className="absolute left-0 top-full z-30 mt-1 min-w-40 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg">
           <div className="flex items-center justify-between gap-2 pl-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
             Assignees
-            <AbandonButton size="sm" onAbandon={() => void abandon()} disabled={reverting} />
+            <AbandonButton size="sm" onAbandon={abandon} />
           </div>
           <div role="listbox" aria-label="Members">
           {members.map((m, i) => {

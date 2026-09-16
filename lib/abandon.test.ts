@@ -1,14 +1,22 @@
-// Abandon changes (KANBAN-42): what an editor writes back, when, and how the
-// revert lands in item history. Pure — no database.
+// Save on finish, abandon for free (KANBAN-42): what an editor writes, when,
+// what it keeps in browser storage, and what it offers back. Pure — no database.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createAbandonSession, itemRevertBody, jsonEqual } from "./abandon.ts";
+import {
+  createDraftSession,
+  dirtyPatch,
+  draftKey,
+  jsonEqual,
+  memoryDraftStore,
+  readFieldDraft,
+  restoreDecision,
+  sameMembers,
+  type DraftStore,
+} from "./abandon.ts";
 import {
   changedTrackedFields,
   coalescesWith,
   fieldEqual,
-  snapshotOf,
-  type ItemSnapshot,
   type TrackedField,
 } from "./item-snapshot.ts";
 import type { Item, RichDoc } from "./types.ts";
@@ -21,278 +29,278 @@ const doc = (text: string): RichDoc => ({
 const itemEqual = (key: string, a: unknown, b: unknown) =>
   fieldEqual(key as TrackedField, a, b);
 
-/** A deferred promise, to hold a save "in flight". */
-function deferred<T = void>() {
-  let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
+type ItemFields = { body: RichDoc | null; tags: string[] };
+
+/** The item modal's wiring: a draft session over the fields it edits. */
+function openItemEditor(
+  stored: ItemFields,
+  store: DraftStore = memoryDraftStore(),
+  id = "item-1",
+) {
+  return createDraftSession<ItemFields>({
+    opened: stored,
+    store,
+    keyOf: (f) => draftKey("item", id, f),
+    equal: itemEqual,
+    baseUpdatedAt: "2026-09-16T00:00:00Z",
+    now: () => "2026-09-16T12:00:00Z",
   });
-  return { promise, resolve, reject };
 }
 
-/**
- * An in-memory item row plus its history, applying writes with the same rules
- * as snapshotThenWrite (lib/item-history.ts): dedupe unchanged writes, coalesce
- * a body-only write into the latest entry from the same edit session,
- * otherwise snapshot the previous state first.
- */
-function fakeItemStore(initial: Item) {
-  let row = initial;
-  const versions: {
-    snapshot: ItemSnapshot;
-    fields_changed: TrackedField[];
-    source: string;
-    edit_session: string | null;
-    created_by: string | null;
-  }[] = [];
+/** Records every save sent. */
+function saver(fail = false) {
+  const sent: Partial<ItemFields>[] = [];
   return {
-    get row() {
-      return row;
-    },
-    versions,
-    patch(body: Record<string, unknown>) {
-      const { edit_session, abandon, ...patch } = body;
-      const editSession = typeof edit_session === "string" ? edit_session : null;
-      const changed = changedTrackedFields(row, patch);
-      const latest = versions[versions.length - 1] ?? null;
-      if (
-        changed.length > 0 &&
-        !coalescesWith(latest, { actor: "david", source: "web", changed, editSession })
-      ) {
-        versions.push({
-          snapshot: {
-            ...snapshotOf(row),
-            ...(abandon === true ? { revert_reason: "abandoned" as const } : {}),
-          },
-          fields_changed: changed,
-          source: "web",
-          edit_session: editSession,
-          created_by: "david",
-        });
-      }
-      row = { ...row, ...patch } as Item;
+    sent,
+    save: async (patch: Partial<ItemFields>) => {
+      sent.push(patch);
+      if (fail) throw new Error("HTTP 500");
     },
   };
 }
 
-const baseItem = (over: Partial<Item> = {}): Item => ({
-  id: "item-1",
-  project_id: "project-1",
-  number: 42,
-  type: "feature",
-  status: "in_progress",
-  position: 1024,
-  body: doc("as opened"),
-  tags: ["ui"],
-  assignees: [],
-  category_id: null,
-  parent_id: null,
-  attachments: [],
-  archived_at: null,
-  github_issue: null,
-  github_issue_created_at: null,
-  github_imported_at: null,
-  github_sync: null,
-  done_at: null,
-  created_at: "2026-09-16T00:00:00Z",
-  updated_at: "2026-09-16T00:00:00Z",
-  created_by: "david",
-  updated_by: "david",
-  ...over,
+// --- Dirty detection --------------------------------------------------------
+
+test("dirty detection: only fields that differ from the as-opened values", () => {
+  const opened = { body: doc("a"), tags: ["ui"], name: "x" };
+  assert.equal(dirtyPatch(opened, { ...opened }, jsonEqual), null);
+  assert.deepEqual(dirtyPatch(opened, { ...opened, tags: ["ui", "new"] }, jsonEqual), {
+    tags: ["ui", "new"],
+  });
+  // Typed then deleted back to the original: not dirty.
+  assert.equal(dirtyPatch(opened, { ...opened, body: doc("a") }, jsonEqual), null);
+  // null and undefined are the same empty.
+  assert.equal(dirtyPatch({ v: null }, { v: undefined }, jsonEqual), null);
 });
 
-/** The item modal's wiring: an abandon session over the fields it edits. */
-function openItemEditor(store: ReturnType<typeof fakeItemStore>, editSession = "session-S") {
-  const it = store.row;
-  const session = createAbandonSession(
-    { body: it.body, tags: it.tags, parent_id: it.parent_id ?? null },
-    { equal: itemEqual },
-  );
-  let n = 0;
-  const mint = () => `revert-${++n}`;
-  return {
-    session,
-    autosaveBody(body: RichDoc) {
-      return session.save({ body }, async () => store.patch({ body, edit_session: editSession }));
-    },
-    abandon(cancelPending?: () => void) {
-      return session.abandon({
-        cancelPending,
-        revert: async (patch) => store.patch(itemRevertBody(patch, editSession, mint)),
-      });
-    },
+test("a session is clean on open and dirty after an edit, clean again when edited back", () => {
+  const s = openItemEditor({ body: doc("a"), tags: [] });
+  assert.equal(s.dirty, false);
+  s.set("body", doc("ab"));
+  assert.equal(s.dirty, true);
+  s.set("body", doc("a"));
+  assert.equal(s.dirty, false);
+});
+
+// --- Close ------------------------------------------------------------------
+
+test("typing writes nothing: many edits, then close sends exactly one save", async () => {
+  const s = openItemEditor({ body: doc(""), tags: ["ui"] });
+  const net = saver();
+  for (const t of ["h", "he", "hel", "hell", "hello"]) s.set("body", doc(t));
+  s.set("tags", ["ui", "new"]);
+  assert.equal(net.sent.length, 0, "nothing is sent while editing");
+
+  const outcome = await s.close(net.save);
+  assert.equal(outcome.kind, "saved");
+  assert.equal(net.sent.length, 1);
+  assert.deepEqual(net.sent[0], { body: doc("hello"), tags: ["ui", "new"] });
+});
+
+test("close sends only the changed fields", async () => {
+  const s = openItemEditor({ body: doc("keep"), tags: ["ui"] });
+  const net = saver();
+  s.set("tags", []);
+  await s.close(net.save);
+  assert.deepEqual(net.sent, [{ tags: [] }]);
+});
+
+test("close with no changes sends nothing", async () => {
+  const s = openItemEditor({ body: doc("a"), tags: ["ui"] });
+  const net = saver();
+  assert.deepEqual(await s.close(net.save), { kind: "unchanged" });
+  s.set("body", doc("changed"));
+  s.set("body", doc("a"));
+  assert.deepEqual(await s.close(net.save), { kind: "unchanged" });
+  assert.equal(net.sent.length, 0);
+});
+
+test("Esc and click-off racing share one save", async () => {
+  const s = openItemEditor({ body: doc("a"), tags: [] });
+  let resolve!: () => void;
+  let calls = 0;
+  const save = () => {
+    calls++;
+    return new Promise<void>((r) => (resolve = r));
   };
-}
-
-test("abandon with no changes just closes: nothing written, no history", async () => {
-  const store = fakeItemStore(baseItem());
-  const editor = openItemEditor(store);
-  const outcome = await editor.abandon();
-  assert.deepEqual(outcome, { kind: "closed" });
-  assert.equal(store.versions.length, 0);
-  assert.deepEqual(store.row.body, doc("as opened"));
+  s.set("body", doc("b"));
+  const first = s.close(save);
+  const second = s.close(save);
+  resolve();
+  assert.equal((await first).kind, "saved");
+  assert.equal((await second).kind, "saved");
+  assert.equal(calls, 1);
 });
 
-test("a change saved back equal to the as-opened value needs no revert", async () => {
-  const store = fakeItemStore(baseItem());
-  const editor = openItemEditor(store);
-  await editor.autosaveBody(doc("as opened"));
-  assert.equal(editor.session.revertPatch(), null);
-  assert.deepEqual(await editor.abandon(), { kind: "closed" });
-  assert.equal(store.versions.length, 0);
+test("a successful close clears the stored draft", async () => {
+  const store = memoryDraftStore();
+  const s = openItemEditor({ body: doc("a"), tags: [] }, store);
+  s.set("body", doc("b"));
+  assert.ok(readFieldDraft(store, draftKey("item", "item-1", "body")));
+  await s.close(saver().save);
+  assert.deepEqual(store.dump(), {});
+  assert.equal(s.dirty, false, "the saved values become the new baseline");
 });
 
-test("revert after autosave restores the as-opened body and keeps the abandoned text in history", async () => {
-  const store = fakeItemStore(baseItem());
-  const editor = openItemEditor(store);
-  await editor.autosaveBody(doc("draft that will be abandoned"));
-  assert.deepEqual(store.row.body, doc("draft that will be abandoned"));
-
-  const outcome = await editor.abandon();
-  assert.equal(outcome.kind, "reverted");
-  assert.deepEqual(store.row.body, doc("as opened"));
-  // Entry 1: the as-opened state (before the autosave). Entry 2: the abandoned
-  // draft (before the revert), annotated, so Restore can bring it back.
-  assert.equal(store.versions.length, 2);
-  assert.deepEqual(store.versions[0].snapshot.body, doc("as opened"));
-  assert.deepEqual(store.versions[1].snapshot.body, doc("draft that will be abandoned"));
-  assert.equal(store.versions[1].snapshot.revert_reason, "abandoned");
-  assert.notEqual(store.versions[1].edit_session, "session-S");
-});
-
-test("abandon after multiple autosaves reverts once and the last abandoned text survives coalescing", async () => {
-  const store = fakeItemStore(baseItem());
-  const editor = openItemEditor(store);
-  await editor.autosaveBody(doc("one"));
-  await editor.autosaveBody(doc("one two"));
-  await editor.autosaveBody(doc("one two three"));
-  // The three autosaves share the session, so they coalesce into one entry.
-  assert.equal(store.versions.length, 1);
-
-  await editor.abandon();
-  assert.deepEqual(store.row.body, doc("as opened"));
-  assert.equal(store.versions.length, 2);
-  assert.deepEqual(store.versions[1].snapshot.body, doc("one two three"));
-});
-
-test("sending the revert under the editor's own session would lose the abandoned text (why the session is fresh)", async () => {
-  const store = fakeItemStore(baseItem());
-  store.patch({ body: doc("abandoned"), edit_session: "session-S" });
-  store.patch({ body: doc("as opened"), edit_session: "session-S" });
-  assert.equal(store.versions.length, 1);
-  assert.ok(!store.versions.some((v) => fieldEqual("body", v.snapshot.body, doc("abandoned"))));
-});
-
-test("the revert body always carries a session different from the editor's", () => {
-  const minted = ["session-S", "session-S", "fresh"];
-  const body = itemRevertBody({ body: null }, "session-S", () => minted.shift() as string);
-  assert.equal(body.edit_session, "fresh");
-  assert.equal(body.abandon, true);
-  assert.equal(body.body, null);
-});
-
-test("abandon while an autosave is pending cancels it and writes nothing", async () => {
-  const store = fakeItemStore(baseItem());
-  const editor = openItemEditor(store);
-  // Typing scheduled a debounced save that hasn't fired yet.
-  let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-    void editor.autosaveBody(doc("typed, not yet saved"));
-  }, 5);
-  const outcome = await editor.abandon(() => {
-    if (timer) clearTimeout(timer);
-    timer = null;
-  });
-  assert.deepEqual(outcome, { kind: "closed" });
-  await new Promise((r) => setTimeout(r, 15));
-  assert.deepEqual(store.row.body, doc("as opened"));
-  assert.equal(store.versions.length, 0);
-});
-
-test("a save that fires after abandon started is dropped", async () => {
-  const store = fakeItemStore(baseItem());
-  const editor = openItemEditor(store);
-  await editor.autosaveBody(doc("saved"));
-  const abandoning = editor.abandon();
-  // e.g. the editor's unmount flush, or a late debounce.
-  let ran = false;
-  const late = await editor.session.save({ body: doc("late") }, async () => {
-    ran = true;
-  });
-  assert.equal(late, undefined);
-  assert.equal(ran, false);
-  await abandoning;
-  assert.deepEqual(store.row.body, doc("as opened"));
-});
-
-test("an in-flight autosave lands before the revert, never after it", async () => {
-  const store = fakeItemStore(baseItem());
-  const session = createAbandonSession({ body: store.row.body }, { equal: itemEqual });
-  const order: string[] = [];
-  const network = deferred();
-  const saving = session.save({ body: doc("in flight") }, async () => {
-    await network.promise;
-    order.push("autosave");
-    store.patch({ body: doc("in flight"), edit_session: "session-S" });
-  });
-  const abandoning = session.abandon({
-    revert: async (patch) => {
-      order.push("revert");
-      store.patch(itemRevertBody(patch, "session-S", () => "fresh"));
-    },
-  });
-  await new Promise((r) => setTimeout(r, 5));
-  assert.deepEqual(order, [], "revert must wait for the in-flight save");
-  network.resolve();
-  await saving;
-  await abandoning;
-  assert.deepEqual(order, ["autosave", "revert"]);
-  assert.deepEqual(store.row.body, doc("as opened"));
-  assert.deepEqual(store.versions[1].snapshot.body, doc("in flight"));
-});
-
-test("a failed in-flight save still gets a revert (the server may hold it)", async () => {
-  const session = createAbandonSession({ tags: ["ui"] });
-  await session.save({ tags: ["ui", "x"] }, async () => {
-    throw new Error("network");
-  }).catch(() => {});
-  const reverts: unknown[] = [];
-  const outcome = await session.abandon({ revert: async (p) => void reverts.push(p) });
-  assert.equal(outcome.kind, "reverted");
-  assert.deepEqual(reverts, [{ tags: ["ui"] }]);
-});
-
-test("only the fields the editor changed are written back", async () => {
-  const session = createAbandonSession({ body: doc("a"), tags: ["ui"], parent_id: null as string | null });
-  await session.save({ tags: ["ui", "new"] }, async () => {});
-  await session.save({ parent_id: "epic-1" }, async () => {});
-  assert.deepEqual(session.revertPatch(), { tags: ["ui"], parent_id: null });
-});
-
-test("a failed revert reopens the session so autosave carries on", async () => {
-  const session = createAbandonSession({ name: "A" });
-  await session.save({ name: "B" }, async () => {});
-  await assert.rejects(
-    session.abandon({
-      revert: async () => {
-        throw new Error("refused");
-      },
-    }),
+test("save failure on close keeps the draft (memory and storage) so the editor can stay open", async () => {
+  const store = memoryDraftStore();
+  const s = openItemEditor({ body: doc("a"), tags: [] }, store);
+  s.set("body", doc("long text I must not lose"));
+  const outcome = await s.close(saver(true).save);
+  assert.deepEqual(outcome, { kind: "failed", error: "HTTP 500" });
+  assert.equal(s.dirty, true);
+  assert.deepEqual(s.values.body, doc("long text I must not lose"));
+  assert.deepEqual(
+    readFieldDraft(store, draftKey("item", "item-1", "body"))?.value,
+    doc("long text I must not lose"),
   );
-  assert.equal(session.abandoning, false);
-  let ran = false;
-  await session.save({ name: "C" }, async () => {
-    ran = true;
-  });
-  assert.equal(ran, true);
-  assert.deepEqual(session.revertPatch(), { name: "A" });
+  // Retrying (Esc again) sends the same one save.
+  const net = saver();
+  assert.equal((await s.close(net.save)).kind, "saved");
+  assert.deepEqual(net.sent, [{ body: doc("long text I must not lose") }]);
 });
 
-test("the as-opened snapshot is a copy, unaffected by later mutation of the source", () => {
-  const source = { name: "A" };
-  const session = createAbandonSession(source);
-  source.name = "B";
-  assert.equal(session.opened.name, "A");
-  assert.ok(jsonEqual("x", null, undefined));
+// --- Abandon ----------------------------------------------------------------
+
+test("abandon sends nothing and clears the draft", async () => {
+  const store = memoryDraftStore();
+  const s = openItemEditor({ body: doc("a"), tags: ["ui"] }, store);
+  const net = saver();
+  s.set("body", doc("abandon me"));
+  s.set("tags", ["ui", "x"]);
+  s.abandon();
+  assert.equal(net.sent.length, 0);
+  assert.deepEqual(store.dump(), {});
+  assert.equal(s.dirty, false);
+  // A stray close afterwards (the editor unmounting) has nothing to send.
+  assert.deepEqual(await s.close(net.save), { kind: "unchanged" });
+  assert.equal(net.sent.length, 0);
+});
+
+// --- Persistence and restore ------------------------------------------------
+
+test("the draft is persisted per item and per field as it changes", () => {
+  const store = memoryDraftStore();
+  const s = openItemEditor({ body: doc("a"), tags: ["ui"] }, store, "item-7");
+  s.set("body", doc("draft"));
+  const body = readFieldDraft(store, "mykan:draft:v1:item:item-7:body");
+  assert.deepEqual(body, {
+    value: doc("draft"),
+    base: doc("a"),
+    baseUpdatedAt: "2026-09-16T00:00:00Z",
+    startedAt: "2026-09-16T12:00:00Z",
+  });
+  assert.equal(store.get("mykan:draft:v1:item:item-7:tags"), null, "unchanged field not stored");
+  // Editing back to the stored value drops that field's draft.
+  s.set("body", doc("a"));
+  assert.deepEqual(store.dump(), {});
+});
+
+test("restore: nothing stored → none; malformed storage → none", () => {
+  const stored = { body: doc("a"), tags: [] as string[] };
+  assert.deepEqual(restoreDecision({}, stored, itemEqual), { kind: "none" });
+  const store = memoryDraftStore();
+  store.set(draftKey("item", "i", "body"), "{not json");
+  store.set(draftKey("item", "i", "tags"), JSON.stringify({ nope: 1 }));
+  const drafts = {
+    body: readFieldDraft(store, draftKey("item", "i", "body")),
+    tags: readFieldDraft(store, draftKey("item", "i", "tags")),
+  };
+  assert.deepEqual(restoreDecision(drafts, stored, itemEqual), { kind: "none" });
+});
+
+test("restore: a leftover draft that differs from the stored value is offered (not stale)", () => {
+  const store = memoryDraftStore();
+  openItemEditor({ body: doc("a"), tags: [] }, store).set("body", doc("crashed mid-edit"));
+  const drafts = { body: readFieldDraft(store, draftKey("item", "item-1", "body")) };
+  const d = restoreDecision(drafts, { body: doc("a"), tags: [] }, itemEqual);
+  assert.equal(d.kind, "offer");
+  if (d.kind !== "offer") return;
+  assert.deepEqual(d.values, { body: doc("crashed mid-edit") });
+  assert.equal(d.stale, false);
+  assert.equal(d.startedAt, "2026-09-16T12:00:00Z");
+});
+
+test("restore: a draft whose save landed (tab-close save) matches the stored value → clear", () => {
+  const store = memoryDraftStore();
+  openItemEditor({ body: doc("a"), tags: [] }, store).set("body", doc("saved on pagehide"));
+  const drafts = { body: readFieldDraft(store, draftKey("item", "item-1", "body")) };
+  assert.deepEqual(
+    restoreDecision(drafts, { body: doc("saved on pagehide"), tags: [] }, itemEqual),
+    { kind: "clear" },
+  );
+});
+
+test("restore: the card changed on the server since the draft began → offered as stale", () => {
+  const store = memoryDraftStore();
+  const s = openItemEditor({ body: doc("a"), tags: ["ui"] }, store);
+  s.set("body", doc("my draft"));
+  s.set("tags", ["ui", "mine"]);
+  const drafts = {
+    body: readFieldDraft(store, draftKey("item", "item-1", "body")),
+    tags: readFieldDraft(store, draftKey("item", "item-1", "tags")),
+  };
+  // Meanwhile another session rewrote the body; tags are untouched.
+  const d = restoreDecision(drafts, { body: doc("written over MCP"), tags: ["ui"] }, itemEqual);
+  assert.equal(d.kind, "offer");
+  if (d.kind !== "offer") return;
+  assert.equal(d.stale, true);
+  assert.deepEqual(d.staleFields, ["body"]);
+  assert.deepEqual(d.values, { body: doc("my draft"), tags: ["ui", "mine"] });
+});
+
+test("Restore puts the draft back as unsaved changes; the close then saves it once", async () => {
+  const store = memoryDraftStore();
+  openItemEditor({ body: doc("a"), tags: [] }, store).set("body", doc("recovered"));
+  const reopened = openItemEditor({ body: doc("a"), tags: [] }, store);
+  const drafts = { body: readFieldDraft(store, draftKey("item", "item-1", "body")) };
+  const d = restoreDecision(drafts, reopened.opened as ItemFields, itemEqual);
+  assert.equal(d.kind, "offer");
+  if (d.kind !== "offer") return;
+  reopened.restore(d.values);
+  assert.equal(reopened.dirty, true);
+  const net = saver();
+  await reopened.close(net.save);
+  assert.deepEqual(net.sent, [{ body: doc("recovered") }]);
+  assert.deepEqual(store.dump(), {});
+});
+
+test("Discard forgets the leftover draft without writing", () => {
+  const store = memoryDraftStore();
+  openItemEditor({ body: doc("a"), tags: [] }, store).set("body", doc("unwanted"));
+  const reopened = openItemEditor({ body: doc("a"), tags: [] }, store);
+  reopened.clearStored();
+  assert.deepEqual(store.dump(), {});
+  assert.equal(reopened.dirty, false);
+});
+
+// --- History ----------------------------------------------------------------
+
+test("one kept edit is one history entry; a tab-close save then a close save still coalesce", () => {
+  const opened: Item["body"] = doc("a");
+  const current = { body: opened, tags: ["ui"] } as unknown as Item;
+  // The close save: body + tags change in ONE write → one snapshot.
+  assert.deepEqual(changedTrackedFields(current, { body: doc("b"), tags: [] }), ["body", "tags"]);
+  // A best-effort pagehide save (bfcache: the page came back) followed by the
+  // close save of the same open: body-only writes in one session fold together.
+  const latest = {
+    fields_changed: ["body"],
+    source: "web",
+    edit_session: "open-1",
+    created_by: "david",
+  };
+  assert.equal(
+    coalescesWith(latest, { actor: "david", source: "web", changed: ["body"], editSession: "open-1" }),
+    true,
+  );
+  assert.equal(
+    coalescesWith(latest, { actor: "david", source: "web", changed: ["body"], editSession: "open-2" }),
+    false,
+    "the next open gets its own entry",
+  );
+});
+
+test("sameMembers is order- and case-insensitive", () => {
+  assert.ok(sameMembers(["a@x.com", "B@x.com"], ["b@x.com", "a@x.com"]));
+  assert.ok(!sameMembers(["a@x.com"], ["a@x.com", "b@x.com"]));
 });

@@ -9,32 +9,43 @@ import type { RichDoc } from "@/lib/types";
 
 const EMPTY_DOC: RichDoc = { type: "doc", content: [] };
 
+/** What the editor holds right now. */
+export type EditorRead = {
+  doc: RichDoc;
+  /** False while the document is exactly what the editor was seeded with. */
+  changed: boolean;
+};
+
+/**
+ * The rich-text body editor. It never saves anything itself (KANBAN-42): it
+ * reports its document to the caller's draft, and the caller saves once when
+ * editing finishes. `value` seeds it once; to load different content (e.g.
+ * restoring a draft), remount it with a new `key`.
+ */
 export function RichTextEditor({
   value,
   onChange,
   onUploadImage,
   autoFocus = false,
-  getDocRef,
-  cancelPendingRef,
+  readRef,
 }: {
   value: RichDoc | null;
-  /** Fired (debounced) with the latest document whenever it changes. */
-  onChange: (doc: RichDoc) => void;
+  /**
+   * Fired shortly after the document changes (debounced ~250ms), for the
+   * caller's local draft only. `changed` compares against the seeded document
+   * as the editor normalised it, so opening and closing without an edit never
+   * reads as a change.
+   */
+  onChange: (read: EditorRead) => void;
   /** Uploads a pasted/dropped image and resolves to its served URL. */
   onUploadImage: (file: File) => Promise<string>;
   autoFocus?: boolean;
   /**
-   * Populated with a synchronous getter for the editor's current document, so
-   * callers can read live content that hasn't cleared the debounced `onChange`
-   * yet (e.g. deciding what to do on an immediate Esc). Null while unmounted.
+   * Populated with a synchronous read of the current document, so the caller
+   * can take the very latest text the moment editing finishes (Esc, close, page
+   * hide) without waiting for the debounced `onChange`. Null while unmounted.
    */
-  getDocRef?: MutableRefObject<(() => RichDoc) | null>;
-  /**
-   * Populated with a function that cancels the pending debounced save WITHOUT
-   * firing it, and without the unmount flush firing it later either. Used by
-   * Abandon changes, which must drop the unsaved edit rather than save it.
-   */
-  cancelPendingRef?: MutableRefObject<(() => void) | null>;
+  readRef?: MutableRefObject<(() => EditorRead) | null>;
 }) {
   // Keep the latest callbacks in refs so the editor's static editorProps
   // closures always call through to current values without re-initialising.
@@ -46,6 +57,8 @@ export function RichTextEditor({
   });
 
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The seeded document as the editor normalised it (set on create).
+  const initialJson = useRef<string | null>(null);
 
   const editor = useEditor({
     immediatelyRender: false, // required under Next.js SSR to avoid hydration drift
@@ -64,11 +77,15 @@ export function RichTextEditor({
       handlePaste: (_view, event) => handleImageFiles(event.clipboardData),
       handleDrop: (_view, event) => handleImageFiles(event.dataTransfer),
     },
+    onCreate: ({ editor }) => {
+      initialJson.current = JSON.stringify(editor.getJSON());
+    },
     onUpdate: ({ editor }) => {
       if (debounce.current) clearTimeout(debounce.current);
       debounce.current = setTimeout(() => {
-        onChangeRef.current(editor.getJSON() as RichDoc);
-      }, 700);
+        debounce.current = null;
+        onChangeRef.current(readEditor(editor, initialJson.current));
+      }, 250);
     },
   });
 
@@ -90,37 +107,27 @@ export function RichTextEditor({
     }
   }
 
-  // Expose a live-content getter so callers can read the document synchronously
-  // (bypassing the 700ms onChange debounce).
+  // Expose the synchronous read.
   useEffect(() => {
-    if (!getDocRef) return;
-    getDocRef.current = editor ? () => editor.getJSON() as RichDoc : null;
+    if (!readRef) return;
+    readRef.current = editor ? () => readEditor(editor, initialJson.current) : null;
     return () => {
-      getDocRef.current = null;
+      readRef.current = null;
     };
-  }, [editor, getDocRef]);
+  }, [editor, readRef]);
 
-  // Expose "cancel the pending save" (nulling the timer also skips the flush).
+  // Nothing to flush on unmount: the caller reads the document when editing
+  // finishes. Just drop the pending draft notification.
   useEffect(() => {
-    if (!cancelPendingRef) return;
-    cancelPendingRef.current = () => {
+    return () => {
       if (debounce.current) clearTimeout(debounce.current);
-      debounce.current = null;
     };
-    return () => {
-      cancelPendingRef.current = null;
-    };
-  }, [cancelPendingRef]);
-
-  // Flush any pending debounced save when unmounting (e.g. modal close).
-  useEffect(() => {
-    return () => {
-      if (debounce.current) {
-        clearTimeout(debounce.current);
-        if (editor) onChangeRef.current(editor.getJSON() as RichDoc);
-      }
-    };
-  }, [editor]);
+  }, []);
 
   return <EditorContent editor={editor} />;
+}
+
+function readEditor(editor: Editor, initialJson: string | null): EditorRead {
+  const doc = editor.getJSON() as RichDoc;
+  return { doc, changed: initialJson !== null && JSON.stringify(doc) !== initialJson };
 }
