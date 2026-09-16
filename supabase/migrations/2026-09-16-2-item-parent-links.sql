@@ -111,6 +111,47 @@ create trigger items_enforce_parent_link
   before insert or update of parent_id, type, project_id on mykan.items
   for each row execute function mykan.items_enforce_parent_link();
 
+-- Delete guard (approved by David, 2026-09-16): an item that still has children
+-- can't be deleted. The app un-links each child through its history chokepoint
+-- first (lib/epic-delete.ts), so this only bites when a child is linked in the
+-- window between that and the delete — the app then re-links the rest and
+-- reports it. The FK's on delete set null stays as a backstop.
+--
+-- Project deletes: deleting a project cascades to its items through the
+-- items.project_id FK, and row-level BEFORE DELETE triggers fire for those
+-- cascaded deletes too, possibly on an epic before its children are gone. The
+-- guard therefore steps aside when the item's project no longer exists. That
+-- is sound because the cascade runs from the FK's action trigger AFTER the
+-- project row is deleted, with a snapshot that no longer sees it, while a
+-- direct item delete always has its project still present. When the project
+-- is gone, every item in it is being deleted by that same cascade, and
+-- children are always in their epic's project, so nothing is left orphaned.
+-- This is narrower than skipping on pg_trigger_depth() > 0, which would also
+-- skip deletes made by any unrelated trigger.
+--
+-- Safe for the currently deployed code: it can't set parent_id, so no item has
+-- children and the guard never fires.
+create or replace function mykan.items_guard_delete_with_children() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+begin
+  if not exists (select 1 from mykan.projects pr where pr.id = old.project_id) then
+    return old; -- cascaded from a project delete: the whole project is going
+  end if;
+  if exists (select 1 from mykan.items c where c.parent_id = old.id) then
+    raise exception 'This epic still has child items; unlink them before deleting it'
+      using errcode = 'check_violation';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists items_guard_delete_with_children on mykan.items;
+create trigger items_guard_delete_with_children
+  before delete on mykan.items
+  for each row execute function mykan.items_guard_delete_with_children();
+
 -- Rollback: normally NOTHING to undo in the schema. Applied-but-unused is a safe
 -- resting state (nullable column, inert trigger, code that ignores both), so a
 -- bad release is rolled back by reverting the CODE and leaving this in place.
@@ -119,6 +160,8 @@ create trigger items_enforce_parent_link
 -- Export first (select id, type, parent_id from mykan.items where type = 'epic'
 -- or parent_id is not null). Run by hand, then delete both 2026-09-16-* rows
 -- from mykan.schema_migrations:
+--   drop trigger if exists items_guard_delete_with_children on mykan.items;
+--   drop function if exists mykan.items_guard_delete_with_children();
 --   drop trigger if exists items_enforce_parent_link on mykan.items;
 --   drop function if exists mykan.items_enforce_parent_link();
 --   drop index if exists mykan.items_parent_idx;

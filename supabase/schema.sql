@@ -232,6 +232,31 @@ create trigger items_enforce_parent_link
   before insert or update of parent_id, type, project_id on items
   for each row execute function items_enforce_parent_link();
 
+-- Delete guard: an item that still has children can't be deleted (the app
+-- un-links them through history first). It steps aside when the item's project
+-- is already gone, i.e. the delete is the items.project_id cascade of a project
+-- delete, which removes every item in the project, children included.
+create or replace function items_guard_delete_with_children() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+begin
+  if not exists (select 1 from mykan.projects pr where pr.id = old.project_id) then
+    return old;
+  end if;
+  if exists (select 1 from mykan.items c where c.parent_id = old.id) then
+    raise exception 'This epic still has child items; unlink them before deleting it'
+      using errcode = 'check_violation';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists items_guard_delete_with_children on items;
+create trigger items_guard_delete_with_children
+  before delete on items
+  for each row execute function items_guard_delete_with_children();
+
 -- Item history (KANBAN-10): whole-item version snapshots. Every field mutation
 -- routes through snapshotThenWrite (lib/item-history.ts), which records the
 -- item's PREVIOUS state before applying the patch. `fields_changed` names the

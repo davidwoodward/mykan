@@ -2,7 +2,11 @@
 // steps are fakes that record the order of calls.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deleteWithChildHistory, type EpicDeleteSteps } from "./epic-delete.ts";
+import {
+  deleteWithChildHistory,
+  describeDeleteFailure,
+  type EpicDeleteSteps,
+} from "./epic-delete.ts";
 import { parentChangeSummary, type ItemSnapshot } from "./item-snapshot.ts";
 
 function fake(
@@ -56,6 +60,36 @@ test("a failed delete re-links every child", async () => {
   assert.equal(out.ok, false);
   assert.match(!out.ok ? out.error : "", /linked back/);
   assert.deepEqual(log, ["unlink a", "unlink b", "delete", "relink a", "relink b"]);
+});
+
+test("the DB delete guard refusing (child linked mid-delete) re-links all children with a clear 409", async () => {
+  // Children a and b were unlinked; a card linked in the race window makes the
+  // guard raise check_violation on the delete.
+  const guard = describeDeleteFailure(
+    "23514",
+    "This epic still has child items; unlink them before deleting it",
+  );
+  assert.equal(guard.status, 409);
+  const log: string[] = [];
+  const out = await deleteWithChildHistory({
+    childIds: ["a", "b"],
+    unlink: async (id) => (log.push(`unlink ${id}`), null),
+    relink: async (id) => (log.push(`relink ${id}`), null),
+    deleteItem: async () => (log.push("delete"), guard.message),
+  });
+  assert.ok(!out.ok);
+  assert.deepEqual(!out.ok ? out.relinkFailed : null, []);
+  assert.match(!out.ok ? out.error : "", /another card was added to this epic/);
+  assert.match(!out.ok ? out.error : "", /linked back/);
+  assert.deepEqual(log, ["unlink a", "unlink b", "delete", "relink a", "relink b"]);
+});
+
+test("other delete failures stay server errors with their own message", () => {
+  assert.deepEqual(describeDeleteFailure("08006", "connection lost"), {
+    message: "connection lost",
+    status: 500,
+  });
+  assert.equal(describeDeleteFailure(undefined, "x").status, 500);
 });
 
 test("a re-link that also fails is reported, and the rest still re-link", async () => {

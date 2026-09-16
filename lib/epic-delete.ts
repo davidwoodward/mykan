@@ -40,6 +40,30 @@ export type EpicDeleteOutcome =
       relinkFailed: string[];
     };
 
+/** Postgres error code for check_violation (raised by the delete guard). */
+const CHECK_VIOLATION = "23514";
+
+/**
+ * What to tell the user when the row delete itself fails. The database's delete
+ * guard (items_guard_delete_with_children) refuses to delete an item that still
+ * has children; after the app has un-linked every child it knew about, that can
+ * only mean a card was added to the epic in the meantime — a conflict (409),
+ * not a server fault.
+ */
+export function describeDeleteFailure(
+  code: string | undefined,
+  message: string,
+): { message: string; status: 409 | 500 } {
+  if (code === CHECK_VIOLATION) {
+    return {
+      message:
+        "another card was added to this epic while it was being deleted; try again",
+      status: 409,
+    };
+  }
+  return { message, status: 500 };
+}
+
 async function relinkAll(
   ids: string[],
   relink: EpicDeleteSteps["relink"],

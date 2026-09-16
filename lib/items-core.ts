@@ -37,7 +37,7 @@ import {
   type CoreResult,
 } from "@/lib/projects-core";
 import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
-import { deleteWithChildHistory } from "@/lib/epic-delete";
+import { deleteWithChildHistory, describeDeleteFailure } from "@/lib/epic-delete";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -506,6 +506,8 @@ export async function deleteItemWithHistory(
   // Latest known row per child: the chokepoint snapshots whatever it is given.
   const rows = new Map(((kidRows ?? []) as Item[]).map((c) => [c.id, c]));
   const parentRef = refOf(projectKey, item.number);
+  // 409 when the DB delete guard refused (a child was linked mid-delete).
+  let deleteStatus = 500;
 
   const outcome = await deleteWithChildHistory({
     childIds: [...rows.keys()],
@@ -526,7 +528,10 @@ export async function deleteItemWithHistory(
     },
     deleteItem: async () => {
       const { error } = await sb.from("items").delete().eq("id", item.id);
-      return error ? error.message : null;
+      if (!error) return null;
+      const d = describeDeleteFailure(error.code, error.message);
+      deleteStatus = d.status;
+      return d.message;
     },
   });
   if (!outcome.ok) {
@@ -534,7 +539,7 @@ export async function deleteItemWithHistory(
     const tail = stranded.length
       ? ` — but ${stranded.join(", ")} could not be linked back; re-add ${stranded.length === 1 ? "it" : "them"} to ${parentRef}`
       : "";
-    return coreErr(`${outcome.error}${tail}`, 500);
+    return coreErr(`${outcome.error}${tail}`, outcome.relinkFailed.length ? 500 : deleteStatus);
   }
   return coreOk({ unlinked: outcome.unlinked.length });
 }
