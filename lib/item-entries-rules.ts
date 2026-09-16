@@ -3,8 +3,13 @@
 // the create-then-mark flow. No DB, no "server-only", so `node --test` can load
 // it. lib/item-entries.ts owns the database side and mirrors these rules in the
 // same order the migration (2026-09-16-3-item-entries.sql) enforces them.
-// Imports are type-only: Node strips them at runtime.
-import type { HistorySource } from "@/lib/item-history";
+
+/**
+ * Where a write came from. The same union as HistorySource in
+ * lib/item-history.ts (declared here so this module imports nothing
+ * server-only); 'recovery' marks restores.
+ */
+export type HistorySource = "web" | "mcp" | "telegram" | "recovery";
 
 export const ENTRY_KINDS = ["progress", "question", "decision"] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];

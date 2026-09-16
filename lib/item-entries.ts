@@ -38,6 +38,8 @@ import {
  * restorable delete. Visibility is the parent item's (loadVisibleItem).
  */
 
+// Re-exported for server callers. Client components must import the pure rules
+// from "@/lib/item-entries-rules" directly: this module is server-only.
 export * from "@/lib/item-entries-rules";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
