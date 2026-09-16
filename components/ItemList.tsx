@@ -449,6 +449,7 @@ function ItemRow({
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <ItemParent item={item} className="min-w-0" />
+            <EpicProgress item={item} />
             <InlineTags
               tags={item.tags}
               suggestions={tagSuggestions ?? []}
@@ -491,7 +492,6 @@ function ItemRow({
           label={text || "item"}
           className="self-center sm:invisible sm:group-hover:visible"
         />
-        <EpicProgress item={item} className="self-center" />
         <TypeMenu
           value={item.type}
           onChange={(t) => void onPatch(item.id, { type: t })}

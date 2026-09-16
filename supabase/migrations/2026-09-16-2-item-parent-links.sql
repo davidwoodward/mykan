@@ -111,8 +111,14 @@ create trigger items_enforce_parent_link
   before insert or update of parent_id, type, project_id on mykan.items
   for each row execute function mykan.items_enforce_parent_link();
 
--- Rollback (run by hand, then delete both 2026-09-16-* rows from
--- mykan.schema_migrations):
+-- Rollback: normally NOTHING to undo in the schema. Applied-but-unused is a safe
+-- resting state (nullable column, inert trigger, code that ignores both), so a
+-- bad release is rolled back by reverting the CODE and leaving this in place.
+--
+-- FULL TEARDOWN — LOSSY: destroys every parent link and which cards were epics.
+-- Export first (select id, type, parent_id from mykan.items where type = 'epic'
+-- or parent_id is not null). Run by hand, then delete both 2026-09-16-* rows
+-- from mykan.schema_migrations:
 --   drop trigger if exists items_enforce_parent_link on mykan.items;
 --   drop function if exists mykan.items_enforce_parent_link();
 --   drop index if exists mykan.items_parent_idx;
