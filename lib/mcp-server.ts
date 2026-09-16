@@ -44,7 +44,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_items",
-    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees. `name` is the item's body flattened to plain text (there is no separate stored title — the first line of the body acts as the title), so it may span multiple lines for a long item.",
+    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
     {
       project: z.string().describe("project name or id"),
       status: status.optional().describe("new | in_progress | blocked | testing | done"),
@@ -54,7 +54,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). NOTE: `name` and `body_text` in the response are the SAME value — the item's body flattened to plain text. There is no separate stored title field; the first line of the body serves as the title. So a `name` that mirrors the whole body is expected and correct, not a bug or 'polluted title'. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body as plain text, title line included. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
