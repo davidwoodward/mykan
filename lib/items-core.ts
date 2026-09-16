@@ -45,7 +45,7 @@ const UUID_RE =
 const REF_RE = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/;
 
 /** The display reference for an item: "{key}-{number}", or "#{number}" if keyless. */
-function refOf(key: string | null, number: number): string {
+export function refOf(key: string | null, number: number): string {
   return key ? `${key}-${number}` : `#${number}`;
 }
 
@@ -655,7 +655,39 @@ export async function setItemParent(
   return coreOk(await detailOf(sb, project, w.data));
 }
 
-/** Append a note paragraph to the item body. */
+/**
+ * Change an item's type (feature | bug | task | idea | epic). The same path as
+ * the web PATCH: the epic rules are checked up front for a clear message (an
+ * epic with children can't change type; an item with a parent can't become an
+ * epic; the database enforces both too) and the write goes through the history
+ * chokepoint, so the previous type is recorded.
+ */
+export async function setItemType(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+  type: string,
+  source: HistorySource = "mcp",
+): Promise<CoreResult<ItemDetail>> {
+  if (!isItemType(type)) {
+    return coreErr(`Invalid type: ${type} (use feature, bug, task, idea or epic)`, 400);
+  }
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const { item: it, project } = r.data;
+  // Parent unchanged (undefined): only the type rules apply.
+  const linkErr = await patchLinkError(sb, it, type, undefined);
+  if (linkErr) return coreErr(linkErr, 400);
+  const w = await snapshotThenWrite(sb, actor, it, { type }, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
+}
+
+/**
+ * Append a note paragraph to the item body. Used by create_item to seed a new
+ * card's description; the MCP append_item_note tool no longer calls this (it
+ * records a progress entry instead, KANBAN-37).
+ */
 export async function appendItemNote(
   sb: SupabaseClient,
   actor: string,
