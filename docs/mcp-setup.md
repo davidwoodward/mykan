@@ -80,7 +80,7 @@ its description: a clean living spec of the work. Everything that happens
   for him. `supersedes` (an active decision's id on the same item) marks the
   older one superseded; it is kept, not deleted.
 - `ask_question(item, question)` records an open *question*;
-  `answer_question(question, decision_id | decision)` answers it with an
+  `answer_question(question_id, decision_id | decision)` answers it with an
   existing active decision or new decision text, and links the two.
 - `update_item_entry(entry, body)` edits any entry's text. Every edit goes
   through the entry version chokepoint, so earlier text is always recoverable:

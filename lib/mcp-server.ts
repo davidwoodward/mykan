@@ -131,7 +131,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "create_item",
-    "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as a note — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails). Type 'epic' makes a card that groups other cards; set `parent` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project.",
+    "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as further paragraphs of the description (not a progress entry) — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails). Type 'epic' makes a card that groups other cards; set `parent` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project.",
     {
       project: z.string().describe("project name or id"),
       name: z
@@ -145,7 +145,7 @@ function registerTools(server: McpServer) {
       body: z
         .string()
         .optional()
-        .describe("longer description; appended after the title as a note in the same body"),
+        .describe("longer description; appended after the title as further paragraphs of the same body (the card description)"),
       tags: z.array(z.string()).optional().describe("tags (normalized lowercase)"),
       area: z
         .string()
@@ -273,7 +273,7 @@ function registerTools(server: McpServer) {
     "answer_question",
     `Answer an open question with a decision, which the question then links to (answered_by_id). Pass EXACTLY ONE of \`decision_id\` (an existing active decision on the same item) or \`decision\` (text for a new decision, which is recorded and linked). As with record_decision, the answer is what David decided; don't answer on his behalf. An answered question can't be answered again. Max ${CAP} for new decision text. Returns the question and the decision.`,
     {
-      question: z.string().describe("id of the open question entry"),
+      question_id: z.string().describe("id of the open question entry (from ask_question, get_item or list_item_entries)"),
       decision_id: z
         .string()
         .optional()
@@ -289,7 +289,7 @@ function registerTools(server: McpServer) {
         if (capErr) return fail(capErr);
       }
       const input = decisionId ? { decisionId } : { body: a.decision };
-      return out(await answerQuestion(getSupabase(), actor(), a.question, input, "mcp"));
+      return out(await answerQuestion(getSupabase(), actor(), a.question_id, input, "mcp"));
     },
   );
 
