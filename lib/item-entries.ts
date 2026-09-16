@@ -4,6 +4,7 @@ import { coreErr, coreOk, type CoreResult } from "@/lib/projects-core";
 import { loadVisibleItem } from "@/lib/items-core";
 import type { HistorySource } from "@/lib/item-history";
 import type { Item, Project } from "@/lib/types";
+import { summarizeEntries, type ItemEntrySummary } from "@/lib/mcp-entry-guards";
 import {
   answerError,
   buildEntryListFilter,
@@ -504,4 +505,49 @@ export async function restoreEntryVersion(
   });
   if (isRuleError(p)) return fromRule(p);
   return snapshotThenWriteEntry(sb, actor, current, p.patch, source);
+}
+
+/**
+ * The compact entry view for an item the caller has ALREADY checked is visible
+ * (KANBAN-37, MCP get_item): active decisions, open questions, and a count of
+ * non-deleted progress entries with the newest one's time. Progress rows are
+ * counted, not fetched, so a long-running card stays cheap to read.
+ */
+export async function summarizeItemEntries(
+  sb: SupabaseClient,
+  itemId: string,
+): Promise<CoreResult<ItemEntrySummary>> {
+  const [open, count, latest] = await Promise.all([
+    sb
+      .from("item_entries")
+      .select("id, kind, state, body, created_at, created_by, supersedes_id, deleted_at")
+      .eq("item_id", itemId)
+      .in("kind", ["decision", "question"])
+      .in("state", ["active", "open"])
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+    sb
+      .from("item_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("item_id", itemId)
+      .eq("kind", "progress")
+      .is("deleted_at", null),
+    sb
+      .from("item_entries")
+      .select("created_at")
+      .eq("item_id", itemId)
+      .eq("kind", "progress")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const failed = open.error ?? count.error ?? latest.error;
+  if (failed) return coreErr(failed.message, 500);
+  return coreOk(
+    summarizeEntries((open.data ?? []) as Parameters<typeof summarizeEntries>[0], {
+      count: count.count ?? 0,
+      last_at: (latest.data as { created_at: string } | null)?.created_at ?? null,
+    }),
+  );
 }

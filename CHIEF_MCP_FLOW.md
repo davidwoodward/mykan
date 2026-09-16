@@ -39,7 +39,7 @@ Every tracked piece of work follows these steps, in order:
 | 1b | **Create** if no card exists | `create_item` | Only with a clear title; confirm with the user unless told to just-do-it. |
 | 2 | **Transition to In Progress — BEFORE any work** | `update_item_status(in_progress)` | This is step *one of execution*, not an afterthought. Echo back: "Working **<title>** (`<id>`) → In Progress." |
 | 3 | **Execute** the work | — | May delegate to specialists. The card stays `in_progress` the whole time. |
-| 4 | **Progress notes** at meaningful checkpoints | `append_item_note` | e.g. "PR #61 opened", "merged + deploying", "deployed, verifying live". |
+| 4 | **Progress notes** at meaningful checkpoints | `append_item_note` | e.g. "PR #61 opened", "merged + deploying", "deployed, verifying live". Since KANBAN-37 each note is a separate progress entry, not body text; max 2,000 chars, so link long detail in the repo. Record David's decisions with `record_decision` and open questions with `ask_question`. |
 | 5 | **Complete — only after shipped + verified** | `update_item_status(done)` + `append_item_note` | Closing note must capture: PR number(s), deploy event, and verification evidence. |
 | 6 | **Reconcile** if the flow was entered late | `update_item_status(in_progress)` | If you start work whose card isn't `in_progress`, fix that first, then continue. |
 
@@ -156,12 +156,25 @@ and any `lfg`/ship pipeline.
 |------|--------------|-------|
 | `mcp__mykan__list_projects` | 1 | id, name, privacy. Pick the project for this repo/context. |
 | `mcp__mykan__list_items` | 1 | `project` (name or id), optional `status` filter. Titles only (`name` = first line of the body). Source for fuzzy-matching. |
-| `mcp__mykan__get_item` | 1/1b | Title (`name`) plus full body (`body_text`, flattened) to confirm a match. |
+| `mcp__mykan__get_item` | 1/1b | Title (`name`) plus full body (`body_text`, flattened) to confirm a match. Also active `decisions`, `open_questions` and a `progress` summary (`{count, last_at}`), with entry ids; not the progress log. |
 | `mcp__mykan__create_item` | 1b | Ad-hoc/no-card path. Optional `parent` (epic ref) files it under an epic; `type: epic` creates an epic. |
 | `mcp__mykan__update_item_status` | 2, 5, 6 | `new` \| `in_progress` \| `done`. The load-bearing call. |
-| `mcp__mykan__append_item_note` | 4, 5 | Progress notes + the closing note. |
+| `mcp__mykan__append_item_note` | 4, 5 | Progress notes + the closing note. Writes a **progress entry** (KANBAN-37), no longer the card body; the response says where it went. Max 2,000 chars: put long detail in a repo doc and link it. |
 | `mcp__mykan__set_item_tags` | optional | Categorize on create/triage. |
 | `mcp__mykan__set_item_parent` | optional | Link a card to its epic (`parent` = epic ref, empty clears). `get_item` on an epic lists its `children` with status and `children_progress`; `list_items` shows each card's `parent` ref. |
+| `mcp__mykan__set_item_type` | optional | Change a card's type (feature, bug, task, idea, epic). Recorded in history; refused when an epic still has children or a child would become an epic. |
+| `mcp__mykan__set_item_body` | optional | Rewrite the description (a living spec). Past 8,000 chars the write still happens but returns a `warning`: progress is probably leaking back in. |
+| `mcp__mykan__record_decision` | 3, 4 | Record what **David** decided (never decide for him). Optional `supersedes` = an earlier active decision's id. |
+| `mcp__mykan__ask_question` / `answer_question` | 3, 4 | Open a question for David; answer it with an existing `decision_id` or new `decision` text (the answer links to the decision). |
+| `mcp__mykan__update_item_entry` | optional | Edit an entry's text; versioned, so the old text is recoverable. |
+| `mcp__mykan__list_item_entries` | 1, as needed | Background on demand: filter by `kind`, `state`, `since`, `limit`. |
+| `mcp__mykan__delete_item_entry` / `restore_item_entry` | optional | Soft delete an entry recorded by mistake / bring it back. |
+| `mcp__mykan__list_item_entry_versions` / `restore_item_entry_version` | optional | Recover an entry's earlier text. |
+
+**Where things go (KANBAN-37).** The card holds the work (its description is a clean living
+spec), its decisions and its status. Progress, decisions and questions are entries, not body
+text. Durable lessons belong in lobe. Handoffs belong in repo `_continue/` docs, linked from the
+card and never copied into it.
 
 ---
 
