@@ -100,6 +100,29 @@ export function richDocText(body: RichDoc | null | undefined): string {
   return flatten(body as { content?: unknown[] }).replace(/^\s+|\s+$/g, "");
 }
 
+/** Longest title `richDocTitle` returns, ellipsis included. */
+export const TITLE_MAX_CHARS = 200;
+
+/**
+ * An item's title: the first non-empty line of its flattened body, trimmed.
+ * Items have no stored title column, so this is the one derived title used by
+ * the MCP/Telegram list and detail shapes. An empty (or image-only) body gives
+ * "". A first line longer than TITLE_MAX_CHARS is cut back to the last whole
+ * word and ends with "…" (hard-cut only when there is no space to break at).
+ */
+export function richDocTitle(body: RichDoc | null | undefined): string {
+  const line =
+    richDocText(body)
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? "";
+  if (line.length <= TITLE_MAX_CHARS) return line;
+  const room = line.slice(0, TITLE_MAX_CHARS - 1);
+  const space = room.lastIndexOf(" ");
+  const cut = space > 0 ? room.slice(0, space) : room;
+  return `${cut.trimEnd()}…`;
+}
+
 /**
  * Collects the `src` of every image node in a rich-text body, in document
  * order. These are the inline screenshots pasted into an item; `richDocText`

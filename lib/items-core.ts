@@ -9,6 +9,7 @@ import {
   paragraphDoc,
   richDocImageSrcs,
   richDocText,
+  richDocTitle,
   type GithubSync,
   type Item,
   type ItemStatus,
@@ -93,6 +94,7 @@ export type ItemSummary = {
   /** "{KEY}-{N}" reference, e.g. "AMOS-12". */
   ref: string;
   number: number;
+  /** Title: the first non-empty line of the body (see `richDocTitle`). */
   name: string;
   type: ItemType;
   status: ItemStatus;
@@ -104,6 +106,7 @@ export type ItemSummary = {
 
 export type ItemDetail = ItemSummary & {
   project_id: string;
+  /** The whole body flattened to plain text (title line included). */
   body_text: string;
   attachments: Item["attachments"];
   /** Backlink to the source GitHub issue (`owner/repo#number`), or null. */
@@ -130,7 +133,7 @@ async function detailOf(
     ref: refOf(project.key, it.number),
     number: it.number,
     project_id: it.project_id,
-    name: richDocText(it.body),
+    name: richDocTitle(it.body),
     body_text: richDocText(it.body),
     type: it.type,
     status: it.status,
@@ -170,7 +173,7 @@ export async function listItems(
       id: it.id,
       ref: refOf(proj.data.key, it.number),
       number: it.number,
-      name: richDocText(it.body),
+      name: richDocTitle(it.body),
       type: it.type,
       status: it.status,
       tags: it.tags,

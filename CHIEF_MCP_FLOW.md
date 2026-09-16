@@ -62,8 +62,10 @@ David writes something like:
 The agent treats the text after "the task" as a **gist to resolve against mykan**:
 
 1. Pick the project (by repo/context — e.g. cwd `…/asset-relay` → mykan project **"Asset Relay"**).
-2. `list_items` and fuzzy-match the gist to a card title/body. ("Disposals should be a Bundle type"
-   → the card *"Disposals are handled by Ed Tech … Disposals should be a Bundle type."*)
+2. `list_items` and fuzzy-match the gist to a card title (`name` is the title — the body's first
+   line — only). If no title fits, `get_item` the likely candidates and match on `body_text`.
+   ("Disposals should be a Bundle type" → the card *"Disposals are handled by Ed Tech … Disposals
+   should be a Bundle type."*)
 3. **One match** → state it and move it to `in_progress`. **Several plausible** → ask which.
    **None** → offer to create one.
 4. Proceed through the lifecycle (§2).
@@ -153,8 +155,8 @@ and any `lfg`/ship pipeline.
 | Tool | Used in step | Notes |
 |------|--------------|-------|
 | `mcp__mykan__list_projects` | 1 | id, name, privacy. Pick the project for this repo/context. |
-| `mcp__mykan__list_items` | 1 | `project` (name or id), optional `status` filter. Source for fuzzy-matching. |
-| `mcp__mykan__get_item` | 1/1b | Full body (flattened) to confirm a match. |
+| `mcp__mykan__list_items` | 1 | `project` (name or id), optional `status` filter. Titles only (`name` = first line of the body). Source for fuzzy-matching. |
+| `mcp__mykan__get_item` | 1/1b | Title (`name`) plus full body (`body_text`, flattened) to confirm a match. |
 | `mcp__mykan__create_item` | 1b | Ad-hoc/no-card path. |
 | `mcp__mykan__update_item_status` | 2, 5, 6 | `new` \| `in_progress` \| `done`. The load-bearing call. |
 | `mcp__mykan__append_item_note` | 4, 5 | Progress notes + the closing note. |

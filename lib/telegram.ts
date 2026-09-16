@@ -214,7 +214,8 @@ async function cmdItem(
   const m = STATUS_META[it.status];
   const lines = [
     `<code>${esc(it.ref)}</code> ${m.emoji} <b>${m.label}</b>`,
-    `${esc(it.name)}`,
+    // The detail view shows the whole body; `name` is only its first line.
+    `${esc(it.body_text)}`,
   ];
   if (it.area) lines.push(`📁 ${esc(it.area)}`);
   if (it.tags.length) lines.push(`🏷️ ${it.tags.map((t) => `#${esc(t)}`).join(" ")}`);
