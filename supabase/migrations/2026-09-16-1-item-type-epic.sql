@@ -1,0 +1,13 @@
+-- migrate:no-transaction
+-- Add an "Epic" item type (KANBAN-41): a card that groups child cards in the same
+-- project via items.parent_id (added by the next migration,
+-- 2026-09-16-2-item-parent-links.sql).
+--
+-- The enum lives in the `mykan` schema (moved there 2026-06-28). ADD VALUE is
+-- idempotent via IF NOT EXISTS and must not share a transaction with any use of
+-- the new label, so it stands alone in this file (same precedent as
+-- 2026-07-10-item-type-task.sql and 2026-07-12-testing-status.sql). Nothing uses
+-- the value here, so it is safe to apply on the live database: the currently
+-- deployed code never writes 'epic'. Enum sort order is cosmetic — the app
+-- orders types by the ITEM_TYPES array, not the enum ordinal.
+alter type mykan.item_type add value if not exists 'epic' before 'feature';

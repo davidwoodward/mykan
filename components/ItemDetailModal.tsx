@@ -8,6 +8,7 @@ import { TypeBadge } from "@/components/TypeBadge";
 import { RefBadge } from "@/components/RefBadge";
 import { GithubItemMeta } from "@/components/GithubItemMeta";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
+import { EpicChildren, EpicProgress, ParentRow } from "@/components/EpicLinks";
 import { STATUS_LABEL, type Item, type RichDoc } from "@/lib/types";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -100,6 +101,7 @@ export function ItemDetailModal({
           <div className="flex items-center gap-2">
             <RefBadge number={item.number} />
             <TypeBadge type={item.type} />
+            <EpicProgress item={item} />
             <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
               {STATUS_LABEL[item.status]}
             </span>
@@ -120,6 +122,14 @@ export function ItemDetailModal({
           onUploadImage={uploadImage}
           autoFocus
         />
+
+        {item.type === "epic" ? (
+          <div className="border-t border-[var(--color-line)] px-4 py-2.5">
+            <EpicChildren item={item} />
+          </div>
+        ) : (
+          <ParentRow item={item} />
+        )}
 
         <div className="border-t border-[var(--color-line)] px-4 py-2.5">
           <TagEditor value={item.tags} suggestions={allTags} onChange={handleTags} />

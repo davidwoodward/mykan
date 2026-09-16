@@ -4,6 +4,7 @@ import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { categoryInProject } from "@/lib/categories-core";
 import { snapshotThenWrite } from "@/lib/item-history";
+import { patchLinkError } from "@/lib/items-core";
 import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import {
   isItemStatus,
@@ -45,6 +46,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     assignees?: unknown;
     archived?: unknown;
     category_id?: unknown;
+    parent_id?: unknown;
     edit_session?: unknown;
   };
   const patch: Record<string, unknown> = {};
@@ -83,8 +85,22 @@ export async function PATCH(req: Request, { params }: Ctx) {
   } else if (body.body === null) {
     patch.body = null;
   }
+  // Parent epic (KANBAN-41): an item id, or null to clear the link.
+  if (typeof body.parent_id === "string" || body.parent_id === null) {
+    patch.parent_id = body.parent_id || null;
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
+  }
+  // Epic rules, checked up front for a clear message (the DB enforces them too).
+  if ("type" in patch || "parent_id" in patch) {
+    const linkErr = await patchLinkError(
+      getSupabase(),
+      current,
+      (patch.type as Item["type"] | undefined) ?? current.type,
+      patch.parent_id as string | null | undefined,
+    );
+    if (linkErr) return NextResponse.json({ error: linkErr }, { status: 400 });
   }
 
   // The editor's per-open session id: body autosaves within one editing

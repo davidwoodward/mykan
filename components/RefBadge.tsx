@@ -9,6 +9,10 @@ import { itemRef } from "@/lib/format";
  */
 const ProjectKeyContext = createContext<string | null>(null);
 export const ProjectKeyProvider = ProjectKeyContext.Provider;
+/** The current project's short key (e.g. "AMOS"), or null. */
+export function useProjectKey(): string | null {
+  return useContext(ProjectKeyContext);
+}
 
 /**
  * The reference badge for an item: muted monospace "AMOS-12" / "#12".

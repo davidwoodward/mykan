@@ -7,6 +7,9 @@ import {
   normalizeAssignees,
   normalizeTags,
   paragraphDoc,
+  parentLinkError,
+  typeChangeError,
+  epicProgress,
   richDocImageSrcs,
   richDocText,
   richDocTitle,
@@ -102,9 +105,23 @@ export type ItemSummary = {
   assignees: string[];
   /** Area path, e.g. "coach / home", or null if unfiled. */
   area: string | null;
+  /** Ref of the epic this item belongs to (e.g. "KANBAN-41"), or null. */
+  parent: string | null;
 };
 
-export type ItemDetail = ItemSummary & {
+/** A linked item in a detail view: its ref and title (`name`). */
+export type ItemLink = { ref: string; name: string };
+
+export type ItemDetail = Omit<ItemSummary, "parent"> & {
+  /** The epic this item belongs to (ref + title), or null. */
+  parent: ItemLink | null;
+  /**
+   * Epics only: the epic's non-archived children in board order. Archived
+   * children still reference the epic but are left out here and of the count.
+   */
+  children?: (ItemLink & { status: ItemStatus })[];
+  /** Epics only: "N/M done" over `children`. */
+  children_progress?: string;
   project_id: string;
   /** The whole body flattened to plain text (title line included). */
   body_text: string;
@@ -128,6 +145,39 @@ async function detailOf(
   const area = it.category_id
     ? pathOf(await listCategories(sb, project.id), it.category_id) || null
     : null;
+  let parent: ItemLink | null = null;
+  if (it.parent_id) {
+    const { data: p } = await sb
+      .from("items")
+      .select("number, body")
+      .eq("id", it.parent_id)
+      .maybeSingle();
+    if (p) {
+      const row = p as Pick<Item, "number" | "body">;
+      parent = { ref: refOf(project.key, row.number), name: richDocTitle(row.body) };
+    }
+  }
+  // Children are only looked up for epics, so ordinary mutator responses don't
+  // pay for an extra query.
+  let epic: Pick<ItemDetail, "children" | "children_progress"> = {};
+  if (it.type === "epic") {
+    const { data: kids } = await sb
+      .from("items")
+      .select("number, body, status, archived_at, position")
+      .eq("parent_id", it.id)
+      .is("archived_at", null)
+      .order("position", { ascending: true });
+    const rows = (kids ?? []) as Pick<Item, "number" | "body" | "status" | "archived_at">[];
+    const { done, total } = epicProgress(rows);
+    epic = {
+      children: rows.map((c) => ({
+        ref: refOf(project.key, c.number),
+        name: richDocTitle(c.body),
+        status: c.status,
+      })),
+      children_progress: `${done}/${total} done`,
+    };
+  }
   return {
     id: it.id,
     ref: refOf(project.key, it.number),
@@ -140,6 +190,8 @@ async function detailOf(
     tags: it.tags,
     assignees: it.assignees,
     area,
+    parent,
+    ...epic,
     attachments: it.attachments,
     github_issue: it.github_issue,
     github_issue_created_at: it.github_issue_created_at,
@@ -168,6 +220,26 @@ export async function listItems(
   if (status) rows = rows.filter((it) => it.status === status);
   // Resolve area paths once for the whole project, not per row.
   const cats = await listCategories(sb, proj.data.id);
+  // Parent refs come from the rows already in hand; only a parent that isn't
+  // among them (an archived epic) needs one batched lookup.
+  const numberById = new Map(((data ?? []) as Item[]).map((it) => [it.id, it.number]));
+  const missing = [
+    ...new Set(
+      rows
+        .map((it) => it.parent_id)
+        .filter((id): id is string => !!id && !numberById.has(id)),
+    ),
+  ];
+  if (missing.length) {
+    const { data: extra } = await sb.from("items").select("id, number").in("id", missing);
+    for (const r of (extra ?? []) as Pick<Item, "id" | "number">[]) {
+      numberById.set(r.id, r.number);
+    }
+  }
+  const parentRef = (id: string | null | undefined) => {
+    const n = id ? numberById.get(id) : undefined;
+    return n === undefined ? null : refOf(proj.data.key, n);
+  };
   return coreOk(
     rows.map((it) => ({
       id: it.id,
@@ -179,6 +251,7 @@ export async function listItems(
       tags: it.tags,
       assignees: it.assignees,
       area: it.category_id ? pathOf(cats, it.category_id) || null : null,
+      parent: parentRef(it.parent_id),
     })),
   );
 }
@@ -347,7 +420,74 @@ export type CreateItemInput = {
   github_issue?: unknown;
   /** The source issue's GitHub creation time (ISO), captured at import. */
   github_issue_created_at?: unknown;
+  /** The parent epic, as an item id or KEY-N reference. Empty/null = none. */
+  parent?: unknown;
 };
+
+/**
+ * Resolve a parent reference (item id or KEY-N) for an item in `project` whose
+ * type will be `childType`, applying the epic rules. `childId` is null for an
+ * item not created yet. Empty/null → no parent.
+ */
+export async function resolveParent(
+  sb: SupabaseClient,
+  actor: string,
+  project: Project,
+  childId: string | null,
+  childType: ItemType,
+  parentRef: unknown,
+): Promise<CoreResult<Item | null>> {
+  const raw = typeof parentRef === "string" ? parentRef.trim() : "";
+  if (!raw) return coreOk(null);
+  const r = await loadVisibleItem(sb, actor, raw);
+  if (!r.ok) return coreErr(`Parent not found: ${raw}`, 404);
+  const parent = r.data.item;
+  const err = parentLinkError({ id: childId, project_id: project.id }, childType, parent, {
+    parentRef: refOf(r.data.project.key, parent.number),
+  });
+  if (err) return coreErr(err, 400);
+  return coreOk(parent);
+}
+
+/** How many items (archived included) reference `itemId` as their parent. */
+export async function countChildren(sb: SupabaseClient, itemId: string): Promise<number> {
+  const { count } = await sb
+    .from("items")
+    .select("id", { count: "exact", head: true })
+    .eq("parent_id", itemId);
+  return count ?? 0;
+}
+
+/**
+ * App-side check for a web patch that changes an item's type and/or parent (the
+ * database enforces the same rules). `nextParentId` undefined = parent
+ * unchanged. Returns a user-facing error or null.
+ */
+export async function patchLinkError(
+  sb: SupabaseClient,
+  current: Item,
+  nextType: ItemType,
+  nextParentId: string | null | undefined,
+): Promise<string | null> {
+  const parentId = nextParentId === undefined ? (current.parent_id ?? null) : nextParentId;
+  if (nextType !== current.type) {
+    const kids = current.type === "epic" ? await countChildren(sb, current.id) : 0;
+    const err = typeChangeError(current.type, nextType, kids, !!parentId);
+    if (err) return err;
+  }
+  if (!nextParentId) return null;
+  const { data } = await sb.from("items").select("*").eq("id", nextParentId).maybeSingle();
+  if (!data) return "Parent not found";
+  // An unchanged link to a since-archived epic stays valid.
+  return parentLinkError(current, nextType, data as Item, {
+    allowArchived: nextParentId === current.parent_id,
+  });
+}
+
+/** Postgres guard-rule errors (check / FK violations) are the caller's fault. */
+function writeErrStatus(code: string | undefined): number {
+  return code === "23514" || code === "23503" ? 400 : 500;
+}
 
 /** Create an item in a project (mirrors POST /api/projects/[id]/items). */
 export async function createItem(
@@ -368,6 +508,9 @@ export async function createItem(
     ? input.body
     : paragraphDoc(typeof input.name === "string" ? input.name : "");
   if (!richDocText(doc)) return coreErr("content required", 400);
+
+  const parent = await resolveParent(sb, actor, proj.data, null, type, input.parent);
+  if (!parent.ok) return parent;
 
   // Area: an explicit category_id wins; otherwise resolve/create from a path.
   let category_id: string | null =
@@ -418,14 +561,38 @@ export async function createItem(
       created_by: actor,
       updated_by: actor,
       category_id,
+      parent_id: parent.data?.id ?? null,
       github_issue,
       github_issue_created_at,
       github_imported_at,
     })
     .select()
     .single();
-  if (error) return coreErr(error.message, 500);
+  if (error) return coreErr(error.message, writeErrStatus(error.code));
   return coreOk(data as Item);
+}
+
+/**
+ * Link an item to its epic, or clear the link. `parent` is the epic's id or
+ * KEY-N reference; empty/null clears it. The epic rules (one level, same
+ * project, parent must be a non-archived epic, no self-parent) are checked here
+ * with clear messages and enforced again by the database. Recorded in history.
+ */
+export async function setItemParent(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+  parent: unknown,
+  source: HistorySource = "mcp",
+): Promise<CoreResult<ItemDetail>> {
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const { item: it, project } = r.data;
+  const p = await resolveParent(sb, actor, project, it.id, it.type, parent);
+  if (!p.ok) return p;
+  const w = await snapshotThenWrite(sb, actor, it, { parent_id: p.data?.id ?? null }, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
 }
 
 /** Append a note paragraph to the item body. */

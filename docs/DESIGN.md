@@ -134,7 +134,29 @@ An item is filed at **one** node; items reference it **by id**, which is what ma
   rename / add / delete — no drag-reparent. The add field stays open and **trims back to the
   last `/` immediately on Enter** so you can rattle off siblings without waiting for the insert.
 
-## Pickers (areas, tag filter, assignees)
+## Epics (parent/child links)
+
+`epic` is an item type (KANBAN-41). The link lives **once, on the child** (`items.parent_id`);
+an epic's children are derived, so the child's parent link and the epic's children list
+always agree. Rules (enforced by a DB trigger and mirrored in `parentLinkError` /
+`typeChangeError`): one level only, same project only, the parent must be an epic, no
+self-parent, and an epic can't change type while it has children. Deleting an epic un-links
+its children.
+
+- **Epics are ordinary cards** on the board and list, with the Epic type badge plus an
+  "N/M done" count over their **non-archived** children.
+- **A child shows its epic inline** (`ItemParent`): an epic-coloured chip with ref + title
+  that opens the epic, a pencil to change it and × to clear it. With no parent, "+ epic"
+  appears only when the project has an open epic to pick.
+- **The parent picker** follows the picker rules below, seeded with the current parent's
+  ref (selected, so typing replaces it) and offering only non-archived epics in the project.
+- **The epic's detail modal** lists its children (ref, title, status), each clickable.
+  Following a link swaps the open modal to that item.
+- **Archived:** an archived child keeps its link but drops out of the list and count; an
+  archived epic keeps its children's links (the chip says "archived") but can't be picked as
+  a new parent.
+
+## Pickers (areas, tag filter, assignees, parent epic)
 
 The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app specifics:
 

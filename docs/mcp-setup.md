@@ -57,8 +57,19 @@ The key is a comma-separated list in the Vercel project env (production) and
 
 `list_projects`, `list_items`, `get_item`, `update_item_status`,
 `create_item`, `set_item_body`, `append_item_note`, `set_item_tags`,
-`set_item_area`, `set_item_assignees`, `set_project_github_account`,
-`list_areas`, `set_area_github_repo`, `refresh_item_from_github`.
+`set_item_area`, `set_item_assignees`, `set_item_parent`,
+`set_project_github_account`, `list_areas`, `set_area_github_repo`,
+`refresh_item_from_github`.
+
+**Epics (KANBAN-41).** `epic` is an item type that groups other cards. The link
+is stored once, on the child: `create_item` takes an optional `parent` (the
+epic's KEY-N ref or id) and `set_item_parent` sets or clears it (empty
+`parent`). `list_items` returns each item's `parent` ref (or null);
+`get_item` returns `parent` as `{ref, name}` and, for an epic, `children`
+(`{ref, name, status}`, non-archived only) plus `children_progress`
+("N/M done"). Rules, enforced by the database too: one level only (an epic has
+no parent, a child is never an epic), same project only, the parent must be a
+non-archived epic, and an epic can't change type while it has children.
 
 `set_item_body` REPLACES an item's whole body (safe overwrite): the previous
 state is snapshotted to the item's history first, so it is always recoverable

@@ -19,6 +19,7 @@ import {
   setItemArea,
   setItemAssignees,
   setItemBody,
+  setItemParent,
   setItemStatus,
   setItemTags,
 } from "@/lib/items-core";
@@ -44,7 +45,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_items",
-    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), area path, tags, and assignees. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
+    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
     {
       project: z.string().describe("project name or id"),
       status: status.optional().describe("new | in_progress | blocked | testing | done"),
@@ -54,7 +55,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body as plain text, title line included. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body as plain text, title line included. `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
@@ -98,7 +99,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "create_item",
-    "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as a note — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails).",
+    "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as a note — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails). Type 'epic' makes a card that groups other cards; set `parent` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project.",
     {
       project: z.string().describe("project name or id"),
       name: z
@@ -106,7 +107,10 @@ function registerTools(server: McpServer) {
         .describe(
           "short one-line title; becomes the first line of the item body (there is no separate stored title)",
         ),
-      type: z.enum(["feature", "bug", "task", "idea"]).optional().describe("feature | bug | task | idea (default feature)"),
+      type: z
+        .enum(["feature", "bug", "task", "idea", "epic"])
+        .optional()
+        .describe("feature | bug | task | idea | epic (default feature)"),
       body: z
         .string()
         .optional()
@@ -120,6 +124,10 @@ function registerTools(server: McpServer) {
         .array(z.string())
         .optional()
         .describe("member emails to assign"),
+      parent: z
+        .string()
+        .optional()
+        .describe("parent epic as a KEY-N reference or id, e.g. KANBAN-41 (same project)"),
     },
     async (a) => {
       const sb = getSupabase();
@@ -129,6 +137,7 @@ function registerTools(server: McpServer) {
         tags: a.tags,
         area: a.area,
         assignees: a.assignees,
+        parent: a.parent,
       });
       if (!created.ok) return out(created);
       if (a.body && a.body.trim()) {
@@ -176,6 +185,16 @@ function registerTools(server: McpServer) {
       area: z.string().describe("Area path, e.g. 'coach / home'; empty to un-file"),
     },
     async (a) => out(await setItemArea(getSupabase(), actor(), a.item, a.area)),
+  );
+
+  server.tool(
+    "set_item_parent",
+    "Link an item to its parent epic, or clear the link. `item` is an id or KEY-N reference; `parent` is the epic's KEY-N reference or id, or empty to clear. Rules: the parent must be a non-archived item of type 'epic' in the same project; an epic cannot itself have a parent (one level only); an item can't be its own parent. The change is recorded in the item's history. Returns the item detail, including `parent`.",
+    {
+      item: z.string().describe("item id or KEY-N reference"),
+      parent: z.string().describe("parent epic KEY-N reference or id; empty to clear"),
+    },
+    async (a) => out(await setItemParent(getSupabase(), actor(), a.item, a.parent)),
   );
 
   server.tool(

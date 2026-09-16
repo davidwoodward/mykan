@@ -1,7 +1,13 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Item, ItemStatus, ItemType, RichDoc } from "@/lib/types";
+import type { Item } from "@/lib/types";
 import { coreErr, coreOk, type CoreResult } from "@/lib/projects-core";
+import {
+  changedTrackedFields,
+  snapshotOf,
+  type ItemSnapshot,
+  type TrackedField,
+} from "@/lib/item-snapshot";
 
 /**
  * Item history (KANBAN-10). Every field mutation — web PATCH, MCP tools,
@@ -11,28 +17,17 @@ import { coreErr, coreOk, type CoreResult } from "@/lib/projects-core";
  * update tracked fields on `items` directly.
  */
 
-/** The mutable fields history tracks. Position/archived/done_at are noise. */
-export const TRACKED_FIELDS = [
-  "body",
-  "tags",
-  "assignees",
-  "category_id",
-  "type",
-  "status",
-] as const;
-export type TrackedField = (typeof TRACKED_FIELDS)[number];
+export {
+  TRACKED_FIELDS,
+  changedTrackedFields,
+  restorePatch,
+  snapshotOf,
+  snapshotParentId,
+  type ItemSnapshot,
+  type TrackedField,
+} from "@/lib/item-snapshot";
 
 export type HistorySource = "web" | "mcp" | "telegram" | "recovery";
-
-/** The tracked slice of an item at one moment. */
-export type ItemSnapshot = {
-  body: RichDoc | null;
-  tags: string[];
-  assignees: string[];
-  category_id: string | null;
-  type: ItemType;
-  status: ItemStatus;
-};
 
 export type ItemVersion = {
   id: string;
@@ -51,36 +46,6 @@ export type ItemVersion = {
   created_at: string;
   created_by: string | null;
 };
-
-export function snapshotOf(item: Item): ItemSnapshot {
-  return {
-    body: item.body,
-    tags: item.tags,
-    assignees: item.assignees,
-    category_id: item.category_id,
-    type: item.type,
-    status: item.status,
-  };
-}
-
-/** Value equality per tracked field (arrays/docs compared structurally). */
-function fieldEqual(field: TrackedField, a: unknown, b: unknown): boolean {
-  if (field === "body") return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  if (field === "tags" || field === "assignees") {
-    return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
-  }
-  return (a ?? null) === (b ?? null);
-}
-
-/** The tracked fields a patch would actually change on the current row. */
-export function changedTrackedFields(
-  current: Item,
-  patch: Record<string, unknown>,
-): TrackedField[] {
-  return TRACKED_FIELDS.filter(
-    (f) => f in patch && !fieldEqual(f, current[f], patch[f]),
-  );
-}
 
 /**
  * The write chokepoint: snapshot the item's previous state (when a tracked
@@ -106,19 +71,25 @@ export async function snapshotThenWrite(
 ): Promise<CoreResult<Item>> {
   const changed = changedTrackedFields(current, patch);
 
+  let versionId: string | null = null;
   if (
     changed.length > 0 &&
     !(await coalescesIntoLatest(sb, current.id, actor, source, changed, editSession))
   ) {
-    const { error: verr } = await sb.from("item_versions").insert({
-      item_id: current.id,
-      snapshot: snapshotOf(current),
-      fields_changed: changed,
-      source,
-      edit_session: editSession,
-      created_by: actor,
-    });
+    const { data: vrow, error: verr } = await sb
+      .from("item_versions")
+      .insert({
+        item_id: current.id,
+        snapshot: snapshotOf(current),
+        fields_changed: changed,
+        source,
+        edit_session: editSession,
+        created_by: actor,
+      })
+      .select("id")
+      .single();
     if (verr) return coreErr(verr.message, 500);
+    versionId = (vrow as { id: string } | null)?.id ?? null;
   }
 
   const { data, error } = await sb
@@ -131,7 +102,14 @@ export async function snapshotThenWrite(
     .eq("id", current.id)
     .select()
     .single();
-  if (error) return coreErr(error.message, 500);
+  if (error) {
+    // The write was refused (e.g. the epic parent/child trigger): drop the
+    // snapshot we just recorded so history doesn't show a change that never
+    // happened. Guard-rule violations are the caller's fault → 400.
+    if (versionId) await sb.from("item_versions").delete().eq("id", versionId);
+    const guard = error.code === "23514" || error.code === "23503";
+    return coreErr(error.message, guard ? 400 : 500);
+  }
   return coreOk(data as Item);
 }
 
