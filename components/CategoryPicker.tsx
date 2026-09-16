@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { Category, Item } from "@/lib/types";
+import { AbandonButton } from "@/components/AbandonButton";
 
 type CategoriesValue = {
   categories: Category[];
@@ -144,6 +145,7 @@ export function PathInput({
   const [draft, setDraft] = useState(initial);
   const [hi, setHi] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const abandoned = useRef(false);
 
   const matches = useMemo(() => {
     const q = normPath(draft);
@@ -162,6 +164,8 @@ export function PathInput({
   }
 
   function commit(path: string, id?: string) {
+    // Abandoned: a blur fired while the picker unmounts must not assign.
+    if (abandoned.current) return;
     const p = path.trim();
     if (!p) {
       if (!keepOpen) onCancel();
@@ -201,8 +205,14 @@ export function PathInput({
     }
   }
 
+  // Abandon: the picker commits on Enter/pick/blur, so abandoning closes it
+  // without assigning (the item keeps its area). In builder mode (the Areas
+  // manager's always-open Add field) it clears the draft, shown only when
+  // there is one.
+  const showAbandon = !keepOpen || draft.length > 0;
+
   return (
-    <span className="relative inline-block">
+    <span className="relative inline-flex items-center gap-0.5">
       <input
         autoFocus={autoFocus}
         value={draft}
@@ -218,6 +228,21 @@ export function PathInput({
         aria-label="Category path"
         className="w-44 rounded border border-[var(--color-line)] bg-transparent px-1.5 py-0.5 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
       />
+      {showAbandon ? (
+        <AbandonButton
+          size="sm"
+          tooltipAlign="left"
+          onAbandon={() => {
+            if (keepOpen) {
+              setDraft("");
+              setHi(0);
+            } else {
+              abandoned.current = true;
+              onCancel();
+            }
+          }}
+        />
+      ) : null}
       {showSuggestions ? (
         <div
           ref={listRef}

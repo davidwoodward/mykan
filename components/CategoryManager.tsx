@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useCategories, PathInput } from "@/components/CategoryPicker";
+import { AbandonButton } from "@/components/AbandonButton";
 import type { Category } from "@/lib/types";
 
 /** Depth of a node (root = 0) for indenting the tree. */
@@ -178,6 +179,7 @@ function CategoryRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(cat.name);
+  const renameAbandoned = useRef(false);
   const [repoEditing, setRepoEditing] = useState(false);
   const [importing, setImporting] = useState(false);
   // A short result line under the row after an import ("Imported 5 · skipped 2",
@@ -234,6 +236,8 @@ function CategoryRow({
   }
 
   function commit() {
+    // Abandoned: a blur fired while the field unmounts must not rename.
+    if (renameAbandoned.current) return;
     const n = draft.trim();
     if (n && n !== cat.name) onRename(n);
     else setDraft(cat.name);
@@ -256,19 +260,31 @@ function CategoryRow({
       <div className="flex items-center gap-2">
       <span style={{ width: depth * 14 }} className="shrink-0" aria-hidden="true" />
       {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKeyDown}
-          onBlur={commit}
-          aria-label={`Rename ${cat.name}`}
-          className="flex-1 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 text-sm outline-none"
-        />
+        <>
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={commit}
+            aria-label={`Rename ${cat.name}`}
+            className="min-w-0 flex-1 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 text-sm outline-none"
+          />
+          {/* Rename commits on Enter/blur; abandoning keeps the old name. */}
+          <AbandonButton
+            size="sm"
+            onAbandon={() => {
+              renameAbandoned.current = true;
+              setDraft(cat.name);
+              setEditing(false);
+            }}
+          />
+        </>
       ) : (
         <button
           type="button"
           onClick={() => {
+            renameAbandoned.current = false;
             setDraft(cat.name);
             setEditing(true);
           }}
@@ -399,6 +415,8 @@ function RepoPicker({
 }) {
   const [draft, setDraft] = useState(initial);
   const [hi, setHi] = useState(0);
+  // Set by Abandon, so a blur fired while the picker unmounts can't bind.
+  const abandoned = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   // Viewport coords for the dropdown. It renders `fixed` so it escapes the
@@ -483,7 +501,7 @@ function RepoPicker({
   }
 
   return (
-    <span className="inline-block shrink-0">
+    <span className="inline-flex shrink-0 items-center gap-0.5">
       <input
         ref={attachInput}
         autoFocus
@@ -496,10 +514,20 @@ function RepoPicker({
         onKeyDown={onKeyDown}
         // Blur commits exactly what's typed (or unbinds if cleared); picking a
         // suggestion goes through onMouseDown below, which fires first.
-        onBlur={() => onCommit(trimmed || null)}
+        onBlur={() => {
+          if (!abandoned.current) onCommit(trimmed || null);
+        }}
         placeholder="repo name"
         aria-label={label}
         className="w-44 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 font-mono text-[11px] outline-none placeholder:text-[var(--color-faint)]"
+      />
+      {/* Binding commits on Enter/pick/blur; abandoning keeps the old repo. */}
+      <AbandonButton
+        size="sm"
+        onAbandon={() => {
+          abandoned.current = true;
+          onCancel();
+        }}
       />
       {open && coords ? (
         <div

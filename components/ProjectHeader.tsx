@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { Byline } from "@/components/Byline";
+import { AbandonButton } from "@/components/AbandonButton";
 import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
 
@@ -329,6 +330,15 @@ export function ProjectHeader({
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </button>
+            {/* Nothing saves until commit, so abandoning drops the drafts. */}
+            <AbandonButton
+              tooltipAlign="left"
+              disabled={status === "saving"}
+              onAbandon={() => {
+                setStatus("idle");
+                setEditing(false);
+              }}
+            />
             <span className="text-[10px] text-[var(--color-faint)]">
               {status === "saving"
                 ? "Saving…"

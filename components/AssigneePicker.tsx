@@ -9,6 +9,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import { displayName } from "@/lib/format";
+import { createAbandonSession, type AbandonSession } from "@/lib/abandon";
+import { AbandonButton } from "@/components/AbandonButton";
 import type { Item } from "@/lib/types";
 
 type AssigneeConfig = {
@@ -16,7 +18,8 @@ type AssigneeConfig = {
   members: string[];
   /** Assignees are only meaningful on shared projects. */
   enabled: boolean;
-  onChange: (id: string, assignees: string[]) => void;
+  /** Resolves once the save settles, so Abandon can wait for it. */
+  onChange: (id: string, assignees: string[]) => void | Promise<unknown>;
 };
 
 const AssigneeContext = createContext<AssigneeConfig | null>(null);
@@ -59,6 +62,10 @@ export function ItemAssignees({
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Abandon changes (KANBAN-42): the assignees as they were when the list
+  // opened. Each toggle saves at once, so abandoning writes that list back.
+  const session = useRef<AbandonSession<{ assignees: string[] }> | null>(null);
+  const [reverting, setReverting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -76,12 +83,37 @@ export function ItemAssignees({
   const assignees = item.assignees ?? [];
 
   function toggle(email: string) {
-    onChange(
-      item.id,
-      assignees.includes(email)
-        ? assignees.filter((e) => e !== email)
-        : [...assignees, email],
-    );
+    const next = assignees.includes(email)
+      ? assignees.filter((e) => e !== email)
+      : [...assignees, email];
+    const run = async () => {
+      await onChange(item.id, next);
+    };
+    if (session.current) void session.current.save({ assignees: next }, run).catch(() => {});
+    else void run();
+  }
+
+  function openList() {
+    session.current = createAbandonSession({ assignees: [...assignees] });
+    setOpen(true);
+  }
+
+  async function abandon() {
+    const s = session.current;
+    if (!s || reverting) return;
+    setReverting(true);
+    try {
+      await s.abandon({
+        revert: async (patch) => {
+          await onChange(item.id, patch.assignees ?? []);
+        },
+      });
+      setOpen(false);
+    } catch {
+      // Keep the list open; the board surfaces the save error.
+    } finally {
+      setReverting(false);
+    }
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -103,7 +135,7 @@ export function ItemAssignees({
     <div ref={wrapRef} className={`relative ${className}`}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -121,11 +153,12 @@ export function ItemAssignees({
       </button>
 
       {open ? (
-        <div
-          role="listbox"
-          aria-label="Members"
-          className="absolute left-0 top-full z-30 mt-1 min-w-40 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg"
-        >
+        <div className="absolute left-0 top-full z-30 mt-1 min-w-40 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg">
+          <div className="flex items-center justify-between gap-2 pl-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+            Assignees
+            <AbandonButton size="sm" onAbandon={() => void abandon()} disabled={reverting} />
+          </div>
+          <div role="listbox" aria-label="Members">
           {members.map((m, i) => {
             const checked = assignees.includes(m);
             return (
@@ -148,6 +181,7 @@ export function ItemAssignees({
               </button>
             );
           })}
+          </div>
         </div>
       ) : null}
     </div>

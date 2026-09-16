@@ -4,6 +4,7 @@ import type { Item } from "@/lib/types";
 import { coreErr, coreOk, type CoreResult } from "@/lib/projects-core";
 import {
   changedTrackedFields,
+  coalescesWith,
   snapshotOf,
   type ItemSnapshot,
   type SnapshotAnnotations,
@@ -139,18 +140,11 @@ async function coalescesIntoLatest(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!data) return false;
-  const latest = data as Pick<
+  const latest = (data ?? null) as Pick<
     ItemVersion,
     "fields_changed" | "source" | "edit_session" | "created_by"
-  >;
-  return (
-    latest.edit_session === editSession &&
-    latest.created_by === actor &&
-    latest.source === source &&
-    latest.fields_changed.length === 1 &&
-    latest.fields_changed[0] === "body"
-  );
+  > | null;
+  return coalescesWith(latest, { actor, source, changed, editSession });
 }
 
 /** All history entries for an item, newest first. */

@@ -3,6 +3,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { formatBytes, isViewable, type Attachment, type Item } from "@/lib/types";
 import { uploadAttachment } from "@/lib/client-attachments";
+import { AbandonButton } from "@/components/AbandonButton";
 
 export function Attachments({
   item,
@@ -17,6 +18,7 @@ export function Attachments({
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const renameAbandoned = useRef(false);
 
   const list = item.attachments;
   const base = `/api/items/${item.id}/attachments`;
@@ -48,6 +50,8 @@ export function Attachments({
   }
 
   async function commitRename(att: Attachment) {
+    // Abandoned: a blur fired while the field unmounts must not rename.
+    if (renameAbandoned.current) return;
     const name = draft.trim();
     setRenamingId(null);
     if (!name || name === att.name) return;
@@ -105,14 +109,25 @@ export function Attachments({
             return (
               <li key={att.id} className="flex items-center gap-2 px-2.5 py-1.5 text-sm">
                 {renamingId === att.id ? (
-                  <input
-                    autoFocus
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={() => void commitRename(att)}
-                    onKeyDown={(e) => onRenameKey(e, att)}
-                    className="min-w-0 flex-1 rounded border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-1.5 py-0.5 text-sm outline-none focus:border-[var(--color-accent)]"
-                  />
+                  <>
+                    <input
+                      autoFocus
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onBlur={() => void commitRename(att)}
+                      onKeyDown={(e) => onRenameKey(e, att)}
+                      aria-label={`Rename ${att.name}`}
+                      className="min-w-0 flex-1 rounded border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-1.5 py-0.5 text-sm outline-none focus:border-[var(--color-accent)]"
+                    />
+                    {/* Rename commits on Enter/blur; abandoning keeps the old name. */}
+                    <AbandonButton
+                      size="sm"
+                      onAbandon={() => {
+                        renameAbandoned.current = true;
+                        setRenamingId(null);
+                      }}
+                    />
+                  </>
                 ) : viewable ? (
                   <a
                     href={`${base}/${att.id}/raw`}
@@ -152,6 +167,7 @@ export function Attachments({
                   <button
                     type="button"
                     onClick={() => {
+                      renameAbandoned.current = false;
                       setRenamingId(att.id);
                       setDraft(att.name);
                     }}
