@@ -280,6 +280,180 @@ alter table item_versions add column if not exists edit_session text;
 create index if not exists item_versions_item_created_idx
   on item_versions (item_id, created_at desc);
 
+-- Item entries (KANBAN-36): progress, questions and decisions logged against an
+-- item, so the item body stays a clean living spec. kind/state pairs:
+-- progress current|superseded, question open|answered, decision active|superseded.
+-- supersedes_id (set at insert, immutable; target must be live, same item, same
+-- kind; one live successor) and answered_by_id (question -> decision, same item)
+-- are enforced by composite FKs and the item_entries_guard trigger. Soft delete
+-- via deleted_at. Every change is versioned in item_entry_versions through the
+-- app chokepoint (lib/item-entries.ts), mirroring item_versions.
+-- Migration: supabase/migrations/2026-09-16-3-item-entries.sql
+create table if not exists item_entries (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references items (id) on delete cascade,
+  kind text not null,
+  state text not null,
+  body text not null,
+  supersedes_id uuid,
+  answered_by_id uuid,
+  source text not null,
+  created_at timestamptz not null default now(),
+  created_by text,
+  updated_at timestamptz not null default now(),
+  updated_by text,
+  deleted_at timestamptz,
+  deleted_by text,
+
+  constraint item_entries_kind_check
+    check (kind in ('progress', 'question', 'decision')),
+  constraint item_entries_kind_state_check check (
+    (kind = 'progress' and state in ('current', 'superseded')) or
+    (kind = 'question' and state in ('open', 'answered')) or
+    (kind = 'decision' and state in ('active', 'superseded'))
+  ),
+  constraint item_entries_source_check
+    check (source in ('web', 'mcp', 'telegram', 'recovery')),
+  constraint item_entries_body_not_blank check (body ~ '[^[:space:]]'),
+  constraint item_entries_supersedes_check check (
+    supersedes_id is null
+    or (kind in ('progress', 'decision') and supersedes_id <> id)
+  ),
+  constraint item_entries_answered_by_check check (
+    answered_by_id is null
+    or (kind = 'question' and state = 'answered' and answered_by_id <> id)
+  ),
+  constraint item_entries_deleted_by_check
+    check (deleted_by is null or deleted_at is not null),
+
+  -- Targets for the composite foreign keys below.
+  constraint item_entries_id_item_key unique (id, item_id),
+  constraint item_entries_id_item_kind_key unique (id, item_id, kind),
+
+  -- Same item AND same kind: the superseding row carries its own item_id/kind.
+  -- No action on delete: entries are only hard-deleted by the item cascade,
+  -- which removes a whole item's entries in one statement.
+  constraint item_entries_supersedes_fkey
+    foreign key (supersedes_id, item_id, kind)
+    references item_entries (id, item_id, kind),
+  -- Same item (the decision kind is checked by the trigger).
+  constraint item_entries_answered_by_fkey
+    foreign key (answered_by_id, item_id)
+    references item_entries (id, item_id)
+);
+
+-- The card's list index (kind filter, newest first) — also serves kind-less
+-- lists through its item_id prefix.
+create index if not exists item_entries_item_kind_created_idx
+  on item_entries (item_id, kind, created_at desc);
+-- Lists across kinds, newest first.
+create index if not exists item_entries_item_created_idx
+  on item_entries (item_id, created_at desc);
+-- One live successor per entry; also the lookup "what superseded X?".
+create unique index if not exists item_entries_one_live_successor_idx
+  on item_entries (supersedes_id)
+  where supersedes_id is not null and deleted_at is null;
+-- Referencing-side lookups for the self FKs (and "which questions did this
+-- decision answer?").
+create index if not exists item_entries_supersedes_idx
+  on item_entries (supersedes_id) where supersedes_id is not null;
+create index if not exists item_entries_answered_by_idx
+  on item_entries (answered_by_id) where answered_by_id is not null;
+
+create or replace function item_entries_guard() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+declare
+  t record;
+begin
+  if tg_op = 'UPDATE' then
+    if new.item_id <> old.item_id then
+      raise exception 'An entry cannot move to another item'
+        using errcode = 'check_violation';
+    end if;
+    if new.kind <> old.kind then
+      raise exception 'An entry''s kind cannot change'
+        using errcode = 'check_violation';
+    end if;
+    if new.supersedes_id is distinct from old.supersedes_id then
+      raise exception 'An entry''s supersedes link is set when it is created and cannot change'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if tg_op = 'INSERT' and new.supersedes_id is not null then
+    -- Lock the target so a concurrent supersede or reinstate can't slip past.
+    select id, item_id, kind, state, deleted_at
+      into t
+      from item_entries
+     where id = new.supersedes_id
+     for update;
+    if not found then
+      raise exception 'The entry being superseded was not found'
+        using errcode = 'foreign_key_violation';
+    end if;
+    if t.item_id <> new.item_id or t.kind <> new.kind then
+      raise exception 'An entry can only supersede an entry of the same kind on the same item'
+        using errcode = 'check_violation';
+    end if;
+    if t.state = 'superseded' then
+      raise exception 'That entry is already superseded'
+        using errcode = 'check_violation';
+    end if;
+    if t.deleted_at is not null then
+      raise exception 'A deleted entry cannot be superseded'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.answered_by_id is not null then
+    select id, item_id, kind into t
+      from item_entries
+     where id = new.answered_by_id;
+    if not found then
+      raise exception 'The answering decision was not found'
+        using errcode = 'foreign_key_violation';
+    end if;
+    if t.item_id <> new.item_id then
+      raise exception 'A question can only be answered by a decision on the same item'
+        using errcode = 'check_violation';
+    end if;
+    if t.kind <> 'decision' then
+      raise exception 'A question can only be answered by a decision'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists item_entries_guard on item_entries;
+create trigger item_entries_guard
+  before insert or update on item_entries
+  for each row execute function item_entries_guard();
+
+-- Entry history: one row per change, holding the entry's PREVIOUS state.
+-- fields_changed names what the following write changed (body, state,
+-- answered_by_id, deleted_at); edit_session fences body-autosave coalescing
+-- exactly like item_versions.edit_session.
+create table if not exists item_entry_versions (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null references item_entries (id) on delete cascade,
+  snapshot jsonb not null,
+  fields_changed text[] not null default '{}',
+  source text not null
+    constraint item_entry_versions_source_check
+    check (source in ('web', 'mcp', 'telegram', 'recovery')),
+  edit_session text,
+  created_at timestamptz not null default now(),
+  created_by text
+);
+
+create index if not exists item_entry_versions_entry_created_idx
+  on item_entry_versions (entry_id, created_at desc);
+
 -- GitHub integration (KANBAN-19/20). A GitHub account is a global entity; a
 -- per-user PAT is the credential that reaches it; projects/areas/items link to
 -- GitHub. Full design: docs/github-integration.md.
@@ -389,6 +563,8 @@ alter table projects           enable row level security;
 alter table items              enable row level security;
 alter table categories         enable row level security;
 alter table item_versions      enable row level security;
+alter table item_entries       enable row level security;
+alter table item_entry_versions enable row level security;
 alter table github_accounts    enable row level security;
 alter table github_credentials enable row level security;
 alter table mcp_tokens         enable row level security;
