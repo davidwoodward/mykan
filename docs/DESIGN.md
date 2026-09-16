@@ -162,6 +162,28 @@ its children.
 - **The pickers** follow the picker rules below: open on focus, ↑/↓, Enter picks, Esc closes
   just the picker, Tab moves on; the parent picker is seeded with the current parent's ref
   (selected, so typing replaces it) and offers only non-archived epics in the project.
+- **Order: status, then number** (David, 2026-09-16). The epic's children list, the **Add
+  child** picker, and both parent pickers (detail modal and Add Item) list cards by status in
+  board column order — Not started, In Progress, Blocked, Testing, Done — and within a status
+  by item number ascending. Board position is deliberately ignored here. Every picker row shows
+  its status (the same small uppercase label as the children list) so the order is legible;
+  per-row labels rather than group headers keep ↑/↓ a flat list. The rule lives in
+  `lib/epic-order.ts` (`sortByStatusThenNumber`, tested), derived from `ITEM_STATUSES` so it
+  follows the board.
+- **Add child is multi-select** (David, 2026-09-16); the parent pickers stay single-select (a
+  card has one parent). Each row has a checkbox: **click/tap** toggles it, and **Space**
+  toggles the highlighted row while the filter is empty or straight after ↑/↓ (once you type,
+  Space types, since titles have spaces). The typed filter stays while you select, and
+  selections survive filter changes. The footer shows "N selected" and an **Add N** primary
+  button. **Enter** (or Cmd/Ctrl+Enter) adds the selection; with nothing selected, Enter adds
+  just the highlighted card, as before. **Esc** closes and drops the selection; **Tab** reaches
+  Add N, and the picker closes once focus leaves it.
+- **Multi-add is one PATCH per card, one at a time** (never in parallel, so each card meets
+  the DB guards exactly as a single link would, and each card's history records its own
+  link). The footer shows "Adding 2 of 5…". If every link succeeds the picker closes. If some
+  are refused, the list is re-fetched so it shows the real state, the failed cards **stay
+  selected**, and the footer lists each failed ref with the server's reason; the picker stays
+  open to retry or Esc.
 - **History:** every link change goes through the history chokepoint, including deleting an
   epic — each child (archived too) is un-linked first and its history reads
   "parent KEY-N removed (epic deleted)".

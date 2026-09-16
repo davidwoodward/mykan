@@ -192,8 +192,31 @@ export function ProjectDetailView({
       }
     })();
   }, []);
+  // Awaited variant for batch linking (the multi-select Add child picker): the
+  // same PATCH, not optimistic, and the server's refusal is RETURNED (null on
+  // success) so the picker can report it per card instead of via the banner.
+  const linkItemParent = useCallback(
+    async (id: string, parentId: string | null): Promise<string | null> => {
+      try {
+        const res = await fetch(`/api/items/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ parent_id: parentId }),
+        });
+        if (!res.ok) return await responseError(res);
+        const updated = (await res.json()) as Item;
+        setItems((prev) =>
+          prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+        );
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : "Failed to set epic";
+      }
+    },
+    [],
+  );
   const openItemById = useCallback((id: string) => setOpenItemId(id), []);
-  const epicCtx = useEpicValue(items, openItemById, setItemParent);
+  const epicCtx = useEpicValue(items, openItemById, setItemParent, linkItemParent, refetch);
 
   // Rich-text body saves go through the same optimistic PATCH path. Re-thrown so
   // the modal can show a save-failed state. `editSession` (minted per modal
