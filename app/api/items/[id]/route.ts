@@ -4,6 +4,7 @@ import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { categoryInProject } from "@/lib/categories-core";
 import { snapshotThenWrite } from "@/lib/item-history";
+import { deleteItemWithHistory, patchLinkError } from "@/lib/items-core";
 import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import {
   isItemStatus,
@@ -45,6 +46,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     assignees?: unknown;
     archived?: unknown;
     category_id?: unknown;
+    parent_id?: unknown;
     edit_session?: unknown;
   };
   const patch: Record<string, unknown> = {};
@@ -83,8 +85,22 @@ export async function PATCH(req: Request, { params }: Ctx) {
   } else if (body.body === null) {
     patch.body = null;
   }
+  // Parent epic (KANBAN-41): an item id, or null to clear the link.
+  if (typeof body.parent_id === "string" || body.parent_id === null) {
+    patch.parent_id = body.parent_id || null;
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
+  }
+  // Epic rules, checked up front for a clear message (the DB enforces them too).
+  if ("type" in patch || "parent_id" in patch) {
+    const linkErr = await patchLinkError(
+      getSupabase(),
+      current,
+      (patch.type as Item["type"] | undefined) ?? current.type,
+      patch.parent_id as string | null | undefined,
+    );
+    if (linkErr) return NextResponse.json({ error: linkErr }, { status: 400 });
   }
 
   // The editor's per-open session id: body autosaves within one editing
@@ -133,7 +149,23 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const deny = await denyItemAccess(id, gate.email);
   if (deny) return deny;
 
-  const { error } = await getSupabase().from("items").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  const { data: row } = await getSupabase().from("items").select("*").eq("id", id).maybeSingle();
+  if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const item = row as Item;
+  const { data: proj } = await getSupabase()
+    .from("projects")
+    .select("key")
+    .eq("id", item.project_id)
+    .maybeSingle();
+
+  // Children of a deleted epic are un-linked through the history chokepoint
+  // first (FK on delete set null remains the backstop).
+  const r = await deleteItemWithHistory(
+    getSupabase(),
+    gate.email,
+    item,
+    (proj as { key: string | null } | null)?.key ?? null,
+  );
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+  return NextResponse.json({ ok: true, unlinked_children: r.data.unlinked });
 }

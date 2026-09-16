@@ -2,14 +2,19 @@ import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { categoryInProject, listCategories, pathOf } from "@/lib/categories-core";
-import { displayName } from "@/lib/format";
+import { displayName, itemRef } from "@/lib/format";
 import {
   listItemVersions,
+  parentChangeSummary,
+  restorePatch,
   snapshotOf,
+  snapshotParentId,
   snapshotThenWrite,
   type ItemSnapshot,
 } from "@/lib/item-history";
+import { patchLinkError } from "@/lib/items-core";
 import {
+  parentLinkError,
   richDocText,
   STATUS_LABEL,
   TYPE_LABEL,
@@ -47,6 +52,7 @@ function summarize(
   snap: ItemSnapshot,
   after: ItemSnapshot,
   cats: Category[],
+  refOf: (id: string) => string,
 ): string[] {
   return fields.map((f) => {
     switch (f) {
@@ -60,6 +66,8 @@ function summarize(
         const path = after.category_id ? pathOf(cats, after.category_id) : "";
         return `area → ${path || "unfiled"}`;
       }
+      case "parent_id":
+        return parentChangeSummary(snap, after, refOf);
       case "type":
         return `type → ${TYPE_LABEL[after.type] ?? after.type}`;
       case "status":
@@ -96,6 +104,27 @@ export async function GET(_req: Request, { params }: Ctx) {
   }
   const cats = await listCategories(getSupabase(), current.project_id);
 
+  // Refs for every parent epic the history mentions, in one lookup.
+  const parentIds = [
+    ...new Set(
+      [current.parent_id, ...versions.data.map((v) => v.snapshot.parent_id)].filter(
+        (x): x is string => !!x,
+      ),
+    ),
+  ];
+  const refs = new Map<string, string>();
+  if (parentIds.length) {
+    const [{ data: proj }, { data: parents }] = await Promise.all([
+      getSupabase().from("projects").select("key").eq("id", current.project_id).maybeSingle(),
+      getSupabase().from("items").select("id, number").in("id", parentIds),
+    ]);
+    const key = (proj as { key: string | null } | null)?.key ?? null;
+    for (const r of (parents ?? []) as { id: string; number: number }[]) {
+      refs.set(r.id, itemRef(key, r.number) ?? `#${r.number}`);
+    }
+  }
+  const refOf = (pid: string) => refs.get(pid) ?? "a deleted epic";
+
   const entries: HistoryEntry[] = versions.data.map((v, i) => {
     const after = i === 0 ? snapshotOf(current) : versions.data[i - 1].snapshot;
     return {
@@ -103,7 +132,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       created_at: v.created_at,
       created_by: v.created_by,
       source: v.source,
-      changes: summarize(v.fields_changed, v.snapshot, after, cats),
+      changes: summarize(v.fields_changed, v.snapshot, after, cats, refOf),
       body_text: richDocText(v.snapshot.body),
     };
   });
@@ -148,18 +177,36 @@ export async function POST(req: Request, { params }: Ctx) {
       ? snap.category_id
       : null;
 
-  const patch: Record<string, unknown> = {
-    body: snap.body,
-    tags: snap.tags ?? [],
-    assignees: snap.assignees ?? [],
-    category_id,
-    type: snap.type,
-    status: snap.status,
-  };
-  // Keep the Done-ordering timestamp coherent with a restored status.
-  if (snap.status !== current.status) {
-    patch.done_at = snap.status === "done" ? new Date().toISOString() : null;
+  // The snapshot's parent epic may have been deleted, retyped or archived since;
+  // restore as unlinked then. A snapshot from before epics existed has no
+  // parent_id at all: leave the current link alone (undefined).
+  const snapParent = snapshotParentId(snap);
+  let parent_id: string | null | undefined = snapParent;
+  if (snapParent) {
+    const { data: prow } = await getSupabase()
+      .from("items")
+      .select("*")
+      .eq("id", snapParent)
+      .maybeSingle();
+    parent_id =
+      prow &&
+      !parentLinkError(current, snap.type, prow as Item, {
+        allowArchived: snapParent === current.parent_id,
+      })
+        ? snapParent
+        : null;
   }
+
+  const patch = restorePatch(snap, current, { category_id, parent_id });
+
+  // An epic that has children can't be restored to a non-epic type.
+  const linkErr = await patchLinkError(
+    getSupabase(),
+    current,
+    snap.type,
+    patch.parent_id as string | null | undefined,
+  );
+  if (linkErr) return NextResponse.json({ error: linkErr }, { status: 409 });
 
   const w = await snapshotThenWrite(getSupabase(), gate.email, current, patch, "recovery");
   if (!w.ok) return NextResponse.json({ error: w.error }, { status: w.status });

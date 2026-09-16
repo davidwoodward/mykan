@@ -1,4 +1,4 @@
-export type ItemType = "feature" | "bug" | "task" | "idea";
+export type ItemType = "feature" | "bug" | "task" | "idea" | "epic";
 export type ItemStatus = "new" | "in_progress" | "blocked" | "testing" | "done";
 
 /**
@@ -335,6 +335,12 @@ export interface Item {
   assignees: string[];
   /** The category (Area) node this item is filed under, if any. */
   category_id: string | null;
+  /**
+   * The epic this item belongs to (KANBAN-41), or null. The link is stored only
+   * here, on the child; an epic's children are derived (items whose parent_id is
+   * the epic). See parentLinkError for the rules.
+   */
+  parent_id: string | null;
   attachments: Attachment[];
   archived_at: string | null;
   /**
@@ -443,7 +449,14 @@ export function tagStyle(tag: string): {
   };
 }
 
-export const ITEM_TYPES: readonly ItemType[] = ["feature", "bug", "task", "idea"] as const;
+/** UI order for type pickers. Epic is last so existing muscle memory holds. */
+export const ITEM_TYPES: readonly ItemType[] = [
+  "feature",
+  "bug",
+  "task",
+  "idea",
+  "epic",
+] as const;
 export const ITEM_STATUSES: readonly ItemStatus[] = [
   "new",
   "in_progress",
@@ -465,6 +478,7 @@ export const TYPE_LABEL: Record<ItemType, string> = {
   bug: "Bug",
   task: "Task",
   idea: "Thought",
+  epic: "Epic",
 };
 
 export function isItemType(v: unknown): v is ItemType {
@@ -472,4 +486,80 @@ export function isItemType(v: unknown): v is ItemType {
 }
 export function isItemStatus(v: unknown): v is ItemStatus {
   return typeof v === "string" && (ITEM_STATUSES as readonly string[]).includes(v);
+}
+
+// ── Epics (KANBAN-41) ────────────────────────────────────────────────────────
+// Pure rules shared by the API, MCP core, UI picker and tests. The database
+// enforces the same rules (trigger items_enforce_parent_link); these exist so
+// callers get a clear message before a write, not a raw Postgres error.
+
+/** The slice of an item the parent/child rules look at. */
+export type ParentLinkNode = {
+  id: string;
+  type: ItemType;
+  project_id: string;
+  parent_id?: string | null;
+  archived_at?: string | null;
+};
+
+/**
+ * Why `child` may not take `parent` as its epic, or null when the link is
+ * allowed. `childType` is the type the child WILL have (a patch may change type
+ * and parent together). A null parent (clearing the link) is always allowed.
+ * An archived epic is refused as a new parent unless `allowArchived` is set.
+ */
+export function parentLinkError(
+  child: { id?: string | null; project_id: string },
+  childType: ItemType,
+  parent: ParentLinkNode | null,
+  opts: { parentRef?: string; allowArchived?: boolean } = {},
+): string | null {
+  if (!parent) return null;
+  const name = opts.parentRef ?? "that item";
+  if (child.id && parent.id === child.id) return "An item cannot be its own parent";
+  if (childType === "epic") {
+    return "An epic cannot have a parent (epics are one level only)";
+  }
+  if (parent.type !== "epic") return `The parent must be an epic; ${name} is not an epic`;
+  if (parent.project_id !== child.project_id) {
+    return `The parent epic must be in the same project; ${name} is in another project`;
+  }
+  if (parent.parent_id) return "The parent epic cannot itself have a parent";
+  if (parent.archived_at && !opts.allowArchived) {
+    return `${name} is archived; restore it before adding items to it`;
+  }
+  return null;
+}
+
+/**
+ * Why an item may not change type from `from` to `to`, or null when allowed.
+ * `childCount` counts ALL children (archived included — they still reference
+ * the epic); `hasParent` is whether the item will still have a parent after
+ * the write.
+ */
+export function typeChangeError(
+  from: ItemType,
+  to: ItemType,
+  childCount: number,
+  hasParent: boolean,
+): string | null {
+  if (from === to) return null;
+  if (from === "epic" && childCount > 0) {
+    return `This epic has ${childCount} child item${childCount === 1 ? "" : "s"}; unlink them before changing its type`;
+  }
+  if (to === "epic" && hasParent) {
+    return "An item with a parent epic cannot become an epic; clear its parent first";
+  }
+  return null;
+}
+
+/**
+ * An epic's progress over its NON-archived children: how many are Done out of
+ * how many there are. Archived children still reference the epic but don't count.
+ */
+export function epicProgress(
+  children: { status: ItemStatus; archived_at?: string | null }[],
+): { done: number; total: number } {
+  const live = children.filter((c) => !c.archived_at);
+  return { done: live.filter((c) => c.status === "done").length, total: live.length };
 }

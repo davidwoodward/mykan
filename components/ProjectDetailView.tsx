@@ -31,6 +31,16 @@ import {
   subtreeIdSet,
 } from "@/components/CategoryPicker";
 import { CategoryManager } from "@/components/CategoryManager";
+import { EpicProvider, useEpicValue } from "@/components/EpicLinks";
+
+/** The API's `{ error }` message for a failed response, else "HTTP <status>". */
+async function responseError(res: Response): Promise<string> {
+  const msg = await res
+    .json()
+    .then((d: { error?: unknown }) => (typeof d.error === "string" ? d.error : null))
+    .catch(() => null);
+  return msg ?? `HTTP ${res.status}`;
+}
 import { useColumnCollapse } from "@/components/useColumnCollapse";
 import { useKeyboardNav } from "@/components/useKeyboardNav";
 import { computePosition } from "@/lib/position";
@@ -121,7 +131,7 @@ export function ProjectDetailView({
   const patchItem = useCallback(
     async (
       id: string,
-      patch: Partial<Pick<Item, "type" | "status" | "position" | "body">>,
+      patch: Partial<Pick<Item, "type" | "status" | "position" | "body" | "parent_id">>,
     ) => {
       const before = items;
       setItems((prev) =>
@@ -133,7 +143,7 @@ export function ProjectDetailView({
           headers: { "content-type": "application/json" },
           body: JSON.stringify(patch),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await responseError(res));
         const updated = (await res.json()) as Item;
         setItems((prev) =>
           prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
@@ -145,6 +155,45 @@ export function ProjectDetailView({
     },
     [items],
   );
+
+  // Link (or clear with null) an item's parent epic. Optimistic + PATCH; the
+  // server applies the epic rules and its message is shown on refusal.
+  const setItemParent = useCallback((id: string, parentId: string | null) => {
+    let before: Item | undefined;
+    setItems((prev) =>
+      prev
+        ? prev.map((it) => {
+            if (it.id !== id) return it;
+            before = it;
+            return { ...it, parent_id: parentId };
+          })
+        : prev,
+    );
+    void (async () => {
+      try {
+        const res = await fetch(`/api/items/${id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ parent_id: parentId }),
+        });
+        if (!res.ok) throw new Error(await responseError(res));
+        const updated = (await res.json()) as Item;
+        setItems((prev) =>
+          prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
+        );
+      } catch (e) {
+        const restore = before;
+        if (restore) {
+          setItems((prev) =>
+            prev ? prev.map((it) => (it.id === id ? restore : it)) : prev,
+          );
+        }
+        setError(e instanceof Error ? e.message : "Failed to set epic");
+      }
+    })();
+  }, []);
+  const openItemById = useCallback((id: string) => setOpenItemId(id), []);
+  const epicCtx = useEpicValue(items, openItemById, setItemParent);
 
   // Rich-text body saves go through the same optimistic PATCH path. Re-thrown so
   // the modal can show a save-failed state. `editSession` (minted per modal
@@ -371,16 +420,29 @@ export function ProjectDetailView({
   const deleteItem = useCallback(
     async (id: string) => {
       const before = items;
-      setItems((prev) => prev?.filter((it) => it.id !== id) ?? prev);
+      // Deleting an epic un-links its children first (server-side, with a
+      // history entry on each), so mirror that locally.
+      const hadChildren = (before ?? []).some((it) => it.parent_id === id);
+      setItems(
+        (prev) =>
+          prev
+            ?.filter((it) => it.id !== id)
+            .map((it) => (it.parent_id === id ? { ...it, parent_id: null } : it)) ?? prev,
+      );
       try {
         const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await responseError(res));
       } catch (e) {
         setItems(before ?? null);
-        setError(e instanceof Error ? e.message : "Failed to delete");
+        const msg = e instanceof Error ? e.message : "Failed to delete";
+        setError(msg);
+        // A failed epic delete re-links its children server-side, and a re-link
+        // can itself fail — re-pull so the board shows what actually happened
+        // (keeping the message, which a successful refetch would clear).
+        if (hadChildren) void refetch().then(() => setError(msg));
       }
     },
-    [items],
+    [items, refetch],
   );
 
   // Soft delete / restore. Optimistically flips archived_at so the item moves
@@ -775,6 +837,7 @@ export function ProjectDetailView({
         value={{ members, enabled: !isPrivate, onChange: changeItemAssignees }}
       >
       <CategoryProvider value={categoryCtx}>
+      <EpicProvider value={epicCtx}>
       {!showArchived ? (
         <div className="lg:shrink-0">
           <button
@@ -1109,6 +1172,10 @@ export function ProjectDetailView({
       ) : null}
       {openItem ? (
         <ItemDetailModal
+          // Keyed by item: following a parent/child link swaps the open item,
+          // which must remount the editor (flushing the previous item's save
+          // and minting a fresh edit session).
+          key={openItem.id}
           item={openItem}
           allTags={allTags}
           onClose={() => setOpenItemId(null)}
@@ -1124,6 +1191,7 @@ export function ProjectDetailView({
           onClose={() => setShowCategoryManager(false)}
         />
       ) : null}
+      </EpicProvider>
       </CategoryProvider>
       </AssigneeProvider>
     </ProjectKeyProvider>

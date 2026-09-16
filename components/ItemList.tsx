@@ -35,11 +35,13 @@ import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
+import { EpicProgress, ParentChip } from "@/components/EpicLinks";
 import {
   CLAMP_LINES,
   ITEM_STATUSES,
   ITEM_TYPES,
   STATUS_LABEL,
+  TYPE_LABEL,
   richDocText,
   type Item,
   type ItemStatus,
@@ -446,6 +448,8 @@ function ItemRow({
             <ItemCategory item={item} />
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <ParentChip item={item} className="min-w-0" />
+            <EpicProgress item={item} />
             <InlineTags
               tags={item.tags}
               suggestions={tagSuggestions ?? []}
@@ -671,6 +675,8 @@ function TypeMenu({
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        title="Change type"
+        aria-label={`Type: ${TYPE_LABEL[value]}. Click to change.`}
       >
         <TypeBadge type={value} />
       </button>

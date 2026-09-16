@@ -28,6 +28,10 @@ exception when duplicate_object then null;
 end $$;
 -- 'task' was added after the type already existed on deployed DBs:
 alter type item_type add value if not exists 'task' before 'idea';
+-- 'epic' groups child items via items.parent_id (KANBAN-41). On a live DB apply
+-- supabase/migrations/2026-09-16-1-item-type-epic.sql on its own (ADD VALUE must
+-- not share a transaction with a use of the label).
+alter type item_type add value if not exists 'epic' before 'feature';
 
 do $$ begin
   create type item_status as enum ('new', 'in_progress', 'blocked', 'done');
@@ -143,6 +147,115 @@ create index if not exists categories_parent_idx on categories (parent_id);
 alter table items add column if not exists category_id uuid
   references categories(id) on delete set null;
 create index if not exists items_category_idx on items (category_id);
+
+-- Epic parent/child links (KANBAN-41). The link is stored once, on the child;
+-- an epic's children are derived (items where parent_id = epic.id). Guards live
+-- in the items_enforce_parent_link trigger: one level only (an epic has no
+-- parent, a child is never an epic), same project only, the parent must be an
+-- epic, and an epic can't change type or project while it has children. Deleting
+-- an epic un-links its children (on delete set null). Archived items keep their
+-- links; the app excludes archived children from counts and won't offer an
+-- archived epic as a new parent.
+-- Migration: supabase/migrations/2026-09-16-2-item-parent-links.sql
+alter table items add column if not exists parent_id uuid
+  references items (id) on delete set null;
+do $$ begin
+  alter table items
+    add constraint items_parent_not_self check (parent_id is null or parent_id <> id);
+exception when duplicate_object then null;
+end $$;
+create index if not exists items_parent_idx on items (parent_id);
+
+create or replace function items_enforce_parent_link() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+declare
+  p record;
+begin
+  if tg_op = 'UPDATE' then
+    if old.type::text = 'epic' and new.type::text <> 'epic'
+       and exists (select 1 from mykan.items c where c.parent_id = old.id) then
+      raise exception 'This epic has child items; unlink them before changing its type'
+        using errcode = 'check_violation';
+    end if;
+    if new.project_id <> old.project_id
+       and exists (select 1 from mykan.items c where c.parent_id = old.id) then
+      raise exception 'This epic has child items; it cannot move to another project'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.parent_id is null then
+    return new;
+  end if;
+
+  if new.parent_id = new.id then
+    raise exception 'An item cannot be its own parent'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.type::text = 'epic' then
+    raise exception 'An epic cannot have a parent (epics are one level only)'
+      using errcode = 'check_violation';
+  end if;
+
+  select id, type::text as type, project_id, parent_id
+    into p
+    from mykan.items
+   where id = new.parent_id
+   for share;
+
+  if not found then
+    raise exception 'Parent item not found'
+      using errcode = 'foreign_key_violation';
+  end if;
+  if p.type <> 'epic' then
+    raise exception 'The parent must be an epic'
+      using errcode = 'check_violation';
+  end if;
+  if p.project_id <> new.project_id then
+    raise exception 'The parent epic must be in the same project'
+      using errcode = 'check_violation';
+  end if;
+  if p.parent_id is not null then
+    raise exception 'The parent epic cannot itself have a parent'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists items_enforce_parent_link on items;
+create trigger items_enforce_parent_link
+  before insert or update of parent_id, type, project_id on items
+  for each row execute function items_enforce_parent_link();
+
+-- Delete guard: an item that still has children can't be deleted (the app
+-- un-links them through history first). It steps aside when the item's project
+-- is already gone, i.e. the delete is the items.project_id cascade of a project
+-- delete, which removes every item in the project, children included.
+create or replace function items_guard_delete_with_children() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+begin
+  if not exists (select 1 from mykan.projects pr where pr.id = old.project_id) then
+    return old;
+  end if;
+  if exists (select 1 from mykan.items c where c.parent_id = old.id) then
+    raise exception 'This epic still has child items; unlink them before deleting it'
+      using errcode = 'check_violation';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists items_guard_delete_with_children on items;
+create trigger items_guard_delete_with_children
+  before delete on items
+  for each row execute function items_guard_delete_with_children();
 
 -- Item history (KANBAN-10): whole-item version snapshots. Every field mutation
 -- routes through snapshotThenWrite (lib/item-history.ts), which records the

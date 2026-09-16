@@ -29,6 +29,7 @@ import { RefBadge } from "@/components/RefBadge";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
+import { EpicProgress, ParentChip } from "@/components/EpicLinks";
 import { computePosition } from "@/lib/position";
 import {
   CLAMP_LINES,
@@ -433,6 +434,7 @@ function Card({
         />
         <ItemAssignees item={item} />
         <ItemCategory item={item} />
+        <ParentChip item={item} className="min-w-0" />
       </div>
       <Byline
         createdBy={item.created_by}
@@ -446,6 +448,7 @@ function Card({
         <div className="flex items-center gap-2">
           <RefBadge number={item.number} />
           <TypeBadge type={item.type} />
+          <EpicProgress item={item} />
           <GithubSyncBadge item={item} onItemChange={onItemChange} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
           <ItemHistory

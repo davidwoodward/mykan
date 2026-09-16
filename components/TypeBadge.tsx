@@ -6,6 +6,7 @@ const styles: Record<ItemType, string> = {
   bug: "text-[var(--color-bug)] bg-[var(--color-bug-bg)] ring-[var(--color-bug-line)]",
   task: "text-[var(--color-task)] bg-[var(--color-task-bg)] ring-[var(--color-task-line)]",
   idea: "text-[var(--color-idea)] bg-[var(--color-idea-bg)] ring-[var(--color-idea-line)]",
+  epic: "text-[var(--color-epic)] bg-[var(--color-epic-bg)] ring-[var(--color-epic-line)]",
 };
 
 export function TypeBadge({ type, className = "" }: { type: ItemType; className?: string }) {

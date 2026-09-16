@@ -157,10 +157,11 @@ and any `lfg`/ship pipeline.
 | `mcp__mykan__list_projects` | 1 | id, name, privacy. Pick the project for this repo/context. |
 | `mcp__mykan__list_items` | 1 | `project` (name or id), optional `status` filter. Titles only (`name` = first line of the body). Source for fuzzy-matching. |
 | `mcp__mykan__get_item` | 1/1b | Title (`name`) plus full body (`body_text`, flattened) to confirm a match. |
-| `mcp__mykan__create_item` | 1b | Ad-hoc/no-card path. |
+| `mcp__mykan__create_item` | 1b | Ad-hoc/no-card path. Optional `parent` (epic ref) files it under an epic; `type: epic` creates an epic. |
 | `mcp__mykan__update_item_status` | 2, 5, 6 | `new` \| `in_progress` \| `done`. The load-bearing call. |
 | `mcp__mykan__append_item_note` | 4, 5 | Progress notes + the closing note. |
 | `mcp__mykan__set_item_tags` | optional | Categorize on create/triage. |
+| `mcp__mykan__set_item_parent` | optional | Link a card to its epic (`parent` = epic ref, empty clears). `get_item` on an epic lists its `children` with status and `children_progress`; `list_items` shows each card's `parent` ref. |
 
 ---
 
