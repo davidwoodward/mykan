@@ -18,6 +18,7 @@ export function Attachments({
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const renameAbandoned = useRef(false);
 
   const list = item.attachments;
   const base = `/api/items/${item.id}/attachments`;
@@ -49,6 +50,8 @@ export function Attachments({
   }
 
   async function commitRename(att: Attachment) {
+    // Abandoned: a blur fired while the field unmounts must not rename.
+    if (renameAbandoned.current) return;
     const name = draft.trim();
     setRenamingId(null);
     if (!name || name === att.name) return;
@@ -117,7 +120,13 @@ export function Attachments({
                       className="min-w-0 flex-1 rounded border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-1.5 py-0.5 text-sm outline-none focus:border-[var(--color-accent)]"
                     />
                     {/* Rename commits on Enter/blur; abandoning keeps the old name. */}
-                    <AbandonButton size="sm" onAbandon={() => setRenamingId(null)} />
+                    <AbandonButton
+                      size="sm"
+                      onAbandon={() => {
+                        renameAbandoned.current = true;
+                        setRenamingId(null);
+                      }}
+                    />
                   </>
                 ) : viewable ? (
                   <a
@@ -158,6 +167,7 @@ export function Attachments({
                   <button
                     type="button"
                     onClick={() => {
+                      renameAbandoned.current = false;
                       setRenamingId(att.id);
                       setDraft(att.name);
                     }}

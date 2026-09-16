@@ -309,7 +309,7 @@ export function ProjectsView({
                     candidates={members}
                     ownerEmail={p.created_by}
                     canEdit={p.created_by?.toLowerCase() === viewerEmail.toLowerCase()}
-                    onChange={(next) => void shareProject(p.id, next)}
+                    onChange={(next) => shareProject(p.id, next)}
                   />
                   <button
                     type="button"

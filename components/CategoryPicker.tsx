@@ -145,6 +145,7 @@ export function PathInput({
   const [draft, setDraft] = useState(initial);
   const [hi, setHi] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const abandoned = useRef(false);
 
   const matches = useMemo(() => {
     const q = normPath(draft);
@@ -163,6 +164,8 @@ export function PathInput({
   }
 
   function commit(path: string, id?: string) {
+    // Abandoned: a blur fired while the picker unmounts must not assign.
+    if (abandoned.current) return;
     const p = path.trim();
     if (!p) {
       if (!keepOpen) onCancel();
@@ -234,6 +237,7 @@ export function PathInput({
               setDraft("");
               setHi(0);
             } else {
+              abandoned.current = true;
               onCancel();
             }
           }}

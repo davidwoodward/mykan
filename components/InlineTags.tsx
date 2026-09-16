@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { Tag } from "@/components/Tag";
 import { AbandonButton } from "@/components/AbandonButton";
 import { normalizeTags } from "@/lib/types";
@@ -25,9 +25,12 @@ export function InlineTags({
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
+  const abandoned = useRef(false);
   const listId = useId();
 
   function commit() {
+    // Abandoned: a blur fired while the field unmounts must not add the draft.
+    if (abandoned.current) return;
     const [t] = normalizeTags([draft]);
     setDraft("");
     setAdding(false);
@@ -84,6 +87,7 @@ export function InlineTags({
             size="sm"
             tooltipAlign="left"
             onAbandon={() => {
+              abandoned.current = true;
               setDraft("");
               setAdding(false);
             }}
@@ -99,7 +103,10 @@ export function InlineTags({
       ) : (
         <button
           type="button"
-          onClick={() => setAdding(true)}
+          onClick={() => {
+            abandoned.current = false;
+            setAdding(true);
+          }}
           aria-label="Add tag"
           className="rounded-full border border-dashed border-[var(--color-line-strong)] px-1.5 py-0.5 text-xs text-[var(--color-faint)] transition-colors hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]"
         >

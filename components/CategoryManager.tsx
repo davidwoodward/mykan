@@ -179,6 +179,7 @@ function CategoryRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(cat.name);
+  const renameAbandoned = useRef(false);
   const [repoEditing, setRepoEditing] = useState(false);
   const [importing, setImporting] = useState(false);
   // A short result line under the row after an import ("Imported 5 · skipped 2",
@@ -235,6 +236,8 @@ function CategoryRow({
   }
 
   function commit() {
+    // Abandoned: a blur fired while the field unmounts must not rename.
+    if (renameAbandoned.current) return;
     const n = draft.trim();
     if (n && n !== cat.name) onRename(n);
     else setDraft(cat.name);
@@ -271,6 +274,7 @@ function CategoryRow({
           <AbandonButton
             size="sm"
             onAbandon={() => {
+              renameAbandoned.current = true;
               setDraft(cat.name);
               setEditing(false);
             }}
@@ -280,6 +284,7 @@ function CategoryRow({
         <button
           type="button"
           onClick={() => {
+            renameAbandoned.current = false;
             setDraft(cat.name);
             setEditing(true);
           }}
@@ -410,6 +415,8 @@ function RepoPicker({
 }) {
   const [draft, setDraft] = useState(initial);
   const [hi, setHi] = useState(0);
+  // Set by Abandon, so a blur fired while the picker unmounts can't bind.
+  const abandoned = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   // Viewport coords for the dropdown. It renders `fixed` so it escapes the
@@ -507,13 +514,21 @@ function RepoPicker({
         onKeyDown={onKeyDown}
         // Blur commits exactly what's typed (or unbinds if cleared); picking a
         // suggestion goes through onMouseDown below, which fires first.
-        onBlur={() => onCommit(trimmed || null)}
+        onBlur={() => {
+          if (!abandoned.current) onCommit(trimmed || null);
+        }}
         placeholder="repo name"
         aria-label={label}
         className="w-44 rounded border border-[var(--color-accent)] bg-transparent px-1.5 py-0.5 font-mono text-[11px] outline-none placeholder:text-[var(--color-faint)]"
       />
       {/* Binding commits on Enter/pick/blur; abandoning keeps the old repo. */}
-      <AbandonButton size="sm" onAbandon={onCancel} />
+      <AbandonButton
+        size="sm"
+        onAbandon={() => {
+          abandoned.current = true;
+          onCancel();
+        }}
+      />
       {open && coords ? (
         <div
           ref={listRef}
