@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -15,8 +16,10 @@ import {
   epicProgress,
   richDocTitle,
   type Item,
+  type ItemStatus,
 } from "@/lib/types";
 import { useProjectKey } from "@/components/RefBadge";
+import { linkSequentially, sortByStatusThenNumber, type LinkFailure } from "@/lib/epic-order";
 
 /**
  * Epic parent/child links (KANBAN-41). The link lives on the child
@@ -34,14 +37,18 @@ type EpicValue = {
   byId: Map<string, Item>;
   /** Every loaded item in the project, in board order. */
   all: Item[];
-  /** Non-archived epics, the only valid NEW parents. */
+  /** Non-archived epics, the only valid NEW parents, by status then number. */
   epics: Item[];
-  /** An epic's children, archived included, in board order. */
+  /** An epic's children, archived included, by status then number. */
   childrenOf: (epicId: string) => Item[];
   /** Open an item's detail modal. */
   open: (id: string) => void;
   /** Link (or clear with null) an item's parent epic. */
   setParent: (id: string, parentId: string | null) => void;
+  /** Awaited link for batches: resolves to null on success, else the error. */
+  linkParent: (id: string, parentId: string | null) => Promise<string | null>;
+  /** Re-fetch the project's items so the UI shows the real state. */
+  refresh: () => Promise<void>;
 };
 
 const EpicContext = createContext<EpicValue | null>(null);
@@ -52,6 +59,8 @@ export function useEpicValue(
   items: Item[] | null,
   open: (id: string) => void,
   setParent: (id: string, parentId: string | null) => void,
+  linkParent: (id: string, parentId: string | null) => Promise<string | null>,
+  refresh: () => Promise<void>,
 ): EpicValue {
   return useMemo(() => {
     const all = [...(items ?? [])].sort((a, b) => a.position - b.position);
@@ -63,9 +72,11 @@ export function useEpicValue(
       l.push(it);
       kids.set(it.parent_id, l);
     }
-    const epics = all
-      .filter((it) => it.type === "epic" && !it.archived_at)
-      .sort((a, b) => a.number - b.number);
+    // Epic lists read status (board column order) then number, never position.
+    for (const [id, l] of kids) kids.set(id, sortByStatusThenNumber(l));
+    const epics = sortByStatusThenNumber(
+      all.filter((it) => it.type === "epic" && !it.archived_at),
+    );
     return {
       byId,
       all,
@@ -73,8 +84,10 @@ export function useEpicValue(
       childrenOf: (id: string) => kids.get(id) ?? [],
       open,
       setParent,
+      linkParent,
+      refresh,
     };
-  }, [items, open, setParent]);
+  }, [items, open, setParent, linkParent, refresh]);
 }
 
 function useEpics(): EpicValue | null {
@@ -184,7 +197,43 @@ export function EpicProgress({ item, className = "" }: { item: Item; className?:
   );
 }
 
-type Option = { id: string; ref: string; title: string; note?: string };
+type Option = {
+  id: string;
+  ref: string;
+  title: string;
+  status: ItemStatus;
+  note?: string;
+};
+
+/** Multi-select mode for ItemTypeahead (the epic's Add child picker). */
+type MultiSelect = {
+  /** Selected option ids (kept across filter changes). */
+  selected: ReadonlySet<string>;
+  onToggle: (id: string) => void;
+  /** Add these ids (the selection, or the highlighted row when none). */
+  onCommit: (ids: string[]) => void;
+  /** Progress text while a batch is running; interactions pause meanwhile. */
+  busy: string | null;
+  /** Per-card failures from the last batch, shown in the footer. */
+  failures: { ref: string; error: string }[];
+};
+
+function CheckIcon() {
+  return (
+    <svg
+      className="h-2.5 w-2.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m5 12 5 5 9-10" />
+    </svg>
+  );
+}
 
 /**
  * Item typeahead used by every epic link picker. Opens on focus (optionally
@@ -192,7 +241,14 @@ type Option = { id: string; ref: string; title: string; note?: string };
  * filters by ref or title; ↑/↓ move, Enter picks the highlighted row, Esc closes
  * without changing anything (and without closing the modal underneath), Tab
  * moves on (blur closes, never picks). The list is an overlay; mouse and touch
- * pick with a press.
+ * pick with a press. Each option shows its status.
+ *
+ * With `multi`, each row carries a checkbox: click/tap toggles it, and Space
+ * toggles the highlighted row while the filter is empty or right after ↑/↓
+ * (otherwise Space types, since titles contain spaces). The typed filter stays
+ * while selecting. Enter (or Cmd/Ctrl+Enter, or the footer's "Add N") adds the
+ * selection; with nothing selected, Enter adds just the highlighted row. Tab
+ * reaches the "Add N" button; the picker closes only when focus leaves it.
  */
 function ItemTypeahead({
   options,
@@ -201,8 +257,10 @@ function ItemTypeahead({
   placeholder,
   label,
   emptyText,
+  align = "left",
   onPick,
   onClose,
+  multi,
 }: {
   options: Option[];
   seed?: string;
@@ -210,12 +268,27 @@ function ItemTypeahead({
   placeholder: string;
   label: string;
   emptyText: string;
+  /** Which edge of the input the overlay lines up with. */
+  align?: "left" | "right";
   onPick: (id: string) => void;
   onClose: () => void;
+  multi?: MultiSelect;
 }) {
   const [draft, setDraft] = useState(seed);
+  // True right after ↑/↓, so Space toggles instead of typing (multi only).
+  const [navigated, setNavigated] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+
+  // After a batch settles with the picker still open (some cards failed), put
+  // focus back in the field if the disabled Add button dropped it.
+  const busyNow = multi?.busy ?? null;
+  useEffect(() => {
+    if (busyNow !== null) return;
+    if (!wrapRef.current?.contains(document.activeElement)) inputRef.current?.focus();
+  }, [busyNow]);
 
   const matches = useMemo(() => {
     const q = draft.trim().toLowerCase();
@@ -225,48 +298,85 @@ function ItemTypeahead({
       (o) => o.ref.toLowerCase().includes(q) || o.title.toLowerCase().includes(q),
     );
   }, [draft, seed, options]);
-  const [hi, setHi] = useState(() =>
+  const [rawHi, setHi] = useState(() =>
     Math.max(0, options.findIndex((o) => o.id === currentId)),
   );
+  // Clamp: the options can shrink under the cursor (a batch add, a refresh).
+  const hi = Math.max(0, Math.min(rawHi, matches.length - 1));
+  const busy = busyNow;
+  const count = multi?.selected.size ?? 0;
 
   function move(n: number) {
     setHi(n);
+    setNavigated(true);
     (listRef.current?.children?.[n] as HTMLElement | undefined)?.scrollIntoView({
       block: "nearest",
     });
+  }
+
+  function close() {
+    if (!busy) onClose();
+  }
+
+  function commit() {
+    if (!multi || busy) return;
+    if (count > 0) multi.onCommit([...multi.selected]);
+    else if (matches[hi]) multi.onCommit([matches[hi].id]);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      onClose();
+      close();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       move(Math.min(matches.length - 1, hi + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       move(Math.max(0, hi - 1));
-    } else if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+    } else if (e.key === "Enter") {
+      if (!multi && (e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
       e.stopPropagation();
-      const sel = matches[hi];
-      if (sel) onPick(sel.id);
+      if (multi) {
+        commit();
+      } else {
+        const sel = matches[hi];
+        if (sel) onPick(sel.id);
+      }
+    } else if (
+      e.key === " " &&
+      multi &&
+      (navigated || draft.trim() === "") &&
+      matches[hi]
+    ) {
+      e.preventDefault();
+      if (!busy) multi.onToggle(matches[hi].id);
     }
   }
 
   return (
-    <span className="relative inline-block">
+    <span
+      ref={wrapRef}
+      className="relative inline-block"
+      // Close when focus leaves the whole picker (input and its Add button),
+      // not when it moves between them.
+      onBlur={(e) => {
+        if (!wrapRef.current?.contains(e.relatedTarget as Node | null)) close();
+      }}
+    >
       <input
+        ref={inputRef}
         autoFocus
         value={draft}
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => {
           setDraft(e.target.value);
           setHi(0);
+          setNavigated(false);
         }}
         onKeyDown={onKeyDown}
-        onBlur={onClose}
         placeholder={placeholder}
         aria-label={label}
         role="combobox"
@@ -276,43 +386,121 @@ function ItemTypeahead({
         className="w-52 rounded border border-[var(--color-line)] bg-transparent px-1.5 py-0.5 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
       />
       <div
-        ref={listRef}
-        id={listId}
-        role="listbox"
-        aria-label={label}
-        className="absolute left-0 top-full z-30 mt-1 max-h-56 w-80 max-w-[80vw] overflow-y-auto overscroll-contain rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-lg"
+        className={`absolute top-full z-30 mt-1 w-96 max-w-[calc(100vw-2rem)] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] shadow-lg ${
+          align === "right" ? "right-0" : "left-0"
+        }`}
       >
-        {matches.length === 0 ? (
-          <div className="px-2 py-1 text-xs text-[var(--color-faint)]">
-            {options.length === 0 ? emptyText : "No matches"}
-          </div>
-        ) : (
-          matches.map((m, i) => (
-            <button
-              key={m.id}
-              type="button"
-              role="option"
-              aria-selected={i === hi}
-              // onMouseDown (not onClick) so it fires before the input blur.
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onPick(m.id);
-              }}
-              onMouseEnter={() => setHi(i)}
-              className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs ${
-                i === hi ? "bg-[var(--color-accent-soft)]" : ""
-              }`}
-            >
-              <span className="shrink-0 font-mono text-[11px] text-[var(--color-faint)]">
-                {m.ref}
+        <div
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          aria-multiselectable={multi ? true : undefined}
+          className="max-h-60 overflow-y-auto overscroll-contain p-1"
+        >
+          {matches.length === 0 ? (
+            <div className="px-2 py-1 text-xs text-[var(--color-faint)]">
+              {options.length === 0 ? emptyText : "No matches"}
+            </div>
+          ) : (
+            matches.map((m, i) => {
+              const checked = multi?.selected.has(m.id) ?? false;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={multi ? checked : i === hi}
+                  // onMouseDown (not onClick) so it fires before the input blur.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    if (!multi) onPick(m.id);
+                    else if (!busy) {
+                      setHi(i);
+                      multi.onToggle(m.id);
+                    }
+                  }}
+                  onMouseEnter={() => setHi(i)}
+                  className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs ${
+                    i === hi ? "bg-[var(--color-accent-soft)]" : ""
+                  }`}
+                >
+                  {multi ? (
+                    <span
+                      aria-hidden="true"
+                      className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border ${
+                        checked
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                          : "border-[var(--color-line-strong)]"
+                      }`}
+                    >
+                      {checked ? <CheckIcon /> : null}
+                    </span>
+                  ) : null}
+                  <span className="shrink-0 font-mono text-[11px] text-[var(--color-faint)]">
+                    {m.ref}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--color-ink)]">
+                    {m.title}
+                  </span>
+                  {m.note ? (
+                    <span className="shrink-0 text-[10px] text-[var(--color-epic)]">{m.note}</span>
+                  ) : null}
+                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+                    {STATUS_LABEL[m.status]}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+        {multi ? (
+          <div className="border-t border-[var(--color-line)] px-2 py-1.5 text-xs">
+            {multi.failures.length > 0 ? (
+              <div role="alert" className="mb-1.5 text-[var(--color-bug)]">
+                <p>
+                  Couldn&apos;t add {multi.failures.length}{" "}
+                  {multi.failures.length === 1 ? "card" : "cards"} (still selected):
+                </p>
+                <ul className="mt-0.5 flex flex-col gap-0.5">
+                  {multi.failures.map((f) => (
+                    <li key={f.ref}>
+                      <span className="font-mono text-[11px]">{f.ref}</span>: {f.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-[var(--color-faint)]" aria-live="polite">
+                {busy ??
+                  (count > 0
+                    ? `${count} selected`
+                    : "Click or Space to select · Enter adds")}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[var(--color-ink)]">{m.title}</span>
-              {m.note ? (
-                <span className="shrink-0 text-[10px] text-[var(--color-epic)]">{m.note}</span>
-              ) : null}
-            </button>
-          ))
-        )}
+              <button
+                type="button"
+                disabled={count === 0 || busy !== null}
+                // Keep focus in the picker so a pointer press doesn't close it.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commit}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    close();
+                  }
+                }}
+                title={count > 0 ? `Add ${count} selected ${count === 1 ? "card" : "cards"}` : "Select cards to add"}
+                aria-label={count > 0 ? `Add ${count} selected ${count === 1 ? "card" : "cards"}` : "Add selected cards"}
+                className="shrink-0 rounded-md bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Add {count > 0 ? count : ""}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </span>
   );
@@ -338,7 +526,12 @@ function ParentPicker({
     () =>
       (ctx?.epics ?? [])
         .filter((e) => e.id !== excludeId)
-        .map((e) => ({ id: e.id, ref: itemRef(key, e.number) ?? "", title: titleOf(e) })),
+        .map((e) => ({
+          id: e.id,
+          ref: itemRef(key, e.number) ?? "",
+          title: titleOf(e),
+          status: e.status,
+        })),
     [ctx, excludeId, key],
   );
   return (
@@ -531,41 +724,103 @@ export function DraftParent({
  * the list and the count. Every link change is a normal PATCH, so it lands in
  * the child's history.
  */
+/**
+ * The epic's children in its detail modal: "N/M done", an "Add child" action
+ * (a multi-select typeahead over cards in the project that can become its
+ * child), and a clickable list (ref, title, status) where each child has a
+ * remove-from-epic icon action. Both lists read status (board column order) then
+ * number. Archived children still reference the epic but are left out of the
+ * list and the count. Every link change is a normal PATCH, so it lands in the
+ * child's history — a multi-add sends one PATCH per card, one at a time.
+ */
 export function EpicChildren({ item }: { item: Item }) {
   const ctx = useEpics();
   const key = useProjectKey();
   const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failures, setFailures] = useState<{ ref: string; error: string }[]>([]);
 
   // Cards that can become this epic's child: same project (the context holds
   // only this project), not an epic, not archived, not already its child. A card
-  // in ANOTHER epic is offered with a note — picking it moves it.
+  // in ANOTHER epic is offered with a note — adding it moves it.
   const candidates = useMemo<Option[]>(
     () =>
-      (ctx?.all ?? [])
-        .filter(
+      sortByStatusThenNumber(
+        (ctx?.all ?? []).filter(
           (c) =>
             c.type !== "epic" &&
             !c.archived_at &&
             c.parent_id !== item.id &&
             c.project_id === item.project_id,
-        )
-        .map((c) => {
-          const other = c.parent_id ? ctx?.byId.get(c.parent_id) : undefined;
-          const otherRef = other ? itemRef(key, other.number) : null;
-          return {
-            id: c.id,
-            ref: itemRef(key, c.number) ?? "",
-            title: titleOf(c),
-            note: c.parent_id ? `in ${otherRef ?? "another epic"} · moves here` : undefined,
-          };
-        }),
+        ),
+      ).map((c) => {
+        const other = c.parent_id ? ctx?.byId.get(c.parent_id) : undefined;
+        const otherRef = other ? itemRef(key, other.number) : null;
+        return {
+          id: c.id,
+          ref: itemRef(key, c.number) ?? "",
+          title: titleOf(c),
+          status: c.status,
+          note: c.parent_id ? `in ${otherRef ?? "another epic"} · moves here` : undefined,
+        };
+      }),
     [ctx, item.id, item.project_id, key],
   );
 
+  // Only ids still offered count as selected (a card can stop being a
+  // candidate after a refresh, e.g. archived elsewhere).
+  const liveSelected = useMemo(() => {
+    const ok = new Set(candidates.map((c) => c.id));
+    return new Set([...selected].filter((id) => ok.has(id)));
+  }, [selected, candidates]);
+
   if (!ctx || item.type !== "epic") return null;
+  const epics = ctx;
   const live = ctx.childrenOf(item.id).filter((c) => !c.archived_at);
   const { done, total } = epicProgress(live);
   const epicRef = itemRef(key, item.number) ?? "this epic";
+
+  function closePicker() {
+    setAdding(false);
+    setSelected(new Set());
+    setFailures([]);
+  }
+
+  function toggle(id: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function addAll(ids: string[]) {
+    if (busy !== null || ids.length === 0) return;
+    const refOf = (id: string) => {
+      const c = epics.byId.get(id);
+      return c ? (itemRef(key, c.number) ?? "card") : "card";
+    };
+    setFailures([]);
+    setBusy(`Adding 1 of ${ids.length}…`);
+    const failed: LinkFailure[] = await linkSequentially(
+      ids,
+      (id) => epics.linkParent(id, item.id),
+      (n, total) => setBusy(n < total ? `Adding ${n + 1} of ${total}…` : "Refreshing…"),
+    );
+    if (failed.length === 0) {
+      setBusy(null);
+      closePicker();
+      return;
+    }
+    // Some links were refused: show the real state, keep the failed cards
+    // selected, and say which failed and why.
+    await epics.refresh();
+    setSelected(new Set(failed.map((f) => f.id)));
+    setFailures(failed.map((f) => ({ ref: refOf(f.id), error: f.error })));
+    setBusy(null);
+  }
 
   return (
     <div>
@@ -580,20 +835,25 @@ export function EpicChildren({ item }: { item: Item }) {
             <ItemTypeahead
               options={candidates}
               placeholder="Card ref or title…"
-              label={`Add child item to ${epicRef}`}
+              label={`Add child items to ${epicRef}`}
               emptyText="No cards available to add"
-              onPick={(id) => {
-                setAdding(false);
-                ctx.setParent(id, item.id);
+              align="right"
+              onPick={(id) => void addAll([id])}
+              onClose={closePicker}
+              multi={{
+                selected: liveSelected,
+                onToggle: toggle,
+                onCommit: (ids) => void addAll(ids),
+                busy,
+                failures,
               }}
-              onClose={() => setAdding(false)}
             />
           ) : (
             <button
               type="button"
               onClick={() => setAdding(true)}
-              title={`Add an existing card to ${epicRef}`}
-              aria-label={`Add child item to ${epicRef}`}
+              title={`Add existing cards to ${epicRef}`}
+              aria-label={`Add child items to ${epicRef}`}
               className={actionBtn}
             >
               <PlusIcon />
