@@ -6,6 +6,7 @@ import {
   changedTrackedFields,
   snapshotOf,
   type ItemSnapshot,
+  type SnapshotAnnotations,
   type TrackedField,
 } from "@/lib/item-snapshot";
 
@@ -20,10 +21,12 @@ import {
 export {
   TRACKED_FIELDS,
   changedTrackedFields,
+  parentChangeSummary,
   restorePatch,
   snapshotOf,
   snapshotParentId,
   type ItemSnapshot,
+  type SnapshotAnnotations,
   type TrackedField,
 } from "@/lib/item-snapshot";
 
@@ -68,6 +71,7 @@ export async function snapshotThenWrite(
   patch: Record<string, unknown>,
   source: HistorySource,
   editSession: string | null = null,
+  annotations: SnapshotAnnotations = {},
 ): Promise<CoreResult<Item>> {
   const changed = changedTrackedFields(current, patch);
 
@@ -80,7 +84,7 @@ export async function snapshotThenWrite(
       .from("item_versions")
       .insert({
         item_id: current.id,
-        snapshot: snapshotOf(current),
+        snapshot: { ...snapshotOf(current), ...annotations },
         fields_changed: changed,
         source,
         edit_session: editSession,

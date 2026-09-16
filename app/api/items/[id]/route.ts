@@ -4,7 +4,7 @@ import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { categoryInProject } from "@/lib/categories-core";
 import { snapshotThenWrite } from "@/lib/item-history";
-import { patchLinkError } from "@/lib/items-core";
+import { deleteItemWithHistory, patchLinkError } from "@/lib/items-core";
 import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import {
   isItemStatus,
@@ -149,7 +149,23 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const deny = await denyItemAccess(id, gate.email);
   if (deny) return deny;
 
-  const { error } = await getSupabase().from("items").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  const { data: row } = await getSupabase().from("items").select("*").eq("id", id).maybeSingle();
+  if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const item = row as Item;
+  const { data: proj } = await getSupabase()
+    .from("projects")
+    .select("key")
+    .eq("id", item.project_id)
+    .maybeSingle();
+
+  // Children of a deleted epic are un-linked through the history chokepoint
+  // first (FK on delete set null remains the backstop).
+  const r = await deleteItemWithHistory(
+    getSupabase(),
+    gate.email,
+    item,
+    (proj as { key: string | null } | null)?.key ?? null,
+  );
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+  return NextResponse.json({ ok: true, unlinked_children: r.data.unlinked });
 }

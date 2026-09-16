@@ -5,6 +5,7 @@ import { categoryInProject, listCategories, pathOf } from "@/lib/categories-core
 import { displayName, itemRef } from "@/lib/format";
 import {
   listItemVersions,
+  parentChangeSummary,
   restorePatch,
   snapshotOf,
   snapshotParentId,
@@ -66,7 +67,7 @@ function summarize(
         return `area → ${path || "unfiled"}`;
       }
       case "parent_id":
-        return `parent → ${after.parent_id ? refOf(after.parent_id) : "none"}`;
+        return parentChangeSummary(snap, after, refOf);
       case "type":
         return `type → ${TYPE_LABEL[after.type] ?? after.type}`;
       case "status":

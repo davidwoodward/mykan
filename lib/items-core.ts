@@ -37,6 +37,7 @@ import {
   type CoreResult,
 } from "@/lib/projects-core";
 import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
+import { deleteWithChildHistory } from "@/lib/epic-delete";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -482,6 +483,60 @@ export async function patchLinkError(
   return parentLinkError(current, nextType, data as Item, {
     allowArchived: nextParentId === current.parent_id,
   });
+}
+
+/**
+ * Permanently delete an item. If it has children (an epic), each child is first
+ * un-linked through the history chokepoint, so its history reads
+ * "parent KEY-N removed (epic deleted)"; see lib/epic-delete.ts for the order
+ * and the failure handling. The caller has already checked access.
+ */
+export async function deleteItemWithHistory(
+  sb: SupabaseClient,
+  actor: string,
+  item: Item,
+  projectKey: string | null,
+  source: HistorySource = "web",
+): Promise<CoreResult<{ unlinked: number }>> {
+  const { data: kidRows, error: kidErr } = await sb
+    .from("items")
+    .select("*")
+    .eq("parent_id", item.id);
+  if (kidErr) return coreErr(kidErr.message, 500);
+  // Latest known row per child: the chokepoint snapshots whatever it is given.
+  const rows = new Map(((kidRows ?? []) as Item[]).map((c) => [c.id, c]));
+  const parentRef = refOf(projectKey, item.number);
+
+  const outcome = await deleteWithChildHistory({
+    childIds: [...rows.keys()],
+    unlink: async (id) => {
+      const w = await snapshotThenWrite(sb, actor, rows.get(id)!, { parent_id: null }, source, null, {
+        parent_ref: parentRef,
+        parent_cleared_reason: "epic_deleted",
+      });
+      if (!w.ok) return w.error;
+      rows.set(id, w.data);
+      return null;
+    },
+    relink: async (id) => {
+      const w = await snapshotThenWrite(sb, actor, rows.get(id)!, { parent_id: item.id }, source);
+      if (!w.ok) return w.error;
+      rows.set(id, w.data);
+      return null;
+    },
+    deleteItem: async () => {
+      const { error } = await sb.from("items").delete().eq("id", item.id);
+      return error ? error.message : null;
+    },
+  });
+  if (!outcome.ok) {
+    const stranded = outcome.relinkFailed.map((id) => refOf(projectKey, rows.get(id)!.number));
+    const tail = stranded.length
+      ? ` — but ${stranded.join(", ")} could not be linked back; re-add ${stranded.length === 1 ? "it" : "them"} to ${parentRef}`
+      : "";
+    return coreErr(`${outcome.error}${tail}`, 500);
+  }
+  return coreOk({ unlinked: outcome.unlinked.length });
 }
 
 /** Postgres guard-rule errors (check / FK violations) are the caller's fault. */

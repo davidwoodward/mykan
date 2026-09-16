@@ -420,8 +420,9 @@ export function ProjectDetailView({
   const deleteItem = useCallback(
     async (id: string) => {
       const before = items;
-      // Deleting an epic un-links its children (the DB does the same via
-      // on delete set null), so mirror that locally.
+      // Deleting an epic un-links its children first (server-side, with a
+      // history entry on each), so mirror that locally.
+      const hadChildren = (before ?? []).some((it) => it.parent_id === id);
       setItems(
         (prev) =>
           prev
@@ -430,13 +431,18 @@ export function ProjectDetailView({
       );
       try {
         const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await responseError(res));
       } catch (e) {
         setItems(before ?? null);
-        setError(e instanceof Error ? e.message : "Failed to delete");
+        const msg = e instanceof Error ? e.message : "Failed to delete";
+        setError(msg);
+        // A failed epic delete re-links its children server-side, and a re-link
+        // can itself fail — re-pull so the board shows what actually happened
+        // (keeping the message, which a successful refetch would clear).
+        if (hadChildren) void refetch().then(() => setError(msg));
       }
     },
-    [items],
+    [items, refetch],
   );
 
   // Soft delete / restore. Optimistically flips archived_at so the item moves

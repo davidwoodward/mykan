@@ -28,7 +28,40 @@ export type ItemSnapshot = {
   parent_id?: string | null;
   type: ItemType;
   status: ItemStatus;
+  /**
+   * Annotation, not item state: the ref of `parent_id` (e.g. "KANBAN-34"),
+   * recorded when the write that follows removes the parent for a reason the
+   * history must still name after the epic row is gone.
+   */
+  parent_ref?: string;
+  /** Annotation: why the following write cleared the parent. */
+  parent_cleared_reason?: "epic_deleted";
 };
+
+/** Extra annotation fields a writer may attach to the snapshot it records. */
+export type SnapshotAnnotations = Pick<ItemSnapshot, "parent_ref" | "parent_cleared_reason">;
+
+/**
+ * The history-panel line for a write that changed the parent: from `before`
+ * (the snapshot) to `after` (the next state). `refOf` names an epic by id; a
+ * deleted epic can't be looked up, so the snapshot's `parent_ref` wins then.
+ */
+export function parentChangeSummary(
+  before: ItemSnapshot,
+  after: { parent_id?: string | null },
+  refOf: (id: string) => string,
+): string {
+  const prev = before.parent_id ?? null;
+  const next = after.parent_id ?? null;
+  if (next) {
+    return prev && prev !== next
+      ? `parent ${before.parent_ref ?? refOf(prev)} → ${refOf(next)}`
+      : `parent → ${refOf(next)}`;
+  }
+  const name = before.parent_ref ?? (prev ? refOf(prev) : "");
+  const why = before.parent_cleared_reason === "epic_deleted" ? " (epic deleted)" : "";
+  return name ? `parent ${name} removed${why}` : `parent removed${why}`;
+}
 
 export function snapshotOf(item: Item): ItemSnapshot {
   return {
