@@ -43,6 +43,7 @@ import {
   CONTENT_BOUNDARY,
   ITEM_BODY_BUDGET_CHARS,
   MCP_ENTRY_MAX_CHARS,
+  MCP_SERVER_INSTRUCTIONS,
   answerArgsError,
   bodyBudgetWarning,
   entryCapError,
@@ -491,7 +492,11 @@ function unauthorized(): Response {
  * is kept alive for backward compatibility with existing registrations.
  */
 export function createGatedMcpHandler(basePath: string) {
-  const handler = createMcpHandler(registerTools, undefined, { basePath });
+  const handler = createMcpHandler(
+    registerTools,
+    { instructions: MCP_SERVER_INSTRUCTIONS },
+    { basePath },
+  );
   return async function gated(req: Request): Promise<Response> {
     const email = await resolveMcpActor(req);
     if (!email) return unauthorized();

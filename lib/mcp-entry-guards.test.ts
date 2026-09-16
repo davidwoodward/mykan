@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   ITEM_BODY_BUDGET_CHARS,
   MCP_ENTRY_MAX_CHARS,
+  MCP_SERVER_INSTRUCTIONS,
   answerArgsError,
   bodyBudgetWarning,
   entryCapError,
@@ -119,4 +120,11 @@ test("append_item_note says where the note went and how to read it back", () => 
   const m = progressRecordedMessage("KANBAN-37");
   assert.match(m, /^Recorded as a progress entry on KANBAN-37 \(not in the card body\)\./);
   assert.match(m, /list_item_entries/);
+});
+
+test("server instructions state the card model and the real cap", () => {
+  assert.match(MCP_SERVER_INSTRUCTIONS, /Decisions are David's/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /append_item_note/);
+  assert.ok(MCP_SERVER_INSTRUCTIONS.includes(`${MCP_ENTRY_MAX_CHARS} characters`));
+  assert.match(MCP_SERVER_INSTRUCTIONS, /nothing is saved/);
 });

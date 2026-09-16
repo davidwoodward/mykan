@@ -23,6 +23,32 @@ export const ITEM_BODY_BUDGET_CHARS = 8000;
 export const CONTENT_BOUNDARY =
   "Boundary: the card holds the work (description = a clean living spec), decisions and status; lobe holds durable lessons; repo _continue/ docs hold handoffs, linked from the card and never copied into it.";
 
+/**
+ * Server-level usage guidance sent to every MCP client on connect (the MCP
+ * `instructions` field). The one place a session learns the whole card model
+ * before calling any tool; tool descriptions repeat the parts they need.
+ */
+export const MCP_SERVER_INSTRUCTIONS = [
+  "mykan is David's kanban and the system of record for his work across projects. Cards are referenced as KEY-N (e.g. KANBAN-37).",
+  "",
+  "How a card is organised:",
+  "- The description (card body) is a clean, living spec: objective, scope, current plan, acceptance. Edit it in place with set_item_body when the plan changes; item history keeps old versions. Never append progress, corrections or session logs to it.",
+  "- Progress goes in progress entries (append_item_note). One short checkpoint per meaningful step: what changed, where (PR, commit, file), what's next.",
+  "- Questions for David go in question entries (ask_question). When David answers, record the answer with answer_question.",
+  "- Decisions are David's. record_decision records what David decided; never record your own judgement as a decision. When a decision changes, record the new one with supersedes rather than editing history away.",
+  "- Entries are editable and versioned: fix a wrong entry with update_item_entry, don't add a correction on top.",
+  `- Every entry is capped at ${MCP_ENTRY_MAX_CHARS} characters. Over the cap nothing is saved: put the detail in the repo (a doc, a _continue/ handoff, the PR description) and record a short entry that links to it.`,
+  "",
+  "Where things belong:",
+  "- The card: the work, what was decided, where it stands.",
+  "- lobe: durable lessons and traps worth remembering beyond this card.",
+  "- Repo _continue/ docs: session handoffs. Link them from the card; never copy them into it.",
+  "",
+  "Reading: list_items returns titles only. get_item returns the description plus active decisions, open questions and a progress summary; call list_item_entries when you need the progress log or older entries.",
+  "",
+  "Epics: an epic groups child cards in the same project (set_item_parent, one level only). Status changes, type changes and card rewrites are real writes to David's live board: re-read a card with get_item immediately before rewriting it.",
+].join("\n");
+
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 /** Why this entry text is refused over MCP (blank, not text, too long), or null. */
