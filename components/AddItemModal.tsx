@@ -5,6 +5,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { TagEditor } from "@/components/TagEditor";
 import { TypeSegmented } from "@/components/TypeSegmented";
 import { DraftCategory } from "@/components/CategoryPicker";
+import { DraftParent } from "@/components/EpicLinks";
 import { richDocText, type Item, type ItemType, type RichDoc } from "@/lib/types";
 
 const EMPTY_DOC: RichDoc = { type: "doc", content: [] };
@@ -38,6 +39,13 @@ export function AddItemModal({
   const [type, setType] = useState<ItemType>("feature");
   const [tags, setTags] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Parent epic, linked at creation. An epic can't have a parent, so choosing
+  // the Epic type clears (and hides) it.
+  const [parentId, setParentId] = useState<string | null>(null);
+  const chooseType = useCallback((t: ItemType) => {
+    setType(t);
+    if (t === "epic") setParentId(null);
+  }, []);
   const bodyRef = useRef<RichDoc>(EMPTY_DOC);
   // Live getter for the editor's current doc — bypasses the editor's 700ms
   // onChange debounce so an immediate Esc still sees what was just typed.
@@ -70,10 +78,17 @@ export function AddItemModal({
           type,
           tags,
           category_id: categoryId,
+          ...(parentId && type !== "epic" ? { parent_id: parentId } : {}),
           ...(typeof position === "number" ? { position } : {}),
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const msg = await res
+          .json()
+          .then((d: { error?: unknown }) => (typeof d.error === "string" ? d.error : null))
+          .catch(() => null);
+        throw new Error(msg ?? `HTTP ${res.status}`);
+      }
       const created = (await res.json()) as Item;
       onCreated(created);
       onClose();
@@ -81,7 +96,7 @@ export function AddItemModal({
       setError(e instanceof Error ? e.message : "Failed to create");
       setBusy(false);
     }
-  }, [projectId, type, tags, categoryId, position, busy, onCreated, onClose, currentDoc]);
+  }, [projectId, type, tags, categoryId, parentId, position, busy, onCreated, onClose, currentDoc]);
 
   // Esc means "I'm done" (like the editor): if the draft has content it
   // commits, so you never lose typed work to a reflexive Esc; an empty draft
@@ -124,7 +139,7 @@ export function AddItemModal({
             <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
               New item
             </span>
-            <TypeSegmented value={type} onChange={setType} />
+            <TypeSegmented value={type} onChange={chooseType} />
           </div>
           <button
             type="button"
@@ -144,8 +159,11 @@ export function AddItemModal({
           autoFocus
         />
 
-        <div className="flex items-center gap-2 border-t border-[var(--color-line)] px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] px-4 py-2.5">
           <DraftCategory categoryId={categoryId} onChange={setCategoryId} />
+          {type !== "epic" ? (
+            <DraftParent parentId={parentId} onChange={setParentId} />
+          ) : null}
         </div>
 
         <div className="border-t border-[var(--color-line)] px-4 py-2.5">

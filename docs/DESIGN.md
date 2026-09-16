@@ -145,13 +145,26 @@ its children.
 
 - **Epics are ordinary cards** on the board and list, with the Epic type badge plus an
   "N/M done" count over their **non-archived** children.
-- **A child shows its epic inline** (`ItemParent`): an epic-coloured chip with ref + title
-  that opens the epic, a pencil to change it and × to clear it. With no parent, "+ epic"
-  appears only when the project has an open epic to pick.
-- **The parent picker** follows the picker rules below, seeded with the current parent's
-  ref (selected, so typing replaces it) and offering only non-archived epics in the project.
-- **The epic's detail modal** lists its children (ref, title, status), each clickable.
-  Following a link swaps the open modal to that item.
+- **Cards show links; the detail modal edits them.** A child's board card / list row shows an
+  epic-coloured chip (ref + title) that opens the epic, and an epic shows "N/M done". The
+  link *controls* live in the detail modal, deliberately not inline on every card: an inline
+  "+ epic" put a control on every card of any project with an epic, and linking is an
+  occasional, deliberate act, unlike tagging. (This is a considered exception to the
+  inline-minimal instinct under Tags.)
+- **Both sides, explicitly labelled.** A non-epic item's modal has a **Parent epic** row:
+  **Add parent** (opens the picker), or the chip with **Change parent** (pencil) and
+  **Remove parent** (unlink) icon actions. An epic's modal lists its children (ref, title,
+  status; each opens the child) with a remove-from-epic icon per child and an **Add child**
+  typeahead over cards that can join (non-epic, non-archived, not already its child); a card
+  already in another epic is listed with "in KEY-N · moves here" and picking it moves it.
+  The **Add Item** modal has the same **Add parent** picker, hidden and cleared when the type
+  is Epic. Following a link swaps the open modal to that item.
+- **The pickers** follow the picker rules below: open on focus, ↑/↓, Enter picks, Esc closes
+  just the picker, Tab moves on; the parent picker is seeded with the current parent's ref
+  (selected, so typing replaces it) and offers only non-archived epics in the project.
+- **History:** every link change goes through the history chokepoint, including deleting an
+  epic — each child (archived too) is un-linked first and its history reads
+  "parent KEY-N removed (epic deleted)".
 - **Archived:** an archived child keeps its link but drops out of the list and count; an
   archived epic keeps its children's links (the chip says "archived") but can't be picked as
   a new parent.

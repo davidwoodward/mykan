@@ -35,7 +35,7 @@ import { EditButton } from "@/components/EditButton";
 import { RefBadge } from "@/components/RefBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
-import { EpicProgress, ItemParent } from "@/components/EpicLinks";
+import { EpicProgress, ParentChip } from "@/components/EpicLinks";
 import {
   CLAMP_LINES,
   ITEM_STATUSES,
@@ -448,7 +448,7 @@ function ItemRow({
             <ItemCategory item={item} />
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            <ItemParent item={item} className="min-w-0" />
+            <ParentChip item={item} className="min-w-0" />
             <EpicProgress item={item} />
             <InlineTags
               tags={item.tags}
