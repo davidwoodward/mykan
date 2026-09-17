@@ -73,8 +73,9 @@ export function ProjectsView({
   }
 
   // Live-suggested key from the typed name (letters/digits, starting with a
-  // letter). A key is required and permanent (KANBAN-44): it is the project's
-  // URL (/KEY) and every card's ref (KEY-12). A blank field uses the suggestion.
+  // letter). A key is required (KANBAN-44) and can be renamed later, keeping
+  // old links working (KANBAN-45): it is the project's URL (/KEY) and every
+  // card's ref (KEY-12). A blank field uses the suggestion.
   const suggestedKey = (name.replace(/^[^A-Za-z]+/, "").match(/[A-Za-z0-9]/g) ?? [])
     .join("")
     .slice(0, 4)
@@ -254,7 +255,7 @@ export function ProjectsView({
               keyProblem ? "text-[var(--color-bug)]" : "text-[var(--color-faint)]"
             }`}
           >
-            {keyProblem ?? "The project's address and card prefix. Permanent: it can't be changed later."}
+            {keyProblem ?? "The project's address and card prefix. You can rename it later; old links keep working."}
           </p>
 
           <div className="mt-3 flex items-center justify-between gap-2">

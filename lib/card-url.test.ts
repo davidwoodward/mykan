@@ -10,12 +10,14 @@ import {
   cardPath,
   cardUrl,
   keyError,
+  keyMatchDecision,
   legacyProjectRedirect,
   lookupDecision,
   normalizeKeyInput,
   parseRootSegment,
   projectUrl,
   routeDecision,
+  withQuery,
 } from "./card-url.ts";
 
 test("keyError: every existing project key is valid", () => {
@@ -134,4 +136,39 @@ test("cardEscAction: first Esc finishes the field, second leaves", () => {
   assert.equal(cardEscAction({ ...base, saving: true }), "ignore");
   // A picker that handled its own Esc wins even over the restore prompt.
   assert.equal(cardEscAction({ ...base, handled: true, restorePrompt: true }), "ignore");
+});
+
+test("keyMatchDecision: current key resolves; an old key redirects; misses 404 (KANBAN-45)", () => {
+  const board = { kind: "project", key: "FPOON" } as const;
+  const card = { kind: "card", key: "FPOON", number: 42 } as const;
+  // Current key of a visible project: go on to the normal lookup.
+  assert.deepEqual(keyMatchDecision(card, { via: "key", currentKey: "FPOON", visible: true }), {
+    action: "resolve",
+  });
+  // Old key of a visible project: the same board or card under the current key.
+  assert.deepEqual(keyMatchDecision(board, { via: "alias", currentKey: "FP", visible: true }), {
+    action: "redirect",
+    to: "/FP",
+  });
+  assert.deepEqual(keyMatchDecision(card, { via: "alias", currentKey: "FP", visible: true }), {
+    action: "redirect",
+    to: "/FP-42",
+  });
+  // Unknown key.
+  assert.deepEqual(keyMatchDecision(card, null), { action: "notFound" });
+  // A project the viewer can't see: the same 404, by its key or an old key.
+  assert.deepEqual(keyMatchDecision(card, { via: "alias", currentKey: "FP", visible: false }), {
+    action: "notFound",
+  });
+  assert.deepEqual(keyMatchDecision(board, { via: "key", currentKey: "FPOON", visible: false }), {
+    action: "notFound",
+  });
+});
+
+test("withQuery keeps the query, repeated values included", () => {
+  assert.equal(withQuery("/FP", {}), "/FP");
+  assert.equal(
+    withQuery("/FP", { view: "board", tag: ["a", "b"], x: undefined }),
+    "/FP?view=board&tag=a&tag=b",
+  );
 });

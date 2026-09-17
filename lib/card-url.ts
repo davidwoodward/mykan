@@ -7,6 +7,9 @@
 // can be imported by server pages, API routes, the MCP server and client
 // components alike. The database mirrors the key rules (a CHECK constraint in
 // supabase/migrations/2026-09-16-4-project-keys.sql); keep the two in step.
+//
+// Keys can be renamed (KANBAN-45); a project's old keys are kept as aliases, so
+// /OLD and /OLD-N redirect to /NEW and /NEW-N (keyMatchDecision below).
 
 /** The one site origin. The app already fixed this host for its MCP endpoint. */
 export const SITE_URL = "https://kanban.dbwoodward.com";
@@ -25,8 +28,9 @@ export const KEY_MAX = 10;
  * by) a real top-level route. The first group is every top-level entry under
  * app/ today (api, mcp, projects, signin, icon; apple-icon has a hyphen so the
  * format already rules it out) plus the auth routes Auth.js serves under /api.
- * The second group is routes the app is likely to grow, reserved now because a
- * key can never be renamed later. Mirrored by projects_key_not_reserved.
+ * The second group is routes the app is likely to grow, reserved now so a
+ * future route never collides with a key (or an old key, which keeps
+ * redirecting). Mirrored by projects_key_not_reserved.
  */
 export const RESERVED_KEYS: readonly string[] = [
   // Routes that exist today.
@@ -173,6 +177,53 @@ export function lookupDecision(input: {
   if (!input.projectVisible) return "notFound";
   if (input.wantsCard && !input.cardFound) return "notFound";
   return "render";
+}
+
+/**
+ * How a canonical key matched a project, for the viewer: by its current key or
+ * by one of its old keys (an alias, KANBAN-45), and whether the viewer can see
+ * that project. null when the key names nothing.
+ */
+export type KeyMatch = {
+  via: "key" | "alias";
+  /** The project's current key. */
+  currentKey: string;
+  visible: boolean;
+} | null;
+
+/**
+ * What the root route does once it knows what the key matched:
+ * - resolve:  the current key of a visible project; go on to lookupDecision.
+ * - redirect: an old key of a visible project; permanently to the same board or
+ *             card under the current key (/OLD-7 -> /NEW-7). The card itself is
+ *             not checked first: /NEW-7 404s on its own if there is no card 7,
+ *             and the viewer can already see the project.
+ * - notFound: unknown, or a project the viewer can't see. An old key of a
+ *             hidden project is the same 404 as a key that never existed, so it
+ *             reveals nothing (visibility is checked before any redirect).
+ */
+export type KeyMatchDecision =
+  | { action: "resolve" }
+  | { action: "redirect"; to: string }
+  | { action: "notFound" };
+
+export function keyMatchDecision(segment: RootSegment, match: KeyMatch): KeyMatchDecision {
+  if (!match || !match.visible) return { action: "notFound" };
+  if (match.via === "key") return { action: "resolve" };
+  return { action: "redirect", to: canonicalPath({ ...segment, key: match.currentKey }) };
+}
+
+/** `path` with the query kept, e.g. withQuery("/FP", {view: "board"}) = "/FP?view=board". */
+export function withQuery(
+  path: string,
+  query: Record<string, string | string[] | undefined>,
+): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    for (const one of Array.isArray(v) ? v : v === undefined ? [] : [v]) qs.append(k, one);
+  }
+  const s = qs.toString();
+  return s ? `${path}?${s}` : path;
 }
 
 /**

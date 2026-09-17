@@ -30,8 +30,9 @@ export async function POST(req: Request) {
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
   const description =
     typeof body.description === "string" ? body.description : null;
-  // The project key (e.g. FPOON) is required and permanent (KANBAN-44): it is
-  // the board's URL (/FPOON) and every card's ref prefix (FPOON-42).
+  // The project key (e.g. FPOON) is required (KANBAN-44): it is the board's URL
+  // (/FPOON) and every card's ref prefix (FPOON-42). It can't be another
+  // project's key or old key (KANBAN-45); it can be renamed later.
   const key = normalizeKeyInput(body.key);
   const keyErr = await projectKeyWriteError(getSupabase(), key);
   if (keyErr) return NextResponse.json({ error: keyErr.error }, { status: keyErr.status });

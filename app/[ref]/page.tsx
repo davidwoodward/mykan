@@ -10,14 +10,25 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { GithubConnect } from "@/components/GithubConnect";
 import { McpTokenSettings } from "@/components/McpTokenSettings";
 import { Brand } from "@/components/Brand";
-import { itemByNumber, visibleProjectByKey } from "@/lib/route-resolve";
-import { lookupDecision, routeDecision, type RootSegment } from "@/lib/card-url";
+import { itemByNumber, projectForKey } from "@/lib/route-resolve";
+import {
+  keyMatchDecision,
+  lookupDecision,
+  routeDecision,
+  withQuery,
+  type KeyMatchDecision,
+  type RootSegment,
+} from "@/lib/card-url";
+import { projectKeyAliases } from "@/lib/project-keys";
+import { getSupabase } from "@/lib/supabase-server";
 import { richDocTitle, type Item, type Project } from "@/lib/types";
 
 // The root segment is a project key (/FPOON, the board) or a card ref
 // (/FPOON-42, the card page), KANBAN-44. Static top-level routes (api, mcp,
 // signin, projects, icon) always win over this dynamic segment, and keys can
 // never equal them (lib/card-url.ts RESERVED_KEYS, mirrored in the database).
+// A project's old key (KANBAN-45) redirects permanently to the same page under
+// its current key, only once the viewer is known to see that project.
 //
 // Status codes: every decision (redirect, not found) is made before anything
 // renders and there is deliberately no loading.tsx or Suspense boundary in this
@@ -28,11 +39,19 @@ type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type Resolved = { project: Project; item: Item | null; segment: RootSegment };
+type Resolved =
+  | { action: "render"; project: Project; item: Item | null; segment: RootSegment }
+  | Exclude<KeyMatchDecision, { action: "resolve" }>;
 
-/** Resolve a canonical segment for this viewer, or null (= not found). */
-async function resolve(segment: RootSegment, email: string): Promise<Resolved | null> {
-  const project = await visibleProjectByKey(segment.key, email);
+/**
+ * Resolve a canonical segment for this viewer: render it, redirect an old key
+ * to the current one, or not found. Visibility is decided before any redirect,
+ * so an old key of a hidden project is the same 404 as an unknown key.
+ */
+async function resolve(segment: RootSegment, email: string): Promise<Resolved> {
+  const { match, project } = await projectForKey(segment.key, email);
+  const byKey = keyMatchDecision(segment, match);
+  if (byKey.action !== "resolve") return byKey;
   const item =
     project && segment.kind === "card" ? await itemByNumber(project.id, segment.number) : null;
   const decision = lookupDecision({
@@ -40,7 +59,9 @@ async function resolve(segment: RootSegment, email: string): Promise<Resolved | 
     wantsCard: segment.kind === "card",
     cardFound: !!item,
   });
-  return decision === "render" && project ? { project, item, segment } : null;
+  return decision === "render" && project
+    ? { action: "render", project, item, segment }
+    : { action: "notFound" };
 }
 
 // The open project or card in the browser tab. Never throws or 404s itself
@@ -51,7 +72,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const d = routeDecision((await params).ref);
   if (!email || d.action !== "lookup") return { title: "MyKan" };
   const r = await resolve(d.segment, email);
-  if (!r) return { title: "Not found · MyKan" };
+  if (r.action === "redirect") return { title: "MyKan" };
+  if (r.action !== "render") return { title: "Not found · MyKan" };
   if (r.item && r.segment.kind === "card") {
     const title = richDocTitle(r.item.body);
     const ref = `${r.segment.key}-${r.segment.number}`;
@@ -72,17 +94,15 @@ export default async function RootRefPage({ params, searchParams }: Props) {
   if (d.action === "redirect") {
     // Case/zero normalising is syntactic: it says nothing about whether the
     // project exists. Keep the board's query (filters) across it.
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(query)) {
-      for (const one of Array.isArray(v) ? v : v === undefined ? [] : [v]) qs.append(k, one);
-    }
-    const s = qs.toString();
-    permanentRedirect(s ? `${d.to}?${s}` : d.to);
+    permanentRedirect(withQuery(d.to, query));
   }
 
   const r = await resolve(d.segment, email);
-  if (!r) notFound();
+  // An old key of a project the viewer can see: /OLD-7 -> /NEW-7, query kept.
+  if (r.action === "redirect") permanentRedirect(withQuery(r.to, query));
+  if (r.action !== "render") notFound();
   const { project, item } = r;
+  const keyAliases = await projectKeyAliases(getSupabase(), project.id);
   const members = projectMembers(project);
 
   return (
@@ -97,6 +117,7 @@ export default async function RootRefPage({ params, searchParams }: Props) {
             <ProjectSwitcher currentId={project.id} />
             <ProjectHeader
               project={project}
+              keyAliases={keyAliases}
               isOwner={isOwner(email)}
               viewerEmail={email}
               allMembers={whitelist()}

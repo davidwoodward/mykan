@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Project } from "@/lib/types";
+import { aliasProjectId } from "@/lib/project-keys";
 
 export type CoreResult<T> =
   | { ok: true; data: T }
@@ -78,8 +79,27 @@ export async function listProjects(
 }
 
 /**
- * Resolve a project by id or case-insensitive name, enforcing visibility.
- * A project the actor can't see is reported as "not found" (never reveal it).
+ * The visible project a key names, by its current key or by one of its old keys
+ * (KANBAN-45), case-insensitively; null when none. `visible` is the actor's
+ * project list (listProjects), so a hidden project is never returned.
+ */
+export async function findVisibleProjectByKey(
+  sb: SupabaseClient,
+  visible: Project[],
+  key: string,
+): Promise<Project | null> {
+  const uc = key.trim().toUpperCase();
+  const byKey = visible.find((p) => p.key === uc);
+  if (byKey) return byKey;
+  if (!visible.length) return null;
+  const id = await aliasProjectId(sb, uc);
+  return id ? visible.find((p) => p.id === id) ?? null : null;
+}
+
+/**
+ * Resolve a project by id, key, case-insensitive name, or old key (in that
+ * order), enforcing visibility. A project the actor can't see is reported as
+ * "not found" (never reveal it). The result always carries the CURRENT key.
  */
 export async function resolveProject(
   sb: SupabaseClient,
@@ -91,10 +111,14 @@ export async function resolveProject(
   const r = ref.trim();
   const byId = list.data.find((p) => p.id === r);
   if (byId) return coreOk(byId);
+  const byKey = list.data.find((p) => p.key === r.toUpperCase());
+  if (byKey) return coreOk(byKey);
   const lc = r.toLowerCase();
   const named = list.data.filter((p) => p.name.trim().toLowerCase() === lc);
   if (named.length === 1) return coreOk(named[0]);
   if (named.length > 1) return coreErr(`Multiple projects named "${r}" — use the id`, 400);
+  const byOldKey = await findVisibleProjectByKey(sb, list.data, r);
+  if (byOldKey) return coreOk(byOldKey);
   return coreErr(`Project not found: ${r}`, 404);
 }
 
