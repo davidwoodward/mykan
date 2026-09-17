@@ -21,6 +21,14 @@ import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { HistoryList } from "@/components/ItemHistory";
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import {
+  DecisionsPanel,
+  ProgressPanel,
+  entryTabCounts,
+  useItemEntries,
+  type EntriesApi,
+} from "@/components/EntryPanels";
+import { CardFinishContext, useRegisterFinisher, type Finisher } from "@/components/cardFinish";
+import {
   EpicChildren,
   EpicProgress,
   EpicProvider,
@@ -50,17 +58,15 @@ async function responseError(res: Response): Promise<string> {
 
 /**
  * The sections beside the description, in tab order. One definition, so the
- * page's layout has one obvious place to grow.
- *
- * KANBAN-38 adds its two panels HERE, e.g.
- *   { id: "progress", label: "Progress" },
- *   { id: "decisions", label: "Decisions & Questions" },
- * and renders them in `PanelBody` below. Nothing else about the layout changes.
+ * page's layout has one obvious place to grow; each is rendered in `PanelBody`.
+ * KANBAN-38 added Progress and Decisions & Questions.
  */
-type PanelId = "children" | "attachments" | "history";
+type PanelId = "children" | "progress" | "decisions" | "attachments" | "history";
 type PanelDef = { id: PanelId; label: string; show: (item: Item) => boolean };
 const PANELS: PanelDef[] = [
   { id: "children", label: "Child items", show: (it) => it.type === "epic" },
+  { id: "progress", label: "Progress", show: () => true },
+  { id: "decisions", label: "Decisions & Questions", show: () => true },
   { id: "attachments", label: "Attachments", show: () => true },
   { id: "history", label: "History", show: () => true },
 ];
@@ -94,8 +100,12 @@ export function CardPage({
   // GitHub refresh).
   const [epoch, setEpoch] = useState(0);
   const [panel, setPanel] = useState<PanelId>(
-    initialItem.type === "epic" ? "children" : "attachments",
+    initialItem.type === "epic" ? "children" : "progress",
   );
+  // The card's progress notes, questions and decisions (KANBAN-38), loaded
+  // once here so both panels and the tab counts share them, and so they (and
+  // any open entry editor) survive the description editor remounting.
+  const entries = useItemEntries(initialItem.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,8 +180,26 @@ export function CardPage({
     [applyItem],
   );
 
-  // Set by the editor while mounted: finish editing (save once if needed).
-  const finishRef = useRef<(() => Promise<boolean>) | null>(null);
+  // Every open editor on the page (the description, entry editors) registers
+  // how to finish it; leaving finishes them all first (KANBAN-38).
+  const finishers = useRef(new Set<Finisher>());
+  const registerFinisher = useCallback((f: Finisher) => {
+    finishers.current.add(f);
+    return () => {
+      finishers.current.delete(f);
+    };
+  }, []);
+  const finishAll = useCallback(async (): Promise<boolean> => {
+    const results = await Promise.all([...finishers.current].map((f) => f()));
+    return results.every(Boolean);
+  }, []);
+  // Set by the description editor while mounted: take a change made to this
+  // card by a section beside it (attachments, history restore).
+  const itemChangeRef = useRef<((item: Item) => void) | null>(null);
+  const onPanelItemChange = useCallback(
+    (updated: Item) => (itemChangeRef.current ?? applyItem)(updated),
+    [applyItem],
+  );
   // Opened from this project's board in this tab: history Back returns there.
   const fromBoard = useRef(false);
   useEffect(() => {
@@ -187,23 +215,21 @@ export function CardPage({
       const target = items?.find((it) => it.id === id);
       if (!target) return;
       void (async () => {
-        const finish = finishRef.current;
-        if (finish && !(await finish())) return;
+        if (!(await finishAll())) return;
         if (fromBoard.current) markCardFromBoard(projectKey);
         router.replace(cardPath(projectKey, target.number));
       })();
     },
-    [items, projectKey, router],
+    [items, projectKey, router, finishAll],
   );
 
   // Back to the board: finish (save once if needed; a failure stays), then go
   // Back when the board is directly behind this page, else to the board URL.
   const leave = useCallback(async () => {
-    const finish = finishRef.current;
-    if (finish && !(await finish())) return;
+    if (!(await finishAll())) return;
     if (fromBoard.current && window.history.length > 1) router.back();
     else router.push(projectPath(projectKey));
-  }, [projectKey, router]);
+  }, [projectKey, router, finishAll]);
 
   const epicCtx = useEpicValue(items, openCard, setParent, linkParent, refresh);
 
@@ -216,20 +242,33 @@ export function CardPage({
   return (
     <ProjectKeyProvider value={projectKey}>
       <EpicProvider value={epicCtx}>
-        <CardEditor
-          key={`${item.id}:${epoch}`}
-          item={item}
-          projectKey={projectKey}
-          allTags={allTags}
-          error={error}
-          panel={panel}
-          onPanel={setPanel}
-          finishRef={finishRef}
-          onLeave={() => void leave()}
-          onSaved={applyItem}
-          onItemChange={applyItem}
-          onRemount={() => setEpoch((n) => n + 1)}
-        />
+        <CardFinishContext.Provider value={registerFinisher}>
+          {/* Header row across the page, then the description beside one
+              tabbed column of sections (stacked on a phone). The sections sit
+              OUTSIDE the description editor's remount (abandon, a change
+              underneath), so an open entry editor is never torn down by it. */}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)] lg:grid-rows-[auto_minmax(0,1fr)]">
+            <CardEditor
+              key={`${item.id}:${epoch}`}
+              item={item}
+              projectKey={projectKey}
+              allTags={allTags}
+              error={error}
+              itemChangeRef={itemChangeRef}
+              onLeave={() => void leave()}
+              onSaved={applyItem}
+              onItemChange={applyItem}
+              onRemount={() => setEpoch((n) => n + 1)}
+            />
+            <CardSections
+              item={item}
+              panel={panel}
+              onPanel={setPanel}
+              entries={entries}
+              onItemChange={onPanelItemChange}
+            />
+          </div>
+        </CardFinishContext.Provider>
       </EpicProvider>
     </ProjectKeyProvider>
   );
@@ -259,9 +298,7 @@ function CardEditor({
   projectKey,
   allTags,
   error,
-  panel,
-  onPanel,
-  finishRef,
+  itemChangeRef,
   onLeave,
   onSaved,
   onItemChange,
@@ -271,9 +308,7 @@ function CardEditor({
   projectKey: string;
   allTags: string[];
   error: string | null;
-  panel: PanelId;
-  onPanel: (p: PanelId) => void;
-  finishRef: React.MutableRefObject<(() => Promise<boolean>) | null>;
+  itemChangeRef: React.MutableRefObject<((item: Item) => void) | null>;
   onLeave: () => void;
   onSaved: (item: Item) => void;
   onItemChange: (item: Item) => void;
@@ -358,12 +393,7 @@ function CardEditor({
     return p;
   }, [syncDraft, session, close, save]);
 
-  useEffect(() => {
-    finishRef.current = finish;
-    return () => {
-      finishRef.current = null;
-    };
-  }, [finishRef, finish]);
+  useRegisterFinisher(finish);
 
   // Abandon: drop the unsaved changes (no write) and reload the editor with the
   // stored card. Stays on the page; Esc then goes back to the board.
@@ -398,15 +428,25 @@ function CardEditor({
     },
     [onItemChange, syncDraft, session, onRemount],
   );
+  useEffect(() => {
+    itemChangeRef.current = takeItemChange;
+    return () => {
+      itemChangeRef.current = null;
+    };
+  }, [itemChangeRef, takeItemChange]);
 
   // Esc: see cardEscAction (lib/card-url.ts). The first Esc while editing a
   // field finishes that edit and settles; the next Esc goes back to the board.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (restore && e.key === "Enter" && !e.defaultPrevented) {
-        const onPromptButton =
-          e.target instanceof HTMLElement && e.target.closest("[data-restore-prompt] button");
-        if (!onPromptButton) {
+        // Enter elsewhere is not an answer to this prompt: on a prompt's own
+        // button, or anywhere in the entry panels (a newline in an entry
+        // editor, another prompt), it does its own thing.
+        const elsewhere =
+          e.target instanceof HTMLElement &&
+          e.target.closest("[data-restore-prompt] button, [data-entry-panels]");
+        if (!elsewhere) {
           e.preventDefault();
           onRestore();
         }
@@ -507,11 +547,12 @@ function CardEditor({
   );
 
   const ref = `${projectKey}-${item.number}`;
-  const panels = PANELS.filter((p) => p.show(item));
-  const activePanel = panels.some((p) => p.id === panel) ? panel : panels[0].id;
 
+  // Two grid cells of the page (CardPage lays them out beside the sections):
+  // the header block across the top, and the description column.
   return (
-    <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1">
+    <>
+    <div className="flex flex-col gap-3 lg:col-span-2">
       {/* Card header: back to the board, the ref with its copy-link action,
           type/status, save state, and the abandon icon. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 lg:shrink-0">
@@ -568,13 +609,13 @@ function CardEditor({
           <RestorePrompt restore={restore} onRestore={onRestore} onDiscard={discardRestore} />
         </div>
       ) : null}
+    </div>
 
-      <div className="grid gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
         {/* Main column: the description (its own scroll region on desktop),
             then tags, the parent epic, and GitHub provenance. */}
         <section
           aria-label="Description"
-          className="flex min-w-0 flex-col rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] lg:min-h-0"
+          className="flex min-w-0 flex-col rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] lg:col-start-1 lg:row-start-2 lg:min-h-0"
         >
           <div
             ref={editorRegion}
@@ -613,70 +654,112 @@ function CardEditor({
           </div>
         </section>
 
-        {/* Beside it: one tabbed column of sections, each scrolling on its own.
-            KANBAN-38's Progress and Decisions & Questions join PANELS. */}
-        <aside
-          aria-label="Card sections"
-          className="flex min-w-0 flex-col rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] lg:min-h-0"
+    </>
+  );
+}
+
+/**
+ * Beside the description: one tabbed column of sections (PANELS), each
+ * scrolling on its own on desktop; stacked under the description on a phone.
+ */
+function CardSections({
+  item,
+  panel,
+  onPanel,
+  entries,
+  onItemChange,
+}: {
+  item: Item;
+  panel: PanelId;
+  onPanel: (p: PanelId) => void;
+  entries: EntriesApi;
+  onItemChange: (item: Item) => void;
+}) {
+  const panels = PANELS.filter((p) => p.show(item));
+  const activePanel = panels.some((p) => p.id === panel) ? panel : panels[0].id;
+  const counts = entryTabCounts(entries.entries);
+  const countOf = (id: PanelId): ReactNode => {
+    if (id === "attachments" && item.attachments.length > 0) {
+      return <span className="ml-1 tabular-nums text-[var(--color-faint)]">{item.attachments.length}</span>;
+    }
+    if (id === "progress" && counts.progress > 0) {
+      return <span className="ml-1 tabular-nums text-[var(--color-faint)]">{counts.progress}</span>;
+    }
+    if (id === "decisions" && counts.open > 0) {
+      return (
+        <span
+          title={`${counts.open} open question${counts.open === 1 ? "" : "s"}`}
+          className="ml-1 rounded-full bg-[var(--color-accent-soft)] px-1.5 tabular-nums text-[var(--color-accent-ink)]"
         >
-          <div
-            role="tablist"
-            aria-label="Card sections"
-            className="flex flex-wrap gap-1 border-b border-[var(--color-line)] px-2 pt-2 lg:shrink-0"
-          >
-            {panels.map((p) => {
-              const on = p.id === activePanel;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  role="tab"
-                  id={`card-tab-${p.id}`}
-                  aria-selected={on}
-                  aria-controls={`card-panel-${p.id}`}
-                  onClick={() => onPanel(p.id)}
-                  className={`-mb-px rounded-t-md border-b-2 px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    on
-                      ? "border-[var(--color-accent)] text-[var(--color-ink)]"
-                      : "border-transparent text-[var(--color-faint)] hover:text-[var(--color-ink)]"
-                  }`}
-                >
-                  {p.label}
-                  {p.id === "attachments" && item.attachments.length > 0 ? (
-                    <span className="ml-1 tabular-nums text-[var(--color-faint)]">
-                      {item.attachments.length}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div
-            role="tabpanel"
-            id={`card-panel-${activePanel}`}
-            aria-labelledby={`card-tab-${activePanel}`}
-            className="px-4 py-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
-          >
-            <PanelBody id={activePanel} item={item} onItemChange={takeItemChange} />
-          </div>
-        </aside>
+          {counts.open}
+        </span>
+      );
+    }
+    return null;
+  };
+  return (
+    <aside
+      aria-label="Card sections"
+      className="flex min-w-0 flex-col rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] lg:col-start-2 lg:row-start-2 lg:min-h-0"
+    >
+      <div
+        role="tablist"
+        aria-label="Card sections"
+        className="flex flex-wrap gap-1 border-b border-[var(--color-line)] px-2 pt-2 lg:shrink-0"
+      >
+        {panels.map((p) => {
+          const on = p.id === activePanel;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              role="tab"
+              id={`card-tab-${p.id}`}
+              aria-selected={on}
+              aria-controls={`card-panel-${p.id}`}
+              onClick={() => onPanel(p.id)}
+              className={`-mb-px rounded-t-md border-b-2 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                on
+                  ? "border-[var(--color-accent)] text-[var(--color-ink)]"
+                  : "border-transparent text-[var(--color-faint)] hover:text-[var(--color-ink)]"
+              }`}
+            >
+              {p.label}
+              {countOf(p.id)}
+            </button>
+          );
+        })}
       </div>
-    </div>
+      <div
+        role="tabpanel"
+        id={`card-panel-${activePanel}`}
+        aria-labelledby={`card-tab-${activePanel}`}
+        className="px-4 py-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+      >
+        <PanelBody id={activePanel} item={item} entries={entries} onItemChange={onItemChange} />
+      </div>
+    </aside>
   );
 }
 
 function PanelBody({
   id,
   item,
+  entries,
   onItemChange,
 }: {
   id: PanelId;
   item: Item;
+  entries: EntriesApi;
   onItemChange: (item: Item) => void;
 }): ReactNode {
   switch (id) {
     case "children":
       return <EpicChildren item={item} />;
+    case "progress":
+      return <ProgressPanel api={entries} />;
+    case "decisions":
+      return <DecisionsPanel api={entries} />;
     case "attachments":
       return <Attachments item={item} onItemChange={onItemChange} />;
     case "history":

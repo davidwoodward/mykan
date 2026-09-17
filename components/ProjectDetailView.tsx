@@ -45,6 +45,7 @@ import {
 } from "@/components/CategoryPicker";
 import { CategoryManager } from "@/components/CategoryManager";
 import { EpicProvider, useEpicValue } from "@/components/EpicLinks";
+import { OpenQuestionsProvider, openQuestionCounts } from "@/components/OpenQuestionsBadge";
 
 /** The API's `{ error }` message for a failed response, else "HTTP <status>". */
 async function responseError(res: Response): Promise<string> {
@@ -84,6 +85,9 @@ export function ProjectDetailView({
     boardStateFromParams(new URLSearchParams(searchParams.toString())),
   );
   const [items, setItems] = useState<Item[] | null>(null);
+  // Open questions per item (KANBAN-38 badge), taken from each items fetch and
+  // kept apart from `items`, whose rows item PATCH responses replace.
+  const [openQuestions, setOpenQuestions] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   // View, grouping, filters and search start from the URL and are written back
   // to it as they change (KANBAN-44), so leaving for a card page and coming
@@ -142,7 +146,11 @@ export function ProjectDetailView({
     pendingSavesSettled()
       .then(() => fetch(`/api/projects/${projectId}/items`))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: Item[]) => !cancelled && setItems(d))
+      .then((d: Item[]) => {
+        if (cancelled) return;
+        setItems(d);
+        setOpenQuestions(openQuestionCounts(d));
+      })
       .catch((e: Error) => !cancelled && setError(e.message));
     fetch(`/api/projects/${projectId}/categories`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -161,7 +169,9 @@ export function ProjectDetailView({
     try {
       const r = await fetch(`/api/projects/${projectId}/items`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setItems((await r.json()) as Item[]);
+      const list = (await r.json()) as Item[];
+      setItems(list);
+      setOpenQuestions(openQuestionCounts(list));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Refresh failed");
@@ -956,6 +966,7 @@ export function ProjectDetailView({
       >
       <CategoryProvider value={categoryCtx}>
       <EpicProvider value={epicCtx}>
+      <OpenQuestionsProvider value={openQuestions}>
       {!showArchived ? (
         <div className="lg:shrink-0">
           <button
@@ -1298,6 +1309,7 @@ export function ProjectDetailView({
           onClose={() => setShowCategoryManager(false)}
         />
       ) : null}
+      </OpenQuestionsProvider>
       </EpicProvider>
       </CategoryProvider>
       </AssigneeProvider>

@@ -3,15 +3,17 @@
 // lib/mcp-server.ts applies these on the way in (caps) and on the way out
 // (body budget warning, the compact get_item entry summary).
 
-import type { EntryKind, ItemEntry } from "./item-entries-rules.ts";
+import { ENTRY_MAX_CHARS, type EntryKind, type ItemEntry } from "./item-entries-rules.ts";
 
 /**
  * The most characters an entry (progress, decision or question) may hold when
  * created or edited over MCP. One number for every kind keeps the contract
  * learnable: a decision or a question is a sentence or two, and a progress
- * note is a checkpoint, not a log. Detail belongs in the repo, linked.
+ * note is a checkpoint, not a log. Detail belongs in the repo, linked. The
+ * number lives in lib/item-entries-rules.ts (ENTRY_MAX_CHARS), shared with the
+ * web editors (KANBAN-38).
  */
-export const MCP_ENTRY_MAX_CHARS = 2000;
+export const MCP_ENTRY_MAX_CHARS = ENTRY_MAX_CHARS;
 
 /**
  * The card description size past which set_item_body still writes but warns.

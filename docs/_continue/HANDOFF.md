@@ -4,6 +4,10 @@
 follow-up were confirmed by David and moved to Done. Next: KANBAN-38 (entry panels on the card
 page), once KANBAN-44 is confirmed and its open question is answered.**
 
+**Later on 2026-09-17: KANBAN-44 is Done (David confirmed it and answered its question, see
+below). KANBAN-38 is in flight in PR #TBD (open, not merged; no migration). David verifies it on
+prod after merge.**
+
 ## At a glance
 
 - **The epic in flight is KANBAN-34, "Clean cards".** Cards worked by Claude Code were bloating
@@ -17,12 +21,20 @@ page), once KANBAN-44 is confirmed and its open question is answered.**
   3. KANBAN-36 — Done (PR #116)
   4. KANBAN-37 — Done (PR #117)
   5. KANBAN-42 — Done (PRs #118, #119). Not a child.
-  6. **KANBAN-44 — Testing** (PR #120). Not a child.
+  6. KANBAN-44 — Done (PR #120). Not a child. (Was Testing; David confirmed 2026-09-17.)
   7. KANBAN-45 — Done (PRs #121, #122). Not a child.
-  8. **KANBAN-38 — next**
+  8. **KANBAN-38 — in flight** (PR #TBD, open for review; see "KANBAN-38 in flight" below)
   9. KANBAN-39
   10. KANBAN-40
-- **Open before KANBAN-38:**
+- **Resolved 2026-09-17 (the three items that were open before KANBAN-38):**
+  - **Click behaviour, answered by David:** keep click-to-select exactly as is. A single click
+    selects a board card or list row; the pencil, a double-click or Enter opens its page. Don't
+    change it.
+  - **404 status, confirmed by David on prod while signed in:** an unknown ref (`/KANBA-22`)
+    returns a real **404 status** and the Not found page, so the DB lookup in the page's
+    `generateMetadata` stays.
+  - **KANBAN-43** (the throwaway smoke-test card) has been deleted.
+- **Open before KANBAN-38 (as it stood; kept for the record, all resolved above):**
   - David verifies the KANBAN-44 card pages and answers its open question entry: should a single
     click on a board/list card open its page, or keep select-then-open (pencil, double-click,
     Enter)?
@@ -115,6 +127,36 @@ page), once KANBAN-44 is confirmed and its open question is answered.**
   `components/AbandonButton.tsx`).
 - **Entry body is plain text**; markdown rendering is probably wanted.
 - Read `docs/DESIGN.md` and `~/dev/me/standards/ui-ux.md` first.
+
+## KANBAN-38 in flight (PR #TBD, 2026-09-17)
+
+- **Status:** built, open PR, not merged. **No migration** (entries tables already exist; RLS is on
+  with no policies and the server client bypasses it, like items). Merging deploys it; David then
+  follows the click-by-click steps in the PR body on prod.
+- **What's in it:**
+  - Card page tabs: Child items (epics) · **Progress** · **Decisions & Questions** · Attachments ·
+    History. Non-epic cards now open on Progress.
+  - Add / edit / soft-delete / restore entries, answer a question (new decision or link an active
+    one), supersede a decision, per-entry history with restore. All via new web routes under
+    `app/api/items/[id]/entries/…` (source `web`).
+  - "N open questions" badge on board cards and list rows (one grouped query in
+    `GET /api/projects/[id]/items`; click behaviour untouched).
+- **Editing:** entry edits follow KANBAN-42 exactly (draft only, one save on Esc / click-off /
+  leaving, abandon = no write, Restore/Discard per entry). New-entry composers only write on the
+  explicit Add (⌘/Ctrl+Enter); Esc there keeps the text. Draft keys are per editor:
+  `entry:<entryId>`, `entry-new:<itemId>:<kind>`, `entry-answer:<questionId>`,
+  `entry-supersede:<decisionId>`. Leaving the card page finishes every open editor
+  (`components/cardFinish.ts`).
+- **Markdown decision (2026-09-17):** entry bodies stay **plain text** in the DB (2,000-character
+  cap, now `ENTRY_MAX_CHARS` in `lib/item-entries-rules.ts`, shared with MCP) and the web
+  **renders** them as markdown with `react-markdown` 10.1.0 + `remark-gfm` 4.0.1 (new
+  dependencies, installed under the existing `min-release-age=7` cooldown in `.npmrc`; 97
+  packages in the lock). No raw HTML, safe links (new tab, `noopener noreferrer`), no images. The
+  in-house `lib/markdown-tiptap.ts` was not reused: it italicises across `snake_case`
+  identifiers and doesn't autolink bare URLs, both common in entries written by Claude.
+- **Known limits / follow-ups:** the panel loads up to 200 entries per card (the list cap);
+  badge counts refresh with the board (load, Refresh, returning from a card), not live.
+- Full detail: `docs/DESIGN.md` → "Entry panels" and "Open-questions badge".
 
 ## After that
 
