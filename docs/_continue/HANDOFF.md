@@ -160,6 +160,28 @@ below). KANBAN-38 is Done (PRs #124, #126; David verified on prod). Next: KANBAN
   returning from a card), not live; the badge count query was judged fine at current volume.
 - Full detail: `docs/DESIGN.md` → "Entry panels" and "Open-questions badge".
 
+## Board sweep, 2026-09-17 (outside the epic)
+
+- **Closed:**
+  - KANBAN-17: card links, delivered by KANBAN-44.
+  - KANBAN-11: RLS was already on.
+  - KANBAN-27: Areas Esc-save, covered by KANBAN-42.
+  - KANBAN-33: dev environment, won't do (one environment, rehearsal routine instead).
+- **KANBAN-32 rewritten** to what's left: a tester field, a My Queue filter and a "Start me on"
+  preference. Three open questions on the card for David; don't build before they're answered.
+- **KANBAN-29** (Notes / meeting log) is a Thought; leave it Not started.
+- **Shipped, in Testing (David verifies on prod):**
+  - KANBAN-12 (#128, #132): row actions by the type pill, and a trash icon on list rows and
+    board cards (`components/DeleteIconButton.tsx`). `IconTip` is now shared,
+    `components/IconTip.tsx`.
+  - KANBAN-15 (#129, #132): paragraph gaps on list/board cards, except Done cards in both views.
+  - KANBAN-28 (#130): GitHub "?" help (`components/GithubHelp.tsx`, content in
+    `lib/github-help.ts`). Unconfirmed: whether the pre-filled new-token link selects Issues
+    read and write.
+  - KANBAN-13 (#131): the list card's ref pins while its tall row scrolls (sm and up).
+- **Prompt tooltips:** David finds native `title` tooltips too slow. New icon buttons use
+  `IconTip`.
+
 ## After that
 
 - **KANBAN-39:** convert BRAIN-8 to the new model (clean description with reversals applied,
