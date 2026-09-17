@@ -45,6 +45,7 @@ import {
   ITEM_TYPES,
   STATUS_LABEL,
   TYPE_LABEL,
+  richDocBlocks,
   richDocText,
   type Item,
   type ItemStatus,
@@ -440,6 +441,7 @@ function ItemRow({
       <div className="min-w-0 flex-1">
         <ClampedText
           text={text}
+          blocks={richDocBlocks(item.body)}
           onOpen={() => onOpen(item)}
           clampLines={CLAMP_LINES[item.status]}
           className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6"

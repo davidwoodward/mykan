@@ -37,6 +37,7 @@ import {
   CLAMP_LINES,
   ITEM_STATUSES,
   STATUS_LABEL,
+  richDocBlocks,
   richDocText,
   type Item,
   type ItemStatus,
@@ -420,6 +421,7 @@ function Card({
         <div className="min-w-0 flex-1">
           <ClampedText
             text={text}
+            blocks={item.status === "done" ? undefined : richDocBlocks(item.body)}
             onOpen={() => onOpen(item)}
             clampLines={CLAMP_LINES[item.status]}
             className="whitespace-pre-wrap break-words leading-5"

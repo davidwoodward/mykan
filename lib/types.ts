@@ -59,6 +59,30 @@ const BLOCK_NODE_TYPES = new Set([
   "horizontalRule",
 ]);
 
+type FlatNode = { type?: string; text?: string; content?: unknown[] };
+
+/** Flattens one node to text: block siblings → "\n", hard breaks → "\n". */
+function flattenNode(node: FlatNode): string {
+  if (node.type === "text") return typeof node.text === "string" ? node.text : "";
+  if (node.type === "hardBreak") return "\n";
+  if (!Array.isArray(node.content)) return "";
+  const kids = node.content as FlatNode[];
+  let out = "";
+  for (let i = 0; i < kids.length; i++) {
+    // Separate consecutive block-level siblings with a newline; inline runs
+    // (text, marks, hard breaks) stay on the same line.
+    if (
+      i > 0 &&
+      (BLOCK_NODE_TYPES.has(kids[i - 1].type ?? "") ||
+        BLOCK_NODE_TYPES.has(kids[i].type ?? ""))
+    ) {
+      out += "\n";
+    }
+    out += flattenNode(kids[i]);
+  }
+  return out;
+}
+
 /**
  * Flattens the plain text out of a rich-text body, preserving the line
  * structure: block siblings (paragraphs, list items, code lines, headings) are
@@ -68,36 +92,47 @@ const BLOCK_NODE_TYPES = new Set([
  */
 export function richDocText(body: RichDoc | null | undefined): string {
   if (!body || !Array.isArray(body.content)) return "";
-  const flatten = (node: {
-    type?: string;
-    text?: string;
-    content?: unknown[];
-  }): string => {
-    if (node.type === "text") return typeof node.text === "string" ? node.text : "";
-    if (node.type === "hardBreak") return "\n";
-    if (!Array.isArray(node.content)) return "";
-    const kids = node.content as {
-      type?: string;
-      text?: string;
-      content?: unknown[];
-    }[];
-    let out = "";
-    for (let i = 0; i < kids.length; i++) {
-      // Separate consecutive block-level siblings with a newline; inline runs
-      // (text, marks, hard breaks) stay on the same line.
-      if (
-        i > 0 &&
-        (BLOCK_NODE_TYPES.has(kids[i - 1].type ?? "") ||
-          BLOCK_NODE_TYPES.has(kids[i].type ?? ""))
-      ) {
-        out += "\n";
-      }
-      out += flatten(kids[i]);
-    }
-    return out;
-  };
   // Trim only outer blank lines/space — interior newlines and indentation stay.
-  return flatten(body as { content?: unknown[] }).replace(/^\s+|\s+$/g, "");
+  return flattenNode(body as FlatNode).replace(/^\s+|\s+$/g, "");
+}
+
+/**
+ * The body split into its **top-level blocks** (paragraphs, headings, a whole
+ * list, a code block…), each flattened like `richDocText`, so list rows and
+ * board cards can put a small gap between paragraphs (KANBAN-15). Hard breaks
+ * stay "\n" inside their block and a list stays one block (its items on
+ * consecutive lines), so only real paragraph boundaries get spaced. A blank
+ * paragraph is kept as an empty block, so blank lines typed to separate
+ * sections still show. Joining the result with "\n" gives exactly
+ * `richDocText(body)` (same outer trim, same blank lines).
+ */
+export function richDocBlocks(body: RichDoc | null | undefined): string[] {
+  if (!body || !Array.isArray(body.content)) return [];
+  const nodes = body.content as FlatNode[];
+  const out: string[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const text = flattenNode(nodes[i]);
+    // Mirror flattenNode's separator rule: two adjacent non-block nodes (e.g.
+    // stray top-level images) share a line, so they share a block.
+    if (
+      i > 0 &&
+      !BLOCK_NODE_TYPES.has(nodes[i - 1].type ?? "") &&
+      !BLOCK_NODE_TYPES.has(nodes[i].type ?? "")
+    ) {
+      out[out.length - 1] += text;
+    } else {
+      out.push(text);
+    }
+  }
+  // Same outer trim as richDocText: drop leading/trailing blank blocks, then
+  // the outer whitespace of the first and last blocks.
+  while (out.length > 0 && out[0].trim() === "") out.shift();
+  while (out.length > 0 && out[out.length - 1].trim() === "") out.pop();
+  if (out.length > 0) {
+    out[0] = out[0].replace(/^\s+/, "");
+    out[out.length - 1] = out[out.length - 1].replace(/\s+$/, "");
+  }
+  return out;
 }
 
 /** Longest title `richDocTitle` returns, ellipsis included. */

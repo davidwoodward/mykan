@@ -1,7 +1,13 @@
 // Run with `npm test` (Node's built-in test runner; Node strips the types).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { richDocTitle, TITLE_MAX_CHARS, type RichDoc } from "./types.ts";
+import {
+  richDocBlocks,
+  richDocText,
+  richDocTitle,
+  TITLE_MAX_CHARS,
+  type RichDoc,
+} from "./types.ts";
 
 const p = (text?: string) =>
   text === undefined
@@ -59,4 +65,88 @@ test("a long first line with no spaces is hard-cut with an ellipsis", () => {
 test("a first line at the cap is returned unchanged", () => {
   const exact = "y".repeat(TITLE_MAX_CHARS);
   assert.equal(richDocTitle(doc(p(exact))), exact);
+});
+
+// richDocBlocks (KANBAN-15): top-level blocks, so cards can space paragraphs.
+
+const li = (t: string) => ({ type: "listItem", content: [p(t)] });
+
+test("blocks are one entry per top-level paragraph", () => {
+  assert.deepEqual(richDocBlocks(doc(p("Title"), p("Second"), p("Third"))), [
+    "Title",
+    "Second",
+    "Third",
+  ]);
+});
+
+test("a hard break stays inside its paragraph block", () => {
+  const body = doc(
+    {
+      type: "paragraph",
+      content: [
+        { type: "text", text: "line one" },
+        { type: "hardBreak" },
+        { type: "text", text: "line two" },
+      ],
+    },
+    p("next para"),
+  );
+  assert.deepEqual(richDocBlocks(body), ["line one\nline two", "next para"]);
+});
+
+test("a list is one block with its items on consecutive lines", () => {
+  const body = doc(
+    p("Intro"),
+    { type: "bulletList", content: [li("a"), li("b"), li("c")] },
+    p("Outro"),
+  );
+  assert.deepEqual(richDocBlocks(body), ["Intro", "a\nb\nc", "Outro"]);
+});
+
+test("blank paragraphs between text are kept as empty blocks", () => {
+  const body = doc(
+    p(),
+    p("   "),
+    p("  Title"),
+    p(),
+    p(),
+    { type: "image", attrs: { src: "x" } },
+    p("Body"),
+    p(),
+  );
+  assert.deepEqual(richDocBlocks(body), ["Title", "", "", "", "Body"]);
+});
+
+test("indentation inside later blocks is kept", () => {
+  const body = doc(p("Title"), {
+    type: "codeBlock",
+    content: [{ type: "text", text: "  indented\n    more" }],
+  });
+  assert.deepEqual(richDocBlocks(body), ["Title", "  indented\n    more"]);
+});
+
+test("blocks joined by newlines always equal richDocText", () => {
+  const img = { type: "image", attrs: { src: "x" } };
+  const bodies = [
+    doc(
+      p("Title"),
+      { type: "heading", content: [{ type: "text", text: "Heading" }] },
+      { type: "orderedList", content: [li("one"), li("two")] },
+      p("End"),
+    ),
+    doc(p(), p("  Objective  "), p(), p("Scope"), p("   "), p(), p("Acceptance"), p()),
+    doc(p("a"), img, img, p("b"), img),
+    doc({ type: "bulletList", content: [li(""), li("x")] }, p("  y  ")),
+    doc(img),
+  ];
+  for (const body of bodies) {
+    assert.equal(richDocBlocks(body).join("\n"), richDocText(body));
+  }
+});
+
+test("empty and missing bodies give no blocks", () => {
+  assert.deepEqual(richDocBlocks(null), []);
+  assert.deepEqual(richDocBlocks(undefined), []);
+  assert.deepEqual(richDocBlocks(doc()), []);
+  assert.deepEqual(richDocBlocks(doc(p())), []);
 });
