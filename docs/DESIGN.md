@@ -50,7 +50,8 @@ is an icon, not the word, and stays last (after the pill, never beside the penci
 easy to hit by accident; it is the same one-click soft delete (archive, restorable from the
 archived view) and stays tap-visible below `sm`. Every icon in the cluster uses the prompt
 styled tooltip (below), not a native `title`. The archived view's Restore / Delete forever
-words are unchanged.
+words are unchanged. Board cards use the same trash icon (hover-only), from the shared
+`components/DeleteIconButton.tsx` (David, 2026-09-17).
 
 ## Paragraph spacing on list rows and board cards (KANBAN-15, 2026-09-17)
 
@@ -63,8 +64,9 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
 - **Blank paragraphs are kept** as a blank line (plus the gap), so empty lines typed to
   separate sections still separate them; the spaced text is exactly the old text, only
   with gaps added.
-- **Where:** every List view row, and every Board column **except Done**, which stays
-  compact (the old single flattened text, blank lines and all) because Done piles up.
+- **Where:** every List view row and every Board card **except Done cards**, which stay
+  compact (the old single flattened text, blank lines and all) because Done piles up. That
+  covers the Board's Done column and Done rows in the List view (David, 2026-09-17).
 - **Unchanged:** the first line (title) sits exactly where it did (no gap above it); the
   line clamp and Show more/less still count lines across the blocks (margins don't use up a
   line); text stays plain and selectable; single click selects, double-click / pencil /
