@@ -74,6 +74,9 @@ export function Attachments({
       e.preventDefault();
       void commitRename(att);
     } else if (e.key === "Escape") {
+      // Handled here: the card page's Esc must not also finish (blur, which
+      // would commit this rename) or leave the page.
+      e.preventDefault();
       setRenamingId(null);
     }
   }

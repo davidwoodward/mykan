@@ -54,7 +54,10 @@ export function McpTokenSettings() {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) close();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        e.preventDefault(); // handled: nothing underneath (the card page) also acts
+        close();
+      }
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
