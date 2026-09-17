@@ -4,7 +4,11 @@ import { loadProjectForAccess, requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { normalizeAssignees } from "@/lib/types";
 import { normalizeKeyInput } from "@/lib/card-url";
-import { keyConstraintMessage, projectKeyWriteError } from "@/lib/project-keys";
+import {
+  keyConstraintMessage,
+  projectKeyAliases,
+  projectKeyWriteError,
+} from "@/lib/project-keys";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,7 +19,9 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const access = await loadProjectForAccess(id, gate.email);
   if (access.error) return access.error;
-  return NextResponse.json(access.project);
+  // The project's old keys (KANBAN-45), for the edit panel.
+  const key_aliases = await projectKeyAliases(getSupabase(), id);
+  return NextResponse.json({ ...access.project, key_aliases });
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
@@ -38,21 +44,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (typeof body.description === "string" || body.description === null) {
     patch.description = body.description;
   }
-  // The project key is permanent once set (KANBAN-44): it is the board's URL
-  // and every card ref, so there is no renaming and no clearing. Sending the
-  // current key is a no-op. Only a legacy project with no key may be given one.
+  // The project key is the board's URL and every card's ref prefix. It can be
+  // renamed (KANBAN-45): the database keeps the old key as an alias, so old
+  // links and refs keep working. Sending the current key is a no-op. The key
+  // can't be cleared, and can't be another project's key or old key.
   if (body.key !== undefined) {
     const current = (access.project as { key?: string | null }).key ?? null;
     const next = normalizeKeyInput(body.key);
-    if (current) {
-      if (next !== current) {
-        return NextResponse.json(
-          { error: `A project key is permanent once set (this project is ${current})` },
-          { status: 400 },
-        );
-      }
-    } else {
-      const keyErr = await projectKeyWriteError(getSupabase(), next);
+    if (next !== current) {
+      const keyErr = await projectKeyWriteError(getSupabase(), next, id);
       if (keyErr) return NextResponse.json({ error: keyErr.error }, { status: keyErr.status });
       patch.key = next;
     }
@@ -92,7 +92,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const msg = keyConstraintMessage(error);
     return NextResponse.json({ error: msg ?? error.message }, { status: msg ? 400 : 500 });
   }
-  return NextResponse.json(data);
+  // The project's old keys ride along, so the edit panel can show them.
+  const key_aliases = await projectKeyAliases(getSupabase(), id);
+  return NextResponse.json({ ...data, key_aliases });
 }
 
 export async function DELETE(_req: Request, { params }: Ctx) {

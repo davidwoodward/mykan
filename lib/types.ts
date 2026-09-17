@@ -192,6 +192,11 @@ export interface Project {
    * github_accounts), or null. Not a stored column.
    */
   github_account?: string | null;
+  /**
+   * The project's old keys (KANBAN-45), which still redirect here. Returned by
+   * PATCH /api/projects/[id]; not a stored column (project_key_aliases).
+   */
+  key_aliases?: string[];
 }
 
 /** A node in a project's Area tree. Items reference one by id. */

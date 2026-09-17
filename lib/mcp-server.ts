@@ -68,7 +68,7 @@ const CAP = `${MCP_ENTRY_MAX_CHARS.toLocaleString("en-US")} characters`;
 function registerTools(server: McpServer) {
   server.tool(
     "list_projects",
-    "List mykan projects visible to the agent (id, name, key, privacy). Each row's `url` is the project's board, e.g. https://kanban.dbwoodward.com/KANBAN.",
+    "List mykan projects visible to the agent (id, name, key, privacy). `key` is the current key; old keys from renames still work wherever a project or KEY-N ref is accepted. Each row's `url` is the project's board, e.g. https://kanban.dbwoodward.com/KANBAN.",
     {},
     async () => {
       const r = await listProjects(getSupabase(), actor());
@@ -79,9 +79,9 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_items",
-    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
+    "List non-archived items in a project. `project` is a key (current or old), name, or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
     {
-      project: z.string().describe("project name or id"),
+      project: z.string().describe("project key (current or old), name, or id"),
       status: status.optional().describe("new | in_progress | blocked | testing | done"),
     },
     async (a) => out(await listItems(getSupabase(), actor(), a.project, a.status)),
@@ -89,7 +89,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12). `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body (the card's description, a living spec) as plain text, title line included. `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body (the card's description, a living spec) as plain text, title line included. `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
@@ -137,9 +137,9 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "create_item",
-    "Create a new item in a project. `project` is a name or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as further paragraphs of the description (not a progress entry) — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails). Type 'epic' makes a card that groups other cards; set `parent` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project.",
+    "Create a new item in a project. `project` is a key (current or old), name, or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as further paragraphs of the description (not a progress entry) — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails). Type 'epic' makes a card that groups other cards; set `parent` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project.",
     {
-      project: z.string().describe("project name or id"),
+      project: z.string().describe("project key (current or old), name, or id"),
       name: z
         .string()
         .describe(
@@ -412,9 +412,9 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "set_project_github_account",
-    "Bind a project to a GitHub account (or unbind). `project` is a name or id; `account` is the GitHub account/org login as connected in mykan, or empty to unbind. Issues import into the project's areas that are mapped to repos in this account. Does NOT touch credentials.",
+    "Bind a project to a GitHub account (or unbind). `project` is a key (current or old), name, or id; `account` is the GitHub account/org login as connected in mykan, or empty to unbind. Issues import into the project's areas that are mapped to repos in this account. Does NOT touch credentials.",
     {
-      project: z.string().describe("project name or id"),
+      project: z.string().describe("project key (current or old), name, or id"),
       account: z.string().describe("GitHub account/org login as connected in mykan; empty to unbind"),
     },
     async (a) =>
@@ -423,16 +423,16 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_areas",
-    "List a project's Areas as full '/'-separated paths with any bound GitHub repo. `project` is a name or id.",
-    { project: z.string().describe("project name or id") },
+    "List a project's Areas as full '/'-separated paths with any bound GitHub repo. `project` is a key (current or old), name, or id.",
+    { project: z.string().describe("project key (current or old), name, or id") },
     async (a) => out(await listAreas(getSupabase(), actor(), a.project)),
   );
 
   server.tool(
     "set_area_github_repo",
-    "Bind a GitHub repo to a project's Area (or unbind). `project` is a name or id; `area` is a '/'-separated path (created if missing); `repo` is just the repo NAME — the owner is implied by the project's bound GitHub account — or empty to unbind. Issues from this repo import as items under this Area. Does NOT touch credentials.",
+    "Bind a GitHub repo to a project's Area (or unbind). `project` is a key (current or old), name, or id; `area` is a '/'-separated path (created if missing); `repo` is just the repo NAME — the owner is implied by the project's bound GitHub account — or empty to unbind. Issues from this repo import as items under this Area. Does NOT touch credentials.",
     {
-      project: z.string().describe("project name or id"),
+      project: z.string().describe("project key (current or old), name, or id"),
       area: z.string().describe("Area path, e.g. 'coach / home' (created if missing)"),
       repo: z.string().describe("repo name (owner implied by the project's account); empty to unbind"),
     },

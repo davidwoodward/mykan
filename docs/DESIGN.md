@@ -200,13 +200,28 @@ Every card has its own page, and no user-facing URL carries a GUID.
   same **404** with a real status (every decision happens before rendering; there is no
   `loading.tsx` or Suspense in `app/[ref]`, so nothing streams first). Old
   `/projects/<id>` links 308 to `/KEY`. The rules are pure and tested in `lib/card-url.ts`.
-- **Keys are required and permanent.** 2 to 10 uppercase letters and digits, starting with
+- **Keys are required.** 2 to 10 uppercase letters and digits, starting with
   a letter, unique, and never a reserved word (every top-level route in `app/`: api, mcp,
   projects, signin, icon; plus auth, login, logout, signout, settings, admin, new, home,
-  static, public, favicon, robots, sitemap). No renaming, no old-key redirects: the edit
-  panel shows the key read-only, the API refuses a change, and the database backs it all
+  static, public, favicon, robots, sitemap). The database backs it all
   (`2026-09-16-4-project-keys.sql`). The new-project form requires a key (a blank field
-  uses the suggestion from the name) and says it is permanent.
+  uses the suggestion from the name).
+- **Keys can be renamed; old keys keep working (KANBAN-45, David 2026-09-17).** KANBAN-44
+  made keys permanent; that was reversed. The key field in the project edit panel is
+  editable. Finishing the panel with a changed key (Esc, click-off, ✓) never saves it
+  silently: an inline **warning** appears in the panel (the same inline-confirm pattern
+  as History's Restore) saying what changes (every card ref becomes `NEW-N`, the board
+  moves to `/NEW`) and what keeps working (`/OLD`, `/OLD-N` and `OLD-N` over MCP). **Enter**
+  or **Rename key** confirms and saves; **Esc**, **Keep OLD** or a press outside the
+  warning drops just the key change and leaves the panel open (Esc again then saves the
+  other fields as usual). The panel lists the project's old keys. The old key is kept as
+  an alias (`project_key_aliases`, `2026-09-17-1-project-key-aliases.sql`): `/OLD` and
+  `/OLD-N` 308 to `/NEW` and `/NEW-N` (query kept, after the case-normalising redirect, and
+  only once the viewer is known to see the project: an old key of a hidden project is the
+  same 404), and MCP tools accept `OLD-N` and the old key as a project, always answering
+  with the current key and url. Renaming back to one of the project's own old keys makes
+  it current again. An old key can never be taken by another project (rename or create);
+  deleting a project frees its old keys. After a rename the page moves to the new URL.
 - **One layout, no modal.** The item modal is gone. The card page puts the **description
   in the main column** (tags, parent epic and GitHub provenance under it) and the other
   sections **beside it as tabs**: Child items (epics), Attachments, History. Below `lg`

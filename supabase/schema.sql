@@ -126,9 +126,10 @@ create trigger items_set_number
   before insert on items
   for each row execute function set_item_number();
 
--- Project keys are required, well-formed, unique, never a reserved word, and
--- permanent (KANBAN-44): the key is the board URL (/FPOON) and the prefix of
--- every card URL (/FPOON-42). 2 to 10 uppercase letters/digits starting with a
+-- Project keys are required, well-formed, unique and never a reserved word
+-- (KANBAN-44): the key is the board URL (/FPOON) and the prefix of every card
+-- URL (/FPOON-42). Keys can be renamed; every old key is kept as an alias
+-- (below, KANBAN-45). 2 to 10 uppercase letters/digits starting with a
 -- letter; the reserved list mirrors RESERVED_KEYS in lib/card-url.ts (every
 -- top-level app route plus likely future ones). Migration, which also gave the
 -- Standards project the key STD:
@@ -150,24 +151,84 @@ exception when duplicate_object then null;
 end $$;
 create unique index if not exists projects_key_unique on projects (key);
 
-create or replace function projects_key_permanent() returns trigger
+-- Old project keys (KANBAN-45). Renaming a key records the old one here, so
+-- /OLD and /OLD-N redirect to /NEW and /NEW-N and MCP tools accept OLD-N.
+-- Renaming back to one of the project's own old keys makes it current again
+-- (its alias row is removed). A key that is another project's alias can't be
+-- taken by a rename or a new project. Deleting a project frees its old keys.
+-- Migration: supabase/migrations/2026-09-17-1-project-key-aliases.sql
+-- (it also dropped the KANBAN-44 projects_key_permanent trigger).
+create table if not exists project_key_aliases (
+  key        text primary key,
+  project_id uuid not null references projects (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint project_key_aliases_key_format check ((key collate "C") ~ '^[A-Z][A-Z0-9]{1,9}$')
+);
+create index if not exists project_key_aliases_project_idx on project_key_aliases (project_id);
+
+drop trigger if exists projects_key_permanent on projects;
+drop function if exists projects_key_permanent();
+
+create or replace function projects_key_aliases_guard() returns trigger
 language plpgsql
 set search_path = mykan, pg_temp
 as $$
 begin
-  if old.key is not null and new.key is distinct from old.key then
-    raise exception 'project key is permanent once set: % cannot become %',
-      old.key, coalesce(new.key, 'NULL')
+  if tg_op = 'UPDATE' and new.key is not distinct from old.key then
+    return new;
+  end if;
+
+  -- Serialise with anything else touching these keys (sorted: fewer deadlocks).
+  if tg_op = 'UPDATE' and old.key is not null and old.key < new.key then
+    perform pg_advisory_xact_lock(hashtext('mykan.project_key:' || old.key));
+    perform pg_advisory_xact_lock(hashtext('mykan.project_key:' || new.key));
+  elsif tg_op = 'UPDATE' and old.key is not null then
+    perform pg_advisory_xact_lock(hashtext('mykan.project_key:' || new.key));
+    perform pg_advisory_xact_lock(hashtext('mykan.project_key:' || old.key));
+  elsif new.key is not null then
+    perform pg_advisory_xact_lock(hashtext('mykan.project_key:' || new.key));
+  end if;
+
+  -- The new key must not be another project's old key.
+  if exists (
+    select 1 from mykan.project_key_aliases
+     where key = new.key
+       and project_id is distinct from new.id
+  ) then
+    raise exception 'project key % is an old key of another project, and old links to it still go there',
+      new.key
       using errcode = 'check_violation';
   end if;
+
+  if tg_op = 'UPDATE' then
+    -- Renaming back to one of this project's own old keys: current again.
+    delete from mykan.project_key_aliases
+     where key = new.key and project_id = new.id;
+
+    -- Keep the old key working.
+    if old.key is not null then
+      if exists (
+        select 1 from mykan.project_key_aliases
+         where key = old.key and project_id <> new.id
+      ) then
+        raise exception 'project key % is an old key of another project, and old links to it still go there',
+          old.key
+          using errcode = 'check_violation';
+      end if;
+      insert into mykan.project_key_aliases (key, project_id)
+      values (old.key, new.id)
+      on conflict (key) do nothing;
+    end if;
+  end if;
+
   return new;
 end;
 $$;
 
-drop trigger if exists projects_key_permanent on projects;
-create trigger projects_key_permanent
-  before update of key on projects
-  for each row execute function projects_key_permanent();
+drop trigger if exists projects_key_aliases_guard on projects;
+create trigger projects_key_aliases_guard
+  before insert or update of key on projects
+  for each row execute function projects_key_aliases_guard();
 
 -- Per-project hierarchical categories (Areas). A node references its parent
 -- (depth capped app-side at 5); an item is filed at one node. Renaming ripples
@@ -603,6 +664,7 @@ create table if not exists schema_migrations (
 -- a deliberate, additive step rather than a silent hole.
 -- Migration: supabase/migrations/2026-07-28-enable-rls.sql
 alter table projects           enable row level security;
+alter table project_key_aliases enable row level security;
 alter table items              enable row level security;
 alter table categories         enable row level security;
 alter table item_versions      enable row level security;

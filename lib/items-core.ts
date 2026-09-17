@@ -32,6 +32,7 @@ import {
 import {
   coreErr,
   coreOk,
+  findVisibleProjectByKey,
   listProjects,
   resolveProject,
   type CoreResult,
@@ -56,7 +57,8 @@ export function urlOf(key: string | null, number: number): string | null {
 }
 
 /**
- * Resolve an item by either its UUID or a "{KEY}-{N}" reference (e.g. AMOS-12),
+ * Resolve an item by either its UUID or a "{KEY}-{N}" reference (e.g. AMOS-12,
+ * or an old key of the project: FPOON-12 after FPOON was renamed FP),
  * returning the row plus its project (for the key + visibility). A project the
  * actor can't see is reported as "not found".
  */
@@ -72,9 +74,9 @@ export async function loadVisibleItem(
     const [, key, numStr] = refMatch;
     const projs = await listProjects(sb, actor);
     if (!projs.ok) return projs;
-    const project = projs.data.find(
-      (p) => (p.key ?? "").toLowerCase() === key.toLowerCase(),
-    );
+    // The current key or an old one (KANBAN-45); the result carries the
+    // current key, so refs and urls in responses always use it.
+    const project = await findVisibleProjectByKey(sb, projs.data, key);
     if (!project) return coreErr(`Item not found: ${raw}`, 404);
     const { data, error } = await sb
       .from("items")
