@@ -614,17 +614,17 @@ the top of the visible part of that row, and scrolls away only with the row's en
 - **It never covers text.** The ref has its own fixed-width column, so pinning it can't
   overlap the body. Row heights don't change.
 - **Two scroll containers, two offsets.** At `lg` the list is its own scroll region below the
-  header, so the offset is `lg:top-5` from that region's top. Between `sm` and `lg` (tablets,
-  phones in landscape) the page scrolls under the pinned header, so the offset is
-  `top: calc(var(--app-header-h) + 1.25rem)`. `--app-header-h` (`app/globals.css`, 3rem) is
+  header, so the offset is `lg:top-7` (1.75rem) from that region's top. Between `sm` and `lg`
+  (tablets, phones in landscape) the page scrolls under the pinned header, so the offset is
+  `top: calc(var(--app-header-h) + 1.75rem)`. `--app-header-h` (`app/globals.css`, 3rem) is
   also the header row's `min-height` in `app/[ref]/page.tsx`, so the offset follows the header
   rather than guessing it. 3rem is the row's natural height (32px controls + `py-2`), so the
   `min-height` changes nothing today. The home page and not-found headers must stay the same
   height (Header & nav), so if the header ever gets taller, change it on all three and update
   the variable to match.
-- **The 1.25rem cushion** leaves room above the pinned ref for its floating "Copied"
-  confirmation (KANBAN-14), which would otherwise be clipped by the scroll region or hidden
-  under the header.
+- **The 1.75rem cushion** leaves about 8px of clear room above the pinned ref for its
+  floating "Copied" confirmation (KANBAN-14), which would otherwise be clipped by the scroll
+  region or hidden under the header.
 - **Below `sm` (phones in portrait) the ref does not pin.** There the ref is on the stacked
   status line above the text (see Small-screen item rows); pinning that line would slide it
   over the body text. It stays where it is and scrolls with the row.
