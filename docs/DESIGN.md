@@ -113,8 +113,9 @@ history entry.
 > **Since KANBAN-44 the item editor is the card page (`/KEY-N`), not a modal.** The rules
 > below were written for the modal and hold unchanged; read "the modal closes" as "the
 > edit finishes" and see **Card pages and clean URLs** for what finishing and leaving
-> mean on a page (Esc in a field saves and settles, Esc again returns to the board;
-> abandon reloads the editor and stays).
+> mean on a page (Esc in the description saves and returns to the board in one press,
+> since KANBAN-46; Esc in another field such as the tag input saves and settles; the save
+> icon saves and stays; abandon reloads the editor and stays).
 
 - **Nothing is written while typing.** Changes live in a local draft in the browser. The
   rich-text body (`RichTextEditor.tsx`) never saves; it reports its document to the
@@ -127,7 +128,8 @@ history entry.
   "Save failed (reason). Still editing, nothing lost. Esc to retry." Esc or click-off
   again retries.
 - **Honest status.** The footer says "Unsaved changes · Esc or click away to save" while the
-  draft differs, "Saving…" during the close save, and the failure message above. There is
+  draft differs (on the card page since KANBAN-46: "Unsaved changes · Esc saves and returns
+  to the board" in the header, the part after the dot hidden on a phone), "Saving…" during the close save, and the failure message above. There is
   no "Saved" line: the modal closes when the save lands, and nothing claims saved while it
   isn't.
 - **Crash safety: the draft is kept in the browser.** As you type, the draft is mirrored to
@@ -199,7 +201,7 @@ Every editor has one explicit way out without saving: the **Abandon changes** ic
 
 | Editor | Icon | While editing → finish → abandon |
 |---|---|---|
-| Card page (`CardPage`; the item detail modal until KANBAN-44): rich-text body, tags (`TagEditor`) | Card header, right end | Draft only (was: body autosaved ~700ms after typing paused, each tag add/remove saved at once) → one PATCH of the changed fields on Esc in a field / click-off / leaving the page (Esc again, back arrow, a card link, browser Back, tab close), none if unchanged; a typed-but-unconfirmed tag is included → abandon discards, no write, and reloads the editor (you stay on the page). |
+| Card page (`CardPage`; the item detail modal until KANBAN-44): rich-text body, tags (`TagEditor`) | Card header, right end | Draft only (was: body autosaved ~700ms after typing paused, each tag add/remove saved at once) → one PATCH of the changed fields on the save icon (stays) / Esc in the tag input / click-off / leaving the page (Esc in the description or with nothing edited, back arrow, a card link, browser Back, tab close), none if unchanged; a typed-but-unconfirmed tag is included → abandon discards, no write, and reloads the editor (you stay on the page). |
 | Parent epic row on the card page (`ParentRow`) | Not covered | A pick (or Remove parent) is its own immediate, recorded write, not part of the draft: the epic guards answer at pick time rather than at close. Undo by relinking. Deliberate scope line. |
 | Epic's Child items on the card page (Add child, remove from epic) | Not covered | These change *other* cards' `parent_id` through explicit actions (Add N, remove icon), each its own recorded write on the child. |
 | Attachments on the card page (upload, remove) | Not covered | File operations, not field edits, and not tracked by item history. Pasted body images upload at once (they need a URL) but only enter the card through the body save. |
@@ -275,7 +277,11 @@ Every card has its own page, and no user-facing URL carries a GUID.
   one `minmax(0,1fr)` column so long entries never widen the page.
 - **Header.** Back-to-board arrow (title "Back to board (Esc)"), the ref as the heading
   with a **Copy link** icon (copies the full `https://…/KEY-N`), type, status, the save
-  state, and the **Abandon changes** icon.
+  state, the **Abandon changes** icon, and right of it the **Save changes** icon
+  (KANBAN-46, David 2026-09-17): a floppy-disk outline that saves the description and tags
+  once and **stays on the page**; disabled while nothing is unsaved or a save is in flight.
+  Like abandon, a press doesn't take focus (the caret stays in the description) and isn't
+  a click-off; `aria-label` plus the shared `IconTip`, no native `title`.
 - **Opening a card.** The pencil on a row/card is a real link to `/KEY-N` (Cmd/Ctrl-click
   opens a tab); a plain click, a double-click on the text, or **Enter** on the selected
   card (keyboard navigation on) goes to the page. Epic chips and child rows are links to
@@ -290,18 +296,23 @@ Every card has its own page, and no user-facing URL carries a GUID.
   board remembers its scroll (the desktop list is its own scroll box, which the browser
   never restores) and the opened card in `sessionStorage`; on return it restores both and
   reselects that card (`components/boardReturn.ts`).
-- **Esc and Back.** Esc while editing a field (description, tag input, any text field)
-  **finishes that edit**: one save if something changed, and the field settles. Esc when
-  nothing is being edited **saves anything still unsaved, then returns to the board**. A
-  failed save stays on the page. Esc that a picker or confirmation handled itself does
+- **Esc and Back.** *Changed by KANBAN-46 (David, 2026-09-17):* Esc in the **description**
+  **saves once (if anything changed) and returns to the board in one press**; it used to
+  save and settle, with a second Esc to leave. Esc in another field (the tag input, any
+  text field that doesn't own Esc) still **finishes that edit** and stays. Esc when
+  nothing is being edited **saves anything still unsaved, then returns to the board**.
+  Leaving finishes every open editor first; a failed save stays on the page, showing the
+  error ("Save failed (…). Nothing lost. Esc or save to retry.") with the draft kept. The
+  footer reads "Paste or drop an image to embed it · Esc saves and returns to the board". Esc that a picker or confirmation handled itself does
   nothing more; with the restore prompt up, Esc is Discard (`cardEscAction`). "Return to
   the board" is history Back when the page was opened from that board in this tab (so Esc
   and the browser's Back land in the same place), else a navigation to `/KEY`. Following a
   link to another card finishes the edit first and **replaces** the history entry, so
   Back from the next card is still the board.
 - **Editing is the save-on-finish model below, unchanged**, with the page as the editor:
-  finishing is Esc in a field, a press outside the description and tags while editing
-  them, or leaving (Esc, the back arrow, a card link, browser Back, closing the tab). A
+  finishing is the save icon, Esc in the tag input, a press outside the description and
+  tags while editing them, or leaving (Esc in the description or with nothing edited, the
+  back arrow, a card link, browser Back, closing the tab). A
   browser Back that unmounts the page mid-save sends the keepalive save, and the board
   waits for it before loading, so it never shows the old text. **Abandon** discards the
   unsaved changes with no write and reloads the editor with the stored card; you stay on
@@ -396,7 +407,12 @@ The card page shows them in two tabs beside the description
 - **Keyboard namespace.** The card page binds no navigation letters, and every entry key
   handler lives on the editor itself: typing `j k l h 0 G / u d o` in an entry only types.
   An editor's Esc is marked handled, so the card page doesn't also finish the description
-  or leave.
+  or leave: Esc in an entry editor saves that entry and stays on the page.
+  *KANBAN-46 (2026-09-17):* the **description** can't use that signal. ProseMirror calls
+  `preventDefault` on **every** Esc inside its editor (prosemirror-view `captureKeyDown`),
+  so the card page read each description Esc as "handled inside" and did nothing
+  (no save, no navigation) from KANBAN-44 until KANBAN-46. `cardEscAction` now takes
+  where focus is and disregards `handled` when it is the description.
 - **Loading.** The first page always carries **every** live open question and active
   decision, however old (`isPinnedEntry`), plus the newest 100 of everything else
   (progress, superseded, answered, deleted) and any entry those link to (answered by /

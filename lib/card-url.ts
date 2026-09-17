@@ -241,27 +241,43 @@ export function legacyProjectRedirect(project: { key: string | null } | null): s
 
 /**
  * What Esc does on a card page, in precedence order:
- * 1. ignore:          something inside already handled it (a picker closing,
- *                     a rename field), or a save is in flight.
+ * 1. ignore:          a save is in flight (never a second save or a second
+ *                     navigation), or something inside already handled the
+ *                     key (an entry editor finishing its own edit, a picker
+ *                     closing, a confirmation).
  * 2. discardRestore:  the "unsaved changes from earlier" prompt is showing;
  *                     Esc answers it with Discard (as in the modal before).
- * 3. finishField:     a field is being edited (focus in the description, the
- *                     tag input, any text field on the card): finish that
- *                     edit, saving once if anything changed, and stay.
- * 4. leave:           nothing is being edited: save if anything is still
- *                     unsaved, then return to the board. A failed save stays.
- * So Esc while typing saves and settles; a second Esc goes back to the board.
+ * 3. leave:           focus is in the description (KANBAN-46, David
+ *                     2026-09-17): save once if anything changed, then return
+ *                     to the board, in ONE press. A failed save stays on the
+ *                     page with the error and the draft.
+ * 4. finishField:     another text field is being edited (the tag input, any
+ *                     text field that doesn't own Esc): finish that edit,
+ *                     saving once if anything changed, and stay.
+ * 5. leave:           nothing is being edited: save if anything is still
+ *                     unsaved, then return to the board.
+ *
+ * `handled` means nothing in the description: ProseMirror calls
+ * preventDefault on EVERY Esc inside its editor (prosemirror-view's
+ * captureKeyDown), so reading it as "handled inside" swallowed Esc there
+ * entirely (the KANBAN-46 bug, from KANBAN-44).
  */
 export type CardEscAction = "ignore" | "discardRestore" | "finishField" | "leave";
+
+/** Where focus is when Esc is pressed on a card page. */
+export type CardEscField = "description" | "other" | null;
 
 export function cardEscAction(state: {
   handled: boolean;
   saving: boolean;
   restorePrompt: boolean;
-  editingField: boolean;
+  field: CardEscField;
 }): CardEscAction {
-  if (state.handled || state.saving) return "ignore";
+  if (state.saving) return "ignore";
+  const handled = state.handled && state.field !== "description";
+  if (handled) return "ignore";
   if (state.restorePrompt) return "discardRestore";
-  if (state.editingField) return "finishField";
+  if (state.field === "description") return "leave";
+  if (state.field === "other") return "finishField";
   return "leave";
 }

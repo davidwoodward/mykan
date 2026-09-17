@@ -127,14 +127,31 @@ test("paths and full URLs", () => {
   assert.equal(projectUrl("BRAIN"), `${SITE_URL}/BRAIN`);
 });
 
-test("cardEscAction: first Esc finishes the field, second leaves", () => {
-  const base = { handled: false, saving: false, restorePrompt: false, editingField: false };
-  assert.equal(cardEscAction({ ...base, editingField: true }), "finishField");
+test("cardEscAction: Esc in the description saves and leaves in one press (KANBAN-46)", () => {
+  const base = { handled: false, saving: false, restorePrompt: false, field: null } as const;
+  // The description: ProseMirror marks EVERY Esc handled (preventDefault), so
+  // `handled` means nothing there. This was the KANBAN-46 bug: it read as
+  // "a picker handled it" and Esc did nothing.
+  assert.equal(cardEscAction({ ...base, field: "description", handled: true }), "leave");
+  assert.equal(cardEscAction({ ...base, field: "description" }), "leave");
+  // Nothing being edited: leave (saving anything still unsaved first).
   assert.equal(cardEscAction(base), "leave");
-  assert.equal(cardEscAction({ ...base, restorePrompt: true, editingField: true }), "discardRestore");
-  assert.equal(cardEscAction({ ...base, handled: true, editingField: true }), "ignore");
+});
+
+test("cardEscAction: handled, saving, the restore prompt and other fields", () => {
+  const base = { handled: false, saving: false, restorePrompt: false, field: null } as const;
+  // Any other text field (the tag input, a field that doesn't own Esc):
+  // finish that edit and stay, as before.
+  assert.equal(cardEscAction({ ...base, field: "other" }), "finishField");
+  // Handled inside (an entry editor, a picker, a confirm): nothing more,
+  // including in the tag input.
+  assert.equal(cardEscAction({ ...base, handled: true, field: "other" }), "ignore");
+  assert.equal(cardEscAction({ ...base, handled: true }), "ignore");
+  // A save in flight: never a second save or a second navigation.
   assert.equal(cardEscAction({ ...base, saving: true }), "ignore");
-  // A picker that handled its own Esc wins even over the restore prompt.
+  assert.equal(cardEscAction({ ...base, saving: true, field: "description", handled: true }), "ignore");
+  // The restore prompt: Esc is Discard; a picker that handled its own Esc wins.
+  assert.equal(cardEscAction({ ...base, restorePrompt: true, field: "other" }), "discardRestore");
   assert.equal(cardEscAction({ ...base, handled: true, restorePrompt: true }), "ignore");
 });
 

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RichTextEditor, type EditorRead } from "@/components/RichTextEditor";
 import { AbandonButton } from "@/components/AbandonButton";
+import { IconTip } from "@/components/IconTip";
 import { useAbandonable, type PendingRestore } from "@/components/useAbandonable";
 import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
@@ -297,12 +298,14 @@ function isTextField(el: Element | null): boolean {
  * with no write; a localStorage draft is offered back with Restore / Discard.
  *
  * On a page, "finishing" is:
- * - Esc in a field (description, tag input): save once if changed, and settle.
+ * - The save icon: save once if changed, and stay (KANBAN-46).
+ * - Esc in another field (the tag input): save once if changed, and settle.
  * - A press outside the description and tags while editing them: save once.
- * - Leaving: a second Esc (or Esc with nothing being edited), the back arrow,
- *   following a link to another card (awaited, a failure stays on the page),
- *   browser Back or any client-side navigation (a best-effort save on unmount),
- *   closing the tab or reloading (a keepalive save on pagehide).
+ * - Leaving: Esc in the description or with nothing being edited (one press,
+ *   KANBAN-46), the back arrow, following a link to another card (awaited, a
+ *   failure stays on the page), browser Back or any client-side navigation (a
+ *   best-effort save on unmount), closing the tab or reloading (a keepalive
+ *   save on pagehide).
  */
 function CardEditor({
   item,
@@ -346,6 +349,8 @@ function CardEditor({
   const readBody = useRef<(() => EditorRead) | null>(null);
   const tagEditor = useRef<TagEditorHandle>(null);
   const editorRegion = useRef<HTMLDivElement>(null);
+  // Just the description editor (not the tags), for Esc (cardEscAction).
+  const descriptionRegion = useRef<HTMLDivElement>(null);
   // Set when this mount is over (abandoned): late events must not revive the draft.
   const ended = useRef(false);
   const restorePending = useRef(restore !== null);
@@ -446,8 +451,9 @@ function CardEditor({
     };
   }, [itemChangeRef, takeItemChange]);
 
-  // Esc: see cardEscAction (lib/card-url.ts). The first Esc while editing a
-  // field finishes that edit and settles; the next Esc goes back to the board.
+  // Esc: see cardEscAction (lib/card-url.ts). Esc in the description saves
+  // once and goes back to the board in one press (KANBAN-46); Esc in another
+  // field finishes that edit and stays; Esc with nothing edited goes back.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (restore && e.key === "Enter" && !e.defaultPrevented) {
@@ -466,10 +472,17 @@ function CardEditor({
       if (e.key !== "Escape") return;
       const active = document.activeElement;
       const action = cardEscAction({
+        // ProseMirror marks every Esc in the description handled; cardEscAction
+        // disregards that there.
         handled: e.defaultPrevented,
         saving: closing.current !== null,
         restorePrompt: restore !== null,
-        editingField: isTextField(active),
+        field:
+          active && descriptionRegion.current?.contains(active)
+            ? "description"
+            : isTextField(active)
+              ? "other"
+              : null,
       });
       if (action === "ignore") return;
       e.preventDefault();
@@ -488,7 +501,8 @@ function CardEditor({
   }, [restore, onRestore, discardRestore, finish, onLeave]);
 
   // Click-off: a press outside the description and tags while editing them
-  // finishes the edit (one save if changed). Presses on the abandon icon don't.
+  // finishes the edit (one save if changed). Presses on the abandon and save
+  // icons don't (the save icon finishes by its own click).
   useEffect(() => {
     function onDown(e: PointerEvent) {
       const region = editorRegion.current;
@@ -607,8 +621,12 @@ function CardEditor({
         <GithubSyncBadge item={item} onItemChange={takeItemChange} />
         <span className="ml-auto flex min-w-0 items-center gap-2 text-xs text-[var(--color-faint)]">
           <DraftIndicator status={draft.status} error={draft.error} dirty={draft.dirty} />
-          <span data-keep-draft className="inline-flex">
+          <span data-keep-draft className="inline-flex items-center gap-1">
             <AbandonButton onAbandon={onAbandon} disabled={draft.status === "saving"} />
+            <SaveButton
+              onSave={() => void finish()}
+              disabled={!draft.dirty || draft.status === "saving"}
+            />
           </span>
         </span>
       </div>
@@ -633,7 +651,10 @@ function CardEditor({
             inert={restore ? true : undefined}
             className={`flex flex-col lg:min-h-0 lg:flex-1 ${restore ? "opacity-60" : ""}`}
           >
-            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
+            <div
+              ref={descriptionRegion}
+              className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+            >
               <RichTextEditor
                 key={draft.revision}
                 value={draft.revision === 0 ? item.body : draft.values.body}
@@ -660,7 +681,7 @@ function CardEditor({
               </div>
             ) : null}
             <p className="border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">
-              Paste or drop an image to embed it · Esc saves, Esc again returns to the board
+              Paste or drop an image to embed it · Esc saves and returns to the board
             </p>
           </div>
         </section>
@@ -835,6 +856,46 @@ function CopyLinkButton({ path }: { path: string }) {
   );
 }
 
+/**
+ * The card header's save icon (KANBAN-46), right of the abandon icon: saves the
+ * description and tags once and stays on the page. Disabled with nothing
+ * unsaved. Like the abandon icon, a press doesn't take focus, so the caret
+ * stays where it was and the press isn't a click-off.
+ */
+function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolean }) {
+  const label = "Save changes";
+  return (
+    <span className="relative inline-flex shrink-0">
+      <button
+        type="button"
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onSave}
+        disabled={disabled}
+        aria-label={label}
+        className="peer grid h-7 w-7 place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-faint)]"
+      >
+        {/* A floppy disk: body with a clipped corner, the label and the shutter. */}
+        <svg
+          className="h-[18px] w-[18px]"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+          <path d="M7 21v-7h10v7" />
+          <path d="M7 3v4h7" />
+        </svg>
+      </button>
+      <IconTip label={label} />
+    </span>
+  );
+}
+
 /** Honest save state: nothing is claimed saved while it isn't. */
 function DraftIndicator({
   status,
@@ -849,10 +910,15 @@ function DraftIndicator({
   if (status === "failed")
     return (
       <span role="alert" className="text-[var(--color-bug)]">
-        Save failed{error ? ` (${error})` : ""}. Nothing lost. Esc to retry.
+        Save failed{error ? ` (${error})` : ""}. Nothing lost. Esc or save to retry.
       </span>
     );
-  if (dirty) return <span>Unsaved changes · Esc or click away to save</span>;
+  if (dirty)
+    return (
+      <span>
+        Unsaved changes<span className="hidden sm:inline"> · Esc saves and returns to the board</span>
+      </span>
+    );
   return null;
 }
 
