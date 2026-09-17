@@ -15,7 +15,8 @@
 // - The accessible name/description the title provided is kept, in the same
 //   step as the move (titleA11yRole in lib/tooltip.ts).
 // - Hidden on leave, blur, pointerdown (until the pointer leaves), Esc, any
-//   scroll, resize, and if the element leaves the DOM.
+//   scroll, resize, and if the element leaves the DOM. None while a mouse
+//   button is held (dragging a card).
 // - One fixed-position element at the end of <body>, placed from
 //   getBoundingClientRect, so scroll containers never clip it.
 //
@@ -158,6 +159,11 @@ export function mountTooltipLayer(doc: Document): () => void {
 
   function onPointerOver(e: PointerEvent) {
     if (e.pointerType === "touch") return;
+    // A button is held (a drag, a text selection): no tips until it's released.
+    if (e.buttons !== 0) {
+      hide();
+      return;
+    }
     const target = e.target instanceof Element ? e.target : null;
     const el = target?.closest(SELECTOR) ?? null;
     if (el && pressed === el) return;

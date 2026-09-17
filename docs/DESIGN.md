@@ -612,7 +612,7 @@ through one mechanism, and the rule for authors is simply: **put the tip in `tit
   hides an ancestor's too (e.g. `InlineAttachments` while its popover is open).
 - **Hidden** on pointer leave, blur, pointerdown (and not again until the pointer leaves that
   element), Esc (the key still reaches the page), any scroll, resize, window blur, or when the
-  element leaves the DOM.
+  element leaves the DOM. None while a mouse button is held (dragging a card, selecting text).
 - **Look.** One `role="tooltip"` element at the end of `<body>`, `.app-tooltip` in `globals.css`:
   `--color-ink` background, `--color-surface` text, 11px, rounded, small shadow (so it inverts
   with the theme), wraps at max 20rem, 100ms fade that `prefers-reduced-motion` turns off. It is
