@@ -407,7 +407,6 @@ function Card({
           {...attributes}
           {...listeners}
           aria-label="Drag to reorder"
-          title="Drag to reorder"
           className="mt-0.5 shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

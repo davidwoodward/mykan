@@ -599,6 +599,11 @@ David, 2026-09-17: "I need tool tips to popup … They are SLOOOOOOW to appear!"
 icon's native "Connect GitHub account" was the example). So **every tooltip in the app is fast**,
 through one mechanism, and the rule for authors is simply: **put the tip in `title`.**
 
+**Only where a tip earns its place (David, 2026-09-17).** Now that tips are instant, a `title` on
+something the pointer rests on constantly is noise, not help. Card text ("Double-click to open")
+and the drag handle ("Drag to reorder") lost theirs; the drag handle keeps its `aria-label`.
+Hover hints belong on icon buttons and short badges, not on body text or large drag targets.
+
 - **How it works.** `components/TooltipLayer.tsx` is mounted once in `app/layout.tsx`; the logic is
   framework-free in `lib/tooltip-layer.ts` (placement and the a11y decision are pure and tested in
   `lib/tooltip.ts` / `lib/tooltip.test.ts`). It listens on `window` in the capture phase (so
