@@ -40,14 +40,11 @@ function sameMembers(a: string[], b: string[]): boolean {
  */
 export function ProjectHeader({
   project: initial,
-  keyAliases: initialAliases = [],
   isOwner,
   viewerEmail,
   allMembers,
 }: {
   project: Project;
-  /** The project's old keys, which still redirect here (KANBAN-45). */
-  keyAliases?: string[];
   isOwner: boolean;
   viewerEmail: string;
   /** The full whitelist — share candidates offered to the owner. */
@@ -66,7 +63,8 @@ export function ProjectHeader({
   const [ghAccounts, setGhAccounts] = useState<{ id: string; login: string }[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [keyAliases, setKeyAliases] = useState<string[]>(initialAliases);
+  /** The project's old keys, which still redirect here (KANBAN-45). Loaded on open. */
+  const [keyAliases, setKeyAliases] = useState<string[]>([]);
   /** A key change is waiting for its warning to be confirmed. */
   const [confirmingKey, setConfirmingKey] = useState(false);
 
@@ -109,6 +107,14 @@ export function ProjectHeader({
     setConfirmingKey(false);
     setEditing(true);
     loadAccounts(); // refresh in case an account was just connected
+    // Old keys: only the panel shows them, so they're fetched here rather than
+    // on every board/card page render. Keeps the last-good list on failure.
+    fetch(`/api/projects/${project.id}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: Project) => {
+        if (Array.isArray(d.key_aliases)) setKeyAliases(d.key_aliases);
+      })
+      .catch(() => {});
   }
 
   // The set of fields that actually differ from the saved project. Drives both
@@ -237,7 +243,8 @@ export function ProjectHeader({
 
   // The warning owns Enter (confirm) and Esc (cancel) while it is up. Captured
   // at the document and stopped there, so no field, board shortcut or card page
-  // Esc handler also acts on the same key.
+  // Esc handler also acts on the same key. Enter on the warning's other button
+  // (Keep OLD, reached with Tab) presses that button instead.
   useEffect(() => {
     if (!confirmingKey) return;
     warningRef.current?.querySelector<HTMLButtonElement>("button[data-primary]")?.focus();
@@ -245,8 +252,16 @@ export function ProjectHeader({
       if (e.key !== "Enter" && e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
-      if (e.key === "Escape") cancelKeyChangeRef.current();
-      else void commitRef.current({ keyConfirmed: true });
+      if (e.key === "Escape") {
+        cancelKeyChangeRef.current();
+        return;
+      }
+      const active = document.activeElement;
+      if (active instanceof HTMLButtonElement && warningRef.current?.contains(active)) {
+        active.click();
+      } else {
+        void commitRef.current({ keyConfirmed: true });
+      }
     }
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);

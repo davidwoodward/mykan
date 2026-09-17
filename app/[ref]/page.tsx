@@ -19,8 +19,6 @@ import {
   type KeyMatchDecision,
   type RootSegment,
 } from "@/lib/card-url";
-import { projectKeyAliases } from "@/lib/project-keys";
-import { getSupabase } from "@/lib/supabase-server";
 import { richDocTitle, type Item, type Project } from "@/lib/types";
 
 // The root segment is a project key (/FPOON, the board) or a card ref
@@ -102,7 +100,6 @@ export default async function RootRefPage({ params, searchParams }: Props) {
   if (r.action === "redirect") permanentRedirect(withQuery(r.to, query));
   if (r.action !== "render") notFound();
   const { project, item } = r;
-  const keyAliases = await projectKeyAliases(getSupabase(), project.id);
   const members = projectMembers(project);
 
   return (
@@ -117,7 +114,6 @@ export default async function RootRefPage({ params, searchParams }: Props) {
             <ProjectSwitcher currentId={project.id} />
             <ProjectHeader
               project={project}
-              keyAliases={keyAliases}
               isOwner={isOwner(email)}
               viewerEmail={email}
               allMembers={whitelist()}

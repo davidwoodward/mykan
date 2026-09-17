@@ -19,7 +19,9 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const access = await loadProjectForAccess(id, gate.email);
   if (access.error) return access.error;
-  return NextResponse.json(access.project);
+  // The project's old keys (KANBAN-45), for the edit panel.
+  const key_aliases = await projectKeyAliases(getSupabase(), id);
+  return NextResponse.json({ ...access.project, key_aliases });
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
