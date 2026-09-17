@@ -37,6 +37,7 @@ import { cardPath } from "@/lib/card-url";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import { EpicProgress, ParentChip } from "@/components/EpicLinks";
+import { OpenQuestionsBadge } from "@/components/OpenQuestionsBadge";
 import {
   CLAMP_LINES,
   ITEM_STATUSES,
@@ -452,6 +453,7 @@ function ItemRow({
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <ParentChip item={item} className="min-w-0" />
             <EpicProgress item={item} />
+            <OpenQuestionsBadge itemId={item.id} />
             <InlineTags
               tags={item.tags}
               suggestions={tagSuggestions ?? []}

@@ -31,6 +31,7 @@ import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import { EpicProgress, ParentChip } from "@/components/EpicLinks";
+import { OpenQuestionsBadge } from "@/components/OpenQuestionsBadge";
 import { computePosition } from "@/lib/position";
 import {
   CLAMP_LINES,
@@ -451,11 +452,12 @@ function Card({
         activeCreator={activeCreator}
         className="mt-1.5 block"
       />
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <RefBadge number={item.number} />
           <TypeBadge type={item.type} />
           <EpicProgress item={item} />
+          <OpenQuestionsBadge itemId={item.id} />
           <GithubSyncBadge item={item} onItemChange={onItemChange} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
           <ItemHistory

@@ -93,8 +93,33 @@ export function isSupersedable(kind: EntryKind): boolean {
 }
 
 /**
+ * The most characters an entry (progress, question or decision) may hold,
+ * counted on the trimmed, LF-normalised text. One number for every kind and
+ * every writer: MCP refuses over it (lib/mcp-entry-guards.ts re-exports it as
+ * MCP_ENTRY_MAX_CHARS, with its own guidance), and so do the web routes
+ * (KANBAN-38), whose editors show a count against it. Over the cap nothing is
+ * saved; text is never truncated.
+ */
+export const ENTRY_MAX_CHARS = 2000;
+
+/** The length the cap is measured on: CRLF → LF, trimmed. Non-text → 0. */
+export function entryTextLength(raw: unknown): number {
+  return typeof raw === "string" ? raw.replace(/\r\n/g, "\n").trim().length : 0;
+}
+
+/** Why this entry text is refused (not text, blank, over the cap), or null. */
+export function entryLengthError(raw: unknown): string | null {
+  if (typeof raw !== "string") return "Entry text must be a string";
+  const length = entryTextLength(raw);
+  if (length === 0) return "Entry text required";
+  if (length <= ENTRY_MAX_CHARS) return null;
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  return `This entry is ${fmt(length)} characters; the cap is ${fmt(ENTRY_MAX_CHARS)}. Nothing was saved.`;
+}
+
+/**
  * Normalise body text for a NEW entry: CRLF → LF, trimmed. Blank → null.
- * Plain text, no size cap here (MCP guardrails are KANBAN-37's).
+ * Plain text. The size cap is the caller's check (entryLengthError).
  */
 export function normalizeEntryBody(raw: unknown): string | null {
   if (typeof raw !== "string") return null;

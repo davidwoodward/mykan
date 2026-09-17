@@ -38,8 +38,8 @@ export type PendingRestore<T> = {
  *   editor to offer: `applyRestore()` puts it back as unsaved changes and bumps
  *   `revision` (remount uncontrolled inputs with it), `discardRestore()` forgets it.
  *
- * Reused by any editor of saved data: the card page (KANBAN-44); entry editors
- * (KANBAN-38) next.
+ * Reused by any editor of saved data: the card page (KANBAN-44) and its entry
+ * editors and composers (KANBAN-38), each an instance with its own draft key.
  */
 export function useAbandonable<T extends Record<string, unknown>>({
   opened,
@@ -47,12 +47,21 @@ export function useAbandonable<T extends Record<string, unknown>>({
   id,
   equal,
   baseUpdatedAt = null,
+  restoreOnOpen = false,
 }: {
   opened: T;
+  /**
+   * The draft's storage scope and id: the key is
+   * `mykan:draft:v1:<scope>:<id>:<field>`. Several editors can be open on one
+   * page as long as each has its own scope/id (the card is `item:<itemId>`;
+   * entry editors use lib/entry-panels.ts entryDraftScope).
+   */
   scope: string;
   id: string;
   equal?: EqualFn;
   baseUpdatedAt?: string | null;
+  /** Apply a leftover draft on open instead of prompting (Restore was already chosen). */
+  restoreOnOpen?: boolean;
 }): {
   session: DraftSession<T>;
   values: Readonly<T>;
@@ -86,16 +95,21 @@ export function useAbandonable<T extends Record<string, unknown>>({
     }
     return restoreDecision<T>(drafts, opened, equal);
   });
-  const [restore, setRestore] = useState<PendingRestore<T> | null>(() =>
-    initialDecision.kind === "offer"
-      ? {
-          values: initialDecision.values,
-          stale: initialDecision.stale,
-          staleFields: initialDecision.staleFields,
-          startedAt: initialDecision.startedAt,
-        }
-      : null,
-  );
+  const [restore, setRestore] = useState<PendingRestore<T> | null>(() => {
+    if (initialDecision.kind !== "offer") return null;
+    // The user already chose Restore before this editor opened (an entry row's
+    // prompt, KANBAN-38): start with the draft as unsaved changes, no prompt.
+    if (restoreOnOpen) {
+      session.restore(initialDecision.values);
+      return null;
+    }
+    return {
+      values: initialDecision.values,
+      stale: initialDecision.stale,
+      staleFields: initialDecision.staleFields,
+      startedAt: initialDecision.startedAt,
+    };
+  });
   const [status, setStatus] = useState<DraftEditorStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
