@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/types";
+import { projectPath } from "@/lib/card-url";
 
 type Option =
   | { kind: "home" }
@@ -80,7 +81,7 @@ export function ProjectSwitcher({ currentId }: { currentId: string }) {
     setOpen(false);
     if (opt.kind === "home") router.push("/");
     else if (opt.kind === "new") router.push("/?new=1");
-    else router.push(`/projects/${opt.project.id}`);
+    else if (opt.project.key) router.push(projectPath(opt.project.key));
   }
 
   // Keyboard driving is document-level while open (not focus-dependent), so

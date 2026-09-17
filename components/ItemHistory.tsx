@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { displayName, timeAgo } from "@/lib/format";
 import type { Item } from "@/lib/types";
 
@@ -63,7 +63,6 @@ export function ItemHistory({
     </>
   );
 }
-
 function HistoryPanel({
   item,
   onClose,
@@ -73,64 +72,17 @@ function HistoryPanel({
   onClose: () => void;
   onItemChange: (item: Item) => void;
 }) {
-  const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  /** Version id whose Restore is awaiting its confirm click. */
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState<string | null>(null);
-  /** Bumped after a restore to refetch the list. */
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/items/${item.id}/history`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`(${res.status})`);
-        const data = (await res.json()) as HistoryEntry[];
-        if (!cancelled) {
-          setEntries(data);
-          setError(null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setError("Couldn't load history");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [item.id, reloadKey]);
-
-  // Close on Escape (a pending confirm is cancelled first).
+  // Esc closes the panel, unless a restore is awaiting confirmation: then the
+  // list's own Esc cancels just that confirmation.
+  const confirmingRef = useRef(false);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      setConfirming((c) => {
-        if (c === null) onClose();
-        return null;
-      });
+      if (e.key !== "Escape" || e.defaultPrevented || confirmingRef.current) return;
+      onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  async function restore(versionId: string) {
-    setRestoring(versionId);
-    try {
-      const res = await fetch(`/api/items/${item.id}/history`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ version_id: versionId }),
-      });
-      if (!res.ok) throw new Error(`(${res.status})`);
-      onItemChange((await res.json()) as Item);
-      setReloadKey((k) => k + 1);
-    } catch {
-      setError("Restore failed");
-    } finally {
-      setRestoring(null);
-      setConfirming(null);
-    }
-  }
 
   return (
     <div
@@ -154,85 +106,171 @@ function HistoryPanel({
         </header>
 
         <div className="max-h-[65vh] overflow-y-auto px-4 py-2">
-          {error ? (
-            <p className="py-6 text-center text-sm text-[var(--color-bug)]">{error}</p>
-          ) : entries === null ? (
-            <p className="py-6 text-center text-sm text-[var(--color-faint)]">Loading…</p>
-          ) : entries.length === 0 ? (
-            <p className="py-6 text-center text-sm text-[var(--color-faint)]">
-              No history yet — changes to this item will appear here.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[var(--color-line)]">
-              {entries.map((e) => (
-                <li key={e.id} className="flex items-start gap-3 py-2.5 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[var(--color-ink)]">
-                      <span className="font-medium">{displayName(e.created_by)}</span>{" "}
-                      <span className="text-[var(--color-muted)]">
-                        {e.changes.join(" · ")}
-                      </span>
-                    </p>
-                    {e.changes.includes("body edited") && e.body_text ? (
-                      <p
-                        className="mt-0.5 overflow-hidden whitespace-pre-wrap break-words text-xs leading-5 text-[var(--color-faint)]"
-                        style={{
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                        }}
-                        title="The body as it was before this change"
-                      >
-                        {e.body_text}
-                      </p>
-                    ) : null}
-                    <p className="mt-0.5 text-xs text-[var(--color-faint)]">
-                      <span title={new Date(e.created_at).toLocaleString()}>
-                        {timeAgo(e.created_at)}
-                      </span>
-                      {e.source !== "web" ? (
-                        <span className="ml-2 font-mono text-[10px] uppercase tracking-wider">
-                          {e.source}
-                        </span>
-                      ) : null}
-                    </p>
-                  </div>
-                  {confirming === e.id ? (
-                    <span className="flex shrink-0 items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => void restore(e.id)}
-                        disabled={restoring !== null}
-                        className="font-medium text-[var(--color-accent)] transition-opacity hover:opacity-70 disabled:opacity-50"
-                      >
-                        {restoring === e.id ? "Restoring…" : "Confirm restore"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirming(null)}
-                        disabled={restoring !== null}
-                        className="text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
-                      >
-                        Cancel
-                      </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(e.id)}
-                      title="Restore the item to how it was before this change"
-                      aria-label="Restore this version"
-                      className="shrink-0 text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-accent)]"
-                    >
-                      Restore
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <HistoryList item={item} onItemChange={onItemChange} confirmingRef={confirmingRef} />
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The item's version history as a plain list, no overlay: the History popover
+ * on rows/cards wraps it, and the card page (KANBAN-44) shows it inline in its
+ * History section. Each entry is the state BEFORE a change; Restore (confirmed)
+ * brings it back, itself recorded in history. Reloads whenever
+ * `item.updated_at` moves, so a save on the card page shows up here.
+ */
+export function HistoryList({
+  item,
+  onItemChange,
+  confirmingRef,
+}: {
+  item: Item;
+  onItemChange: (item: Item) => void;
+  /** Mirrors "a restore is awaiting confirmation", for an enclosing Esc handler. */
+  confirmingRef?: MutableRefObject<boolean>;
+}) {
+  const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  /** Version id whose Restore is awaiting its confirm click. */
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (confirmingRef) confirmingRef.current = confirming !== null;
+  }, [confirming, confirmingRef]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/items/${item.id}/history`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`(${res.status})`);
+        const data = (await res.json()) as HistoryEntry[];
+        if (!cancelled) {
+          setEntries(data);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load history");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, item.updated_at]);
+
+  // Esc cancels a pending confirmation, and marks the key handled so nothing
+  // underneath (the popover, the card page) also acts on it.
+  useEffect(() => {
+    if (confirming === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setConfirming(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirming]);
+
+  async function restore(versionId: string) {
+    setRestoring(versionId);
+    try {
+      const res = await fetch(`/api/items/${item.id}/history`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version_id: versionId }),
+      });
+      if (!res.ok) throw new Error(`(${res.status})`);
+      // The restored item carries a new updated_at, which reloads this list.
+      onItemChange((await res.json()) as Item);
+    } catch {
+      setError("Restore failed");
+    } finally {
+      setRestoring(null);
+      setConfirming(null);
+    }
+  }
+
+  if (error) {
+    return <p className="py-6 text-center text-sm text-[var(--color-bug)]">{error}</p>;
+  }
+  if (entries === null) {
+    return <p className="py-6 text-center text-sm text-[var(--color-faint)]">Loading…</p>;
+  }
+  if (entries.length === 0) {
+    return (
+      <p className="py-6 text-center text-sm text-[var(--color-faint)]">
+        No history yet — changes to this item will appear here.
+      </p>
+    );
+  }
+  return (
+    <ul className="divide-y divide-[var(--color-line)]">
+      {entries.map((e) => (
+        <li key={e.id} className="flex items-start gap-3 py-2.5 text-sm">
+          <div className="min-w-0 flex-1">
+            <p className="text-[var(--color-ink)]">
+              <span className="font-medium">{displayName(e.created_by)}</span>{" "}
+              <span className="text-[var(--color-muted)]">
+                {e.changes.join(" · ")}
+              </span>
+            </p>
+            {e.changes.includes("body edited") && e.body_text ? (
+              <p
+                className="mt-0.5 overflow-hidden whitespace-pre-wrap break-words text-xs leading-5 text-[var(--color-faint)]"
+                style={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                }}
+                title="The body as it was before this change"
+              >
+                {e.body_text}
+              </p>
+            ) : null}
+            <p className="mt-0.5 text-xs text-[var(--color-faint)]">
+              <span title={new Date(e.created_at).toLocaleString()}>
+                {timeAgo(e.created_at)}
+              </span>
+              {e.source !== "web" ? (
+                <span className="ml-2 font-mono text-[10px] uppercase tracking-wider">
+                  {e.source}
+                </span>
+              ) : null}
+            </p>
+          </div>
+          {confirming === e.id ? (
+            <span className="flex shrink-0 items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => void restore(e.id)}
+                disabled={restoring !== null}
+                className="font-medium text-[var(--color-accent)] transition-opacity hover:opacity-70 disabled:opacity-50"
+              >
+                {restoring === e.id ? "Restoring…" : "Confirm restore"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(null)}
+                disabled={restoring !== null}
+                className="text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirming(e.id)}
+              title="Restore the item to how it was before this change"
+              aria-label="Restore this version"
+              className="shrink-0 text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-accent)]"
+            >
+              Restore
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

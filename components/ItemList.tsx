@@ -32,7 +32,8 @@ import { GithubItemMeta } from "@/components/GithubItemMeta";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
-import { RefBadge } from "@/components/RefBadge";
+import { RefBadge, useProjectKey } from "@/components/RefBadge";
+import { cardPath } from "@/lib/card-url";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import { EpicProgress, ParentChip } from "@/components/EpicLinks";
@@ -364,6 +365,7 @@ function ItemRow({
 }: { item: Item; sortable?: SortableBits } & RowProps) {
   const text = richDocText(item.body);
   const selected = !!onSelect && item.id === selectedId;
+  const projectKey = useProjectKey();
 
   // A plain click on the row's background selects it. We skip when the click
   // landed on an interactive control (buttons, pickers, inputs) or when the
@@ -460,7 +462,7 @@ function ItemRow({
             <ItemAssignees item={item} />
           </div>
           {/* GitHub provenance for linked items: far-right on the area/tags line,
-              large screens only (small screens use the detail modal). */}
+              large screens only (small screens use the card page). */}
           <GithubItemMeta
             item={item}
             onItemChange={onItemChange}
@@ -481,6 +483,7 @@ function ItemRow({
       <div className="flex items-center gap-3 sm:contents">
         <EditButton
           onClick={() => onOpen(item)}
+          href={projectKey ? cardPath(projectKey, item.number) : undefined}
           label={text || "item"}
           className="self-center sm:mt-0.5"
         />

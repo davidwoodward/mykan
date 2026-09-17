@@ -19,7 +19,7 @@ export type TagEditorHandle = {
 };
 
 /**
- * Chip-input tag editor for the item modal. Type + Enter (or comma) to add,
+ * Chip-input tag editor for the card page. Type + Enter (or comma) to add,
  * Backspace on an empty field removes the last, ✕ removes a specific one.
  * Suggests existing project tags so the vocabulary stays consistent.
  */

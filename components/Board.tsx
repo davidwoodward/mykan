@@ -25,7 +25,8 @@ import { InlineAttachments } from "@/components/InlineAttachments";
 import { ItemHistory } from "@/components/ItemHistory";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
-import { RefBadge } from "@/components/RefBadge";
+import { RefBadge, useProjectKey } from "@/components/RefBadge";
+import { cardPath } from "@/lib/card-url";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
@@ -349,6 +350,7 @@ function Card({
 } & TagProps) {
   const text = richDocText(item.body);
   const selected = !!onSelect && item.id === selectedId;
+  const projectKey = useProjectKey();
   const {
     attributes,
     listeners,
@@ -422,7 +424,12 @@ function Card({
             className="whitespace-pre-wrap break-words leading-5"
           />
         </div>
-        <EditButton onClick={() => onOpen(item)} label={text || "item"} className="mt-0.5" />
+        <EditButton
+          onClick={() => onOpen(item)}
+          href={projectKey ? cardPath(projectKey, item.number) : undefined}
+          label={text || "item"}
+          className="mt-0.5"
+        />
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <InlineTags

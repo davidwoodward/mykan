@@ -77,6 +77,12 @@ it is also **quiet while you type**: nothing is written to the card until you fi
 other sessions reading the card over MCP never see half-typed text, and a kept edit is one
 history entry.
 
+> **Since KANBAN-44 the item editor is the card page (`/KEY-N`), not a modal.** The rules
+> below were written for the modal and hold unchanged; read "the modal closes" as "the
+> edit finishes" and see **Card pages and clean URLs** for what finishing and leaving
+> mean on a page (Esc in a field saves and settles, Esc again returns to the board;
+> abandon reloads the editor and stays).
+
 - **Nothing is written while typing.** Changes live in a local draft in the browser. The
   rich-text body (`RichTextEditor.tsx`) never saves; it reports its document to the
   editor's draft (debounced ~250ms, local only).
@@ -152,7 +158,7 @@ Every editor has one explicit way out without saving: the **Abandon changes** ic
   as-opened values on mount, holds and persists the draft, `close(save)` sends the one save
   (or none), `abandon()` drops the draft, and it surfaces the restore prompt's decision.
   Entry editors (KANBAN-38) and the card page (KANBAN-44) reuse it.
-- **Keyboard:** Esc is unchanged everywhere (finish = save, in the item modal and the
+- **Keyboard:** Esc is unchanged everywhere (finish = save, on the card page and in the
   assignee/sharing lists). The icon is pointer/touch-first; in inline fields that commit on
   blur, tabbing away commits (as before), so Esc remains the keyboard route to cancel those.
 
@@ -160,11 +166,11 @@ Every editor has one explicit way out without saving: the **Abandon changes** ic
 
 | Editor | Icon | While editing → finish → abandon |
 |---|---|---|
-| Item detail modal (`ItemDetailModal`): rich-text body, tags (`TagEditor`) | Header, left of ✕ | Draft only (was: body autosaved ~700ms after typing paused, each tag add/remove saved at once) → one PATCH of the changed fields on Esc/click-off/✕/following a link, none if unchanged; a typed-but-unconfirmed tag is included → abandon discards, no write. |
-| Parent epic row in the modal (`ParentRow`) | Not covered | A pick (or Remove parent) is its own immediate, recorded write, not part of the draft: the epic guards answer at pick time rather than at close. Undo by relinking. Deliberate scope line. |
-| Epic's Child items in the modal (Add child, remove from epic) | Not covered | These change *other* cards' `parent_id` through explicit actions (Add N, remove icon), each its own recorded write on the child. |
-| Attachments in the modal (upload, remove) | Not covered | File operations, not field edits, and not tracked by item history. Pasted body images upload at once (they need a URL) but only enter the card through the body save. |
-| Attachment rename (inline, in the modal) | After the field | Commits on Enter/blur; abandon keeps the old name. Nothing written mid-edit. |
+| Card page (`CardPage`; the item detail modal until KANBAN-44): rich-text body, tags (`TagEditor`) | Card header, right end | Draft only (was: body autosaved ~700ms after typing paused, each tag add/remove saved at once) → one PATCH of the changed fields on Esc in a field / click-off / leaving the page (Esc again, back arrow, a card link, browser Back, tab close), none if unchanged; a typed-but-unconfirmed tag is included → abandon discards, no write, and reloads the editor (you stay on the page). |
+| Parent epic row on the card page (`ParentRow`) | Not covered | A pick (or Remove parent) is its own immediate, recorded write, not part of the draft: the epic guards answer at pick time rather than at close. Undo by relinking. Deliberate scope line. |
+| Epic's Child items on the card page (Add child, remove from epic) | Not covered | These change *other* cards' `parent_id` through explicit actions (Add N, remove icon), each its own recorded write on the child. |
+| Attachments on the card page (upload, remove) | Not covered | File operations, not field edits, and not tracked by item history. Pasted body images upload at once (they need a URL) but only enter the card through the body save. |
+| Attachment rename (inline, on the card page) | After the field | Commits on Enter/blur; abandon keeps the old name. Nothing written mid-edit. |
 | Add Item modal (`AddItemModal`): body, type, area, parent, tags | Header, left of ✕ | Nothing saved until Add: discard the draft and close. No browser-storage draft (there is no card yet). |
 | Project edit panel (`ProjectHeader`): name, description, key, GitHub account, sharing | Action row, beside ✓ | Drafts seeded on open, committed once by Esc/click-off/✓: abandon drops the drafts and closes. |
 | New project form (`ProjectsView`) | Beside Create | Nothing saved until Create: discard and close. |
@@ -179,9 +185,69 @@ Every editor has one explicit way out without saving: the **Abandon changes** ic
 | Status picker and type picker on a row/card | None | One choice commits and closes the menu, so the menu never holds a change to abandon; choose the old value to undo (recorded in history). |
 | Parent epic picker and Add child picker (`ItemTypeahead`) | None of their own | Esc and click-off close without picking; a pick is the commit. |
 | MCP tokens and GitHub connect popovers | None | Action forms, not editors of saved data: nothing is written until Generate/Connect, and there is no saved value to revert to. |
-| History panel (Restore) | None | Restore is a confirmed action, itself recorded in history. |
+| History panel, and the card page's History section (Restore) | None | Restore is a confirmed action, itself recorded in history. |
 | Search, tag filter, area and status filters, view toggles | None | View state, not data. |
 | Item entry editors (KANBAN-38) | To come | Reuse `useAbandonable` + `AbandonButton`: draft while editing, one save on finish, abandon discards. |
+
+## Card pages and clean URLs (KANBAN-44, David 2026-09-16)
+
+Every card has its own page, and no user-facing URL carries a GUID.
+
+- **URLs.** A project's board is its key at the root: `/FPOON`. A card is its ref at the
+  root: `/FPOON-42`. Keys match case-insensitively and redirect to the canonical form
+  (`/fpoon-42` and `/FPOON-042` both 308 to `/FPOON-42`, board query kept). `/KEY-0`, a bad
+  format, a reserved word, an unknown key or card, and a project you can't see are all the
+  same **404** with a real status (every decision happens before rendering; there is no
+  `loading.tsx` or Suspense in `app/[ref]`, so nothing streams first). Old
+  `/projects/<id>` links 308 to `/KEY`. The rules are pure and tested in `lib/card-url.ts`.
+- **Keys are required and permanent.** 2 to 10 uppercase letters and digits, starting with
+  a letter, unique, and never a reserved word (every top-level route in `app/`: api, mcp,
+  projects, signin, icon; plus auth, login, logout, signout, settings, admin, new, home,
+  static, public, favicon, robots, sitemap). No renaming, no old-key redirects: the edit
+  panel shows the key read-only, the API refuses a change, and the database backs it all
+  (`2026-09-16-4-project-keys.sql`). The new-project form requires a key (a blank field
+  uses the suggestion from the name) and says it is permanent.
+- **One layout, no modal.** The item modal is gone. The card page puts the **description
+  in the main column** (tags, parent epic and GitHub provenance under it) and the other
+  sections **beside it as tabs**: Child items (epics), Attachments, History. Below `lg`
+  they stack under the description and the page scrolls. At `lg+` the page is locked to
+  the viewport like the board, and the description and the tab panel **each scroll on
+  their own**, so a long card never pushes anything off screen. KANBAN-38's **Progress**
+  and **Decisions & Questions** join the `PANELS` list in `components/CardPage.tsx`;
+  nothing else about the layout changes.
+- **Header.** Back-to-board arrow (title "Back to board (Esc)"), the ref as the heading
+  with a **Copy link** icon (copies the full `https://…/KEY-N`), type, status, the save
+  state, and the **Abandon changes** icon.
+- **Opening a card.** The pencil on a row/card is a real link to `/KEY-N` (Cmd/Ctrl-click
+  opens a tab); a plain click, a double-click on the text, or **Enter** on the selected
+  card (keyboard navigation on) goes to the page. Epic chips and child rows are links to
+  `/KEY-N` too.
+- **Getting back to the same board.** View, grouping, status/tag/area/creator filters and
+  search live in the board URL (`?view=board&status=blocked&q=…`; defaults omitted; the
+  area is written as its path, never an id), updated with `replaceState` so filter
+  changes don't add history entries (`lib/board-state.ts`). Before opening a card the
+  board remembers its scroll (the desktop list is its own scroll box, which the browser
+  never restores) and the opened card in `sessionStorage`; on return it restores both and
+  reselects that card (`components/boardReturn.ts`).
+- **Esc and Back.** Esc while editing a field (description, tag input, any text field)
+  **finishes that edit**: one save if something changed, and the field settles. Esc when
+  nothing is being edited **saves anything still unsaved, then returns to the board**. A
+  failed save stays on the page. Esc that a picker or confirmation handled itself does
+  nothing more; with the restore prompt up, Esc is Discard (`cardEscAction`). "Return to
+  the board" is history Back when the page was opened from that board in this tab (so Esc
+  and the browser's Back land in the same place), else a navigation to `/KEY`. Following a
+  link to another card finishes the edit first and **replaces** the history entry, so
+  Back from the next card is still the board.
+- **Editing is the save-on-finish model below, unchanged**, with the page as the editor:
+  finishing is Esc in a field, a press outside the description and tags while editing
+  them, or leaving (Esc, the back arrow, a card link, browser Back, closing the tab). A
+  browser Back that unmounts the page mid-save sends the keepalive save, and the board
+  waits for it before loading, so it never shows the old text. **Abandon** discards the
+  unsaved changes with no write and reloads the editor with the stored card; you stay on
+  the page. Each finished edit is one history entry (the page mints a new edit session
+  after each save). If the card changes underneath with nothing unsaved (History
+  Restore, GitHub Refresh), the editor reloads with the new values; with unsaved changes
+  they are kept and the next save wins, as with two tabs.
 
 ## Tags
 
@@ -209,7 +275,7 @@ Tags are lightweight, inline, and keyboard-first — never a separate management
 - Every item has an immutable, per-project **number** (stamped on insert by a DB trigger, never
   reused). Shown as a muted monospace badge — `{project.key}-{number}` (e.g. `AMOS-12`) when the
   project has a short **key**, else `#{number}`. The key is set inline in the project-edit panel
-  (`ProjectHeader`); the badge appears on rows, cards, and the item modal (`RefBadge`,
+  (`ProjectHeader`); the badge appears on rows, cards, and the card page header (`RefBadge`,
   `itemRef` in `lib/format.ts`). Don't surface raw UUIDs to users.
 
 ## Categories (Areas)
@@ -237,25 +303,28 @@ its children.
 
 - **Epics are ordinary cards** on the board and list, with the Epic type badge plus an
   "N/M done" count over their **non-archived** children.
-- **Cards show links; the detail modal edits them.** A child's board card / list row shows an
-  epic-coloured chip (ref + title) that opens the epic, and an epic shows "N/M done". The
-  link *controls* live in the detail modal, deliberately not inline on every card: an inline
+- **Cards show links; the card page edits them** (the detail modal until KANBAN-44). A
+  child's board card / list row shows an epic-coloured chip (ref + title), a link to the
+  epic's page `/KEY-N`, and an epic shows "N/M done". The link *controls* live on the card
+  page, deliberately not inline on every card: an inline
   "+ epic" put a control on every card of any project with an epic, and linking is an
   occasional, deliberate act, unlike tagging. (This is a considered exception to the
   inline-minimal instinct under Tags.)
-- **Both sides, explicitly labelled.** A non-epic item's modal has a **Parent epic** row:
+- **Both sides, explicitly labelled.** A non-epic card's page has a **Parent epic** row:
   **Add parent** (opens the picker), or the chip with **Change parent** (pencil) and
-  **Remove parent** (unlink) icon actions. An epic's modal lists its children (ref, title,
+  **Remove parent** (unlink) icon actions. An epic's page lists its children in its Child
+  items section (ref, title,
   status; each opens the child) with a remove-from-epic icon per child and an **Add child**
   typeahead over cards that can join (non-epic, non-archived, not already its child); a card
   already in another epic is listed with "in KEY-N · moves here" and picking it moves it.
   The **Add Item** modal has the same **Add parent** picker, hidden and cleared when the type
-  is Epic. Following a link swaps the open modal to that item.
+  is Epic. Following a link goes to that card's page (`/KEY-N`), finishing the current
+  edit first and replacing the history entry, so Back still returns to the board.
 - **The pickers** follow the picker rules below: open on focus, ↑/↓, Enter picks, Esc closes
   just the picker, Tab moves on; the parent picker is seeded with the current parent's ref
   (selected, so typing replaces it) and offers only non-archived epics in the project.
 - **Order: status, then number** (David, 2026-09-16). The epic's children list, the **Add
-  child** picker, and both parent pickers (detail modal and Add Item) list cards by status in
+  child** picker, and both parent pickers (card page and Add Item) list cards by status in
   board column order — Not started, In Progress, Blocked, Testing, Done — and within a status
   by item number ascending. Board position is deliberately ignored here. Every picker row shows
   its status (the same small uppercase label as the children list) so the order is legible;

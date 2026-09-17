@@ -10,8 +10,22 @@ import {
 } from "react";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
-import { ItemDetailModal, type ItemEditPatch } from "@/components/ItemDetailModal";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AddItemModal } from "@/components/AddItemModal";
+import {
+  boardSearch,
+  boardStateFromParams,
+  normAreaPath,
+  type BoardState,
+} from "@/lib/board-state";
+import { cardPath } from "@/lib/card-url";
+import {
+  clearCardFromBoard,
+  markCardFromBoard,
+  pendingSavesSettled,
+  rememberBoardScroll,
+  takeBoardScroll,
+} from "@/components/boardReturn";
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
@@ -59,22 +73,51 @@ export function ProjectDetailView({
   isPrivate: boolean;
   keyboardDefault: boolean;
 }) {
+  const router = useRouter();
+  // View, grouping, filters and search, read from the board's URL when the
+  // board mounts. Read on the client (not passed from the server page): after
+  // Back from a card page, the URL carries the filters as last written here by
+  // replaceState, while a cached server render would carry the ones the board
+  // was first loaded with.
+  const searchParams = useSearchParams();
+  const [initialState] = useState<BoardState>(() =>
+    boardStateFromParams(new URLSearchParams(searchParams.toString())),
+  );
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<View>("list");
-  const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
-  const [tagFilter, setTagFilter] = useState<string[]>([]);
-  const [showArchived, setShowArchived] = useState(false);
+  // View, grouping, filters and search start from the URL and are written back
+  // to it as they change (KANBAN-44), so leaving for a card page and coming
+  // back (browser Back, or Esc on the card) shows the same board.
+  const [view, setView] = useState<View>(initialState.view);
+  const [creatorFilter, setCreatorFilter] = useState<string | null>(initialState.by);
+  const [tagFilter, setTagFilter] = useState<string[]>(initialState.tags);
+  const [showArchived, setShowArchived] = useState(initialState.archived);
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [areaFilter, setAreaFilter] = useState<string | null>(null);
-  const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">("status");
-  const [statusFilter, setStatusFilter] = useState<ItemStatus[]>([]);
+  const [chosenArea, setChosenArea] = useState<string | null>(null);
+  // The URL names the area filter by path (no ids in URLs); it becomes a node
+  // id once the areas load. Null once resolved (or when there was none).
+  const [pendingAreaPath, setPendingAreaPath] = useState<string | null>(initialState.area);
+  const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">(initialState.group);
+  const [statusFilter, setStatusFilter] = useState<ItemStatus[]>(initialState.status);
   // Free-text search over card content (body text + ref number), AND-composed
-  // with the other filters. Transient: shared by List/Board, resets on reload.
-  const [query, setQuery] = useState("");
+  // with the other filters. Shared by List/Board; kept in the URL.
+  const [query, setQuery] = useState(initialState.q);
+  // The list/board scroll region (desktop), for remembering its position.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // The effective area filter: the one picked here, else the URL's path once
+  // an area with that path has loaded.
+  const areaFilter = useMemo(() => {
+    if (chosenArea) return chosenArea;
+    if (!pendingAreaPath) return null;
+    const pathOfNode = buildPathOf(categories);
+    return categories.find((c) => normAreaPath(pathOfNode(c.id)) === pendingAreaPath)?.id ?? null;
+  }, [chosenArea, pendingAreaPath, categories]);
+  const setAreaFilter = useCallback((id: string | null) => {
+    setChosenArea(id);
+    setPendingAreaPath(null);
+  }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   // The row "selected" in the status-grouped list — drives the highlight, the
@@ -92,7 +135,12 @@ export function ProjectDetailView({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/projects/${projectId}/items`)
+    // The board is showing: no card page sits on top of it any more.
+    clearCardFromBoard();
+    // Coming back from a card page whose save is still landing (browser Back
+    // unmounts it mid-save): wait for it so the board never shows the old text.
+    pendingSavesSettled()
+      .then(() => fetch(`/api/projects/${projectId}/items`))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: Item[]) => !cancelled && setItems(d))
       .catch((e: Error) => !cancelled && setError(e.message));
@@ -215,38 +263,31 @@ export function ProjectDetailView({
     },
     [],
   );
-  // Following a link from the open modal to another card finishes the current
-  // edit first (one save); a failed save keeps the current card open.
-  const leaveItemGuard = useRef<(() => Promise<boolean>) | null>(null);
-  const openItemById = useCallback((id: string) => {
-    void (async () => {
-      const guard = leaveItemGuard.current;
-      if (guard && !(await guard())) return;
-      setOpenItemId(id);
-    })();
-  }, []);
-  const epicCtx = useEpicValue(items, openItemById, setItemParent, linkItemParent, refetch);
-
-  // The item modal's one save when editing finishes (KANBAN-42): body and/or
-  // tags in a single PATCH, so a kept edit is one history entry. Throws the
-  // server's message so the modal stays open with the draft intact.
-  // `editSession` (minted per modal open) keeps a rare second save of the same
-  // open (a tab-close save, then the close) in that one entry.
-  const saveItemEdit = useCallback(
-    async (id: string, patch: ItemEditPatch, editSession: string) => {
-      const res = await fetch(`/api/items/${id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...patch, edit_session: editSession }),
+  // Opening a card is a navigation to its page, /KEY-N (KANBAN-44; the item
+  // modal is gone). Before leaving, remember where the board was scrolled and
+  // which card was opened, and mark that the card page sits on top of this
+  // board, so Esc there can go Back to exactly this board.
+  const openCard = useCallback(
+    (it: Pick<Item, "number">) => {
+      if (!projectKey) return;
+      rememberBoardScroll(projectKey, {
+        listTop: scrollRef.current?.scrollTop ?? 0,
+        windowY: window.scrollY,
+        number: it.number,
       });
-      if (!res.ok) throw new Error(await responseError(res));
-      const updated = (await res.json()) as Item;
-      setItems((prev) =>
-        prev ? prev.map((it) => (it.id === id ? updated : it)) : prev,
-      );
+      markCardFromBoard(projectKey);
+      router.push(cardPath(projectKey, it.number));
     },
-    [],
+    [projectKey, router],
   );
+  const openCardById = useCallback(
+    (id: string) => {
+      const it = items?.find((x) => x.id === id);
+      if (it) openCard(it);
+    },
+    [items, openCard],
+  );
+  const epicCtx = useEpicValue(items, openCardById, setItemParent, linkItemParent, refetch);
 
   const saveTags = useCallback(async (id: string, tags: string[]) => {
     setItems((prev) =>
@@ -429,11 +470,12 @@ export function ProjectDetailView({
           : prev,
       );
       if (areaFilter === id) setAreaFilter(null);
+      // (A pending URL area naming the deleted node simply stops matching.)
       void fetch(`/api/categories/${id}`, { method: "DELETE" }).catch((e) =>
         setError(e instanceof Error ? e.message : "Failed to delete area"),
       );
     },
-    [areaFilter],
+    [areaFilter, setAreaFilter],
   );
 
   const toggleTag = useCallback((tag: string) => {
@@ -549,6 +591,41 @@ export function ProjectDetailView({
         .sort((a, b) => a.path.localeCompare(b.path)),
     [categories, pathOf],
   );
+
+  // Keep the board's URL in step with its view state (replaceState: no history
+  // entry per change, so Back from a card still lands here in one step).
+  const boardQuery = boardSearch({
+    view,
+    group: groupBy,
+    status: statusFilter,
+    tags: tagFilter,
+    area: areaFilter ? normAreaPath(pathOf(areaFilter)) : pendingAreaPath,
+    by: creatorFilter,
+    q: query,
+    archived: showArchived,
+  });
+  useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    if (search === boardQuery) return;
+    window.history.replaceState(null, "", `${pathname}${boardQuery}${hash}`);
+  }, [boardQuery]);
+
+  // Back from a card page: put the scroll position back (the desktop list is
+  // its own scroll box, which the browser never restores) and reselect the
+  // card that was opened. Once, when the items first arrive.
+  const scrollRestored = useRef(false);
+  useEffect(() => {
+    if (items === null || scrollRestored.current || !projectKey) return;
+    scrollRestored.current = true;
+    const saved = takeBoardScroll(projectKey);
+    if (!saved) return;
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = saved.listTop;
+      if (saved.windowY) window.scrollTo(0, saved.windowY);
+    });
+    const opened = saved.number === null ? null : items.find((it) => it.number === saved.number);
+    if (opened) setSelectedId(opened.id);
+  }, [items, projectKey]);
 
   const categoryCtx = useMemo(
     () => ({
@@ -701,7 +778,7 @@ export function ProjectDetailView({
   useEffect(() => {
     if (!keyboardNavActive) return;
     function onKey(e: globalThis.KeyboardEvent) {
-      if (adding || openItemId || showCategoryManager) return;
+      if (adding || showCategoryManager) return;
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -730,6 +807,16 @@ export function ProjectDetailView({
       }
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Enter opens the selected card's page (Enter = primary action). A
+      // focused button or link keeps its own Enter.
+      if (e.key === "Enter") {
+        if (!sel || t?.closest("button, a, [role='button'], [role='option']")) return;
+        e.preventDefault();
+        openCard(sel);
+        return;
+      }
+
       if (!"jkgG0ud".includes(e.key)) return;
 
       // u/d move the selected item one slot within its own status column,
@@ -792,13 +879,13 @@ export function ProjectDetailView({
   }, [
     keyboardNavActive,
     adding,
-    openItemId,
     showCategoryManager,
     grouped,
     visibleItems,
     view,
     selectedId,
     patchItem,
+    openCard,
   ]);
 
   // "/" focuses the card search from anywhere on the page. Independent of the
@@ -807,7 +894,7 @@ export function ProjectDetailView({
   useEffect(() => {
     function onSlash(e: globalThis.KeyboardEvent) {
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (adding || openItemId || showCategoryManager) return;
+      if (adding || showCategoryManager) return;
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -820,7 +907,7 @@ export function ProjectDetailView({
     }
     window.addEventListener("keydown", onSlash);
     return () => window.removeEventListener("keydown", onSlash);
-  }, [adding, openItemId, showCategoryManager]);
+  }, [adding, showCategoryManager]);
 
   // Keep the selected row visible as j/k/g/G move the selection and u/d reorder
   // it. `block: "nearest"` only scrolls when the row is actually out of view.
@@ -843,7 +930,7 @@ export function ProjectDetailView({
   // the current selection.
   useEffect(() => {
     if (!selectionActive || !selectedId) return;
-    if (adding || openItemId || showCategoryManager) return;
+    if (adding || showCategoryManager) return;
     function onDown(e: MouseEvent) {
       const t = e.target as HTMLElement | null;
       if (!t) return;
@@ -859,12 +946,8 @@ export function ProjectDetailView({
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [selectionActive, selectedId, adding, openItemId, showCategoryManager]);
+  }, [selectionActive, selectedId, adding, showCategoryManager]);
 
-  const openItem = useMemo(
-    () => (openItemId ? (items?.find((it) => it.id === openItemId) ?? null) : null),
-    [openItemId, items],
-  );
 
   return (
     <ProjectKeyProvider value={projectKey}>
@@ -1140,7 +1223,10 @@ export function ProjectDetailView({
           Only desktop (≥lg) gets this contained scroll; phones (both
           orientations — landscape is ~960px wide) and tablets keep plain
           full-page scroll, so only the pinned top bar stays put. */}
-      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
+      <div
+        ref={scrollRef}
+        className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+      >
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
       ) : query.trim() && visibleItems.length === 0 ? (
@@ -1157,7 +1243,7 @@ export function ProjectDetailView({
           onArchive={archiveItem}
           onRestore={restoreItem}
           onPurge={deleteItem}
-          onOpen={(it) => setOpenItemId(it.id)}
+          onOpen={openCard}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
           onTagClick={toggleTag}
@@ -1182,7 +1268,7 @@ export function ProjectDetailView({
           onArchive={archiveItem}
           onRestore={restoreItem}
           onPurge={deleteItem}
-          onOpen={(it) => setOpenItemId(it.id)}
+          onOpen={openCard}
           onCreatorClick={toggleCreatorFilter}
           activeCreator={creatorFilter}
           onTagClick={toggleTag}
@@ -1203,20 +1289,6 @@ export function ProjectDetailView({
           position={addPosition}
           onClose={() => setAdding(false)}
           onCreated={addCreated}
-        />
-      ) : null}
-      {openItem ? (
-        <ItemDetailModal
-          // Keyed by item: following a parent/child link swaps the open item,
-          // which must remount the editor (a fresh draft and edit session; the
-          // previous item's edit was saved by the leave guard first).
-          key={openItem.id}
-          item={openItem}
-          allTags={allTags}
-          onClose={() => setOpenItemId(null)}
-          onSave={saveItemEdit}
-          onItemChange={replaceItem}
-          leaveGuardRef={leaveItemGuard}
         />
       ) : null}
       {showCategoryManager ? (

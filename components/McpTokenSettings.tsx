@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { McpTokenSummary } from "@/lib/types";
+import { SITE_URL } from "@/lib/card-url";
 
 /**
  * Personal MCP token manager for the top bar (KANBAN-30, Phase I.5a). A key icon
@@ -13,7 +14,7 @@ import type { McpTokenSummary } from "@/lib/types";
  * MCP is then attributed to the token's user → their GitHub PAT. Human-UI-only —
  * there is deliberately no MCP tool to mint a token. See docs/mcp-setup.md.
  */
-const MCP_URL = "https://kanban.dbwoodward.com/mcp";
+const MCP_URL = `${SITE_URL}/mcp`;
 
 export function McpTokenSettings() {
   const [open, setOpen] = useState(false);
@@ -53,7 +54,10 @@ export function McpTokenSettings() {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) close();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        e.preventDefault(); // handled: nothing underneath (the card page) also acts
+        close();
+      }
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);

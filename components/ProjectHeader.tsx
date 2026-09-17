@@ -13,6 +13,7 @@ import { Byline } from "@/components/Byline";
 import { AbandonButton } from "@/components/AbandonButton";
 import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
+import { KEY_MAX } from "@/lib/card-url";
 
 type Status = "idle" | "saving" | "error";
 
@@ -101,7 +102,9 @@ export function ProjectHeader({
     const patch: Record<string, unknown> = {};
     if (trimmedName && trimmedName !== project.name) patch.name = trimmedName;
     if (nextDescription !== project.description) patch.description = nextDescription;
-    if (nextKey !== project.key) patch.key = nextKey;
+    // A key is permanent once set (KANBAN-44); only a project without one
+    // (none since the migration) can be given one here.
+    if (!project.key && nextKey) patch.key = nextKey;
     if (canToggleVisibility && !sameMembers(sharedWith, project.shared_with ?? [])) {
       patch.sharedWith = sharedWith;
     }
@@ -253,22 +256,35 @@ export function ProjectHeader({
           <label className="mt-3 block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
             Key
           </label>
-          <div className="mt-1 flex items-center gap-2">
-            <input
-              value={key}
-              onChange={(e) =>
-                setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))
-              }
-              onKeyDown={onKeyInputKeyDown}
-              placeholder={suggestedKey || "KEY"}
-              maxLength={6}
-              aria-label="Project key"
-              className="w-24 rounded border border-[var(--color-line)] bg-transparent px-2 py-1 font-mono text-sm uppercase tracking-wide outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
-            />
-            <span className="font-mono text-xs text-[var(--color-faint)]">
-              {(key.trim() || suggestedKey || "KEY")}-12 · prefixes item refs
-            </span>
-          </div>
+          {project.key ? (
+            // Permanent (KANBAN-44): the key is the board's URL and every card
+            // ref, so it is shown, never edited.
+            <div className="mt-1 flex items-center gap-2">
+              <span className="font-mono text-sm tracking-wide text-[var(--color-ink)]">
+                {project.key}
+              </span>
+              <span className="text-xs text-[var(--color-faint)]">
+                /{project.key} · {project.key}-12 · permanent
+              </span>
+            </div>
+          ) : (
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                value={key}
+                onChange={(e) =>
+                  setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, KEY_MAX))
+                }
+                onKeyDown={onKeyInputKeyDown}
+                placeholder={suggestedKey || "KEY"}
+                maxLength={KEY_MAX}
+                aria-label="Project key"
+                className="w-28 rounded border border-[var(--color-line)] bg-transparent px-2 py-1 font-mono text-sm uppercase tracking-wide outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
+              />
+              <span className="font-mono text-xs text-[var(--color-faint)]">
+                {(key.trim() || suggestedKey || "KEY")}-12 · permanent once set
+              </span>
+            </div>
+          )}
 
           <label className="mt-3 block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
             GitHub account

@@ -63,7 +63,7 @@ export function ClampedText({
       <div
         ref={ref}
         onDoubleClick={onOpen}
-        title="Double-click to edit"
+        title="Double-click to open"
         className={`cursor-text select-text ${className}`}
         style={clampStyle}
       >
