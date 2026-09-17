@@ -78,6 +78,14 @@ Caveats to surface in the UX: an **org** account may require an admin to approve
 works, and fine-grained PATs carry a **max ~1-year expiry**, so the reconnect lifecycle below is
 always necessary.
 
+> **User-facing setup help (KANBAN-28, 2026-09-17):** the how-to lives in the app, not here: the
+> "?" on the Connect popover, the project's GitHub account field and the Areas panel, all
+> rendered from `lib/github-help.ts`. Checked against GitHub's docs that day, two details above
+> have moved on: fine-grained PATs **no longer have a 1-year maximum** (no expiry is allowed
+> unless an org or enterprise sets a maximum lifetime; the form defaults to 30 days), and
+> **Pull requests** is not needed, since nothing calls a PR endpoint. The token needs only
+> Metadata: read and Issues: read & write.
+
 ### Credential lifecycle
 
 1. **Validate on connect** — call GitHub `/user` (or equivalent) with the token to confirm it

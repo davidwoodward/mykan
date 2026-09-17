@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { Byline } from "@/components/Byline";
 import { AbandonButton } from "@/components/AbandonButton";
+import { GithubHelpButton } from "@/components/GithubHelp";
 import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
 import { KEY_MAX, keyError, normalizeKeyInput, projectPath } from "@/lib/card-url";
@@ -423,9 +424,12 @@ export function ProjectHeader({
             </p>
           ) : null}
 
-          <label className="mt-3 block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
-            GitHub account
-          </label>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <span className="block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
+              GitHub account
+            </span>
+            <GithubHelpButton />
+          </div>
           <select
             value={githubAccountId ?? ""}
             onChange={(e) => setGithubAccountId(e.target.value || null)}

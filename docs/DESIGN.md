@@ -569,3 +569,33 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   ("Delete", "Open card"); the `aria-label` can be longer and name the item. Also used by the
   row/card pencil (`EditButton`), attachments clip (`InlineAttachments`, hidden while its
   popover is open), history clock (`ItemHistory`) and the list row's delete icon.
+
+## In-app help: the "?" dialog (KANBAN-28, 2026-09-17)
+
+Setup that is easy to get wrong gets a **"?" icon where the configuring happens**, not a
+separate doc. First use: GitHub setup (`GithubHelpButton`, `components/GithubHelp.tsx`).
+
+- **Where:** beside the "GitHub connections" heading in the Connect popover (`GithubConnect`),
+  beside the **GitHub account** field in the project edit panel (`ProjectHeader`), and in
+  the **Areas** panel header next to ✕ (`CategoryManager`; one per panel, not per row).
+- **One content source.** The words live as typed data in `lib/github-help.ts` (sections of
+  steps and bullets, the permissions table, the pre-filled GitHub token URL), tested in
+  `lib/github-help.test.ts`. Every "?" renders the same content, and there is no parallel
+  `docs/` how-to to drift from it. Keep it matched to the code (`lib/github*.ts`) and to
+  GitHub's current docs.
+- **The trigger** is a 24px icon button (circle with a question mark): `aria-label`, the prompt
+  styled tooltip (~150ms after hover, at once on keyboard focus: the shared `IconTip`), no
+  native `title`. Click, tap, Enter or Space opens.
+- **The dialog** is modal (`role="dialog"`, `aria-modal`), centred, `max-w-lg`, capped at
+  `88svh` with its body scrolling, token colours only, fine at phone width. Focus starts on
+  its ✕, Tab stays inside, and every close (Esc, ✕, a press on the backdrop) returns focus to
+  the "?". External links open in a new tab with `rel="noopener noreferrer"`.
+- **It closes itself only, never the surface it sits in.** Those surfaces own Esc and
+  click-off (the popover, the project panel, the Areas modal, the card page), so the dialog
+  takes Esc in the window's **capture** phase and stops it, and is portaled into its **own
+  container** on `<body>` whose native listeners stop pointer, mouse, touch, click and key
+  events from bubbling on. A React `stopPropagation` alone is not enough: the App Router's
+  React root is `document`, the same node those click-off listeners are on. React events
+  are also stopped at the backdrop, since they bubble to the portal's React parents (the
+  Areas backdrop closes on mousedown). Reuse this component's approach for any future help
+  dialog that opens from inside another overlay.

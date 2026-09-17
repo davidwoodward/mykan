@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useCategories, PathInput } from "@/components/CategoryPicker";
 import { AbandonButton } from "@/components/AbandonButton";
+import { GithubHelpButton } from "@/components/GithubHelp";
 import type { Category } from "@/lib/types";
 
 /** Depth of a node (root = 0) for indenting the tree. */
@@ -101,14 +102,17 @@ export function CategoryManager({
       >
         <header className="flex items-center justify-between gap-4 border-b border-[var(--color-line)] px-4 py-2.5">
           <h2 className="text-sm font-semibold">Areas</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            ✕
-          </button>
+          <span className="flex items-center gap-1">
+            <GithubHelpButton />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="shrink-0 rounded p-1 text-[var(--color-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              ✕
+            </button>
+          </span>
         </header>
 
         <div className="max-h-[50vh] overflow-y-auto px-2 py-2">

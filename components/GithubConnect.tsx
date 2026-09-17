@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GithubConnection } from "@/lib/types";
+import { GithubHelpButton } from "@/components/GithubHelp";
+import { GITHUB_NEW_TOKEN_PREFILLED_URL } from "@/lib/github-help";
 
 /**
  * "Connect GitHub Account" control for the top bar (KANBAN-21 / GH-2). A GitHub
@@ -155,8 +157,11 @@ export function GithubConnect() {
           aria-label="GitHub connections"
           className="absolute right-0 top-full z-30 mt-2 w-[min(92vw,24rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-lg"
         >
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
-            GitHub connections
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+              GitHub connections
+            </span>
+            <GithubHelpButton />
           </div>
 
           {/* Existing connections for this user. */}
@@ -253,11 +258,11 @@ export function GithubConnect() {
               <p className="text-[11px] leading-snug text-[var(--color-faint)]">
                 Create a fine-grained token with <span className="font-medium">Metadata: read</span>{" "}
                 and <span className="font-medium">Issues: read &amp; write</span>, then paste it
-                here.{" "}
+                here. The ? above walks through it.{" "}
                 <a
-                  href="https://github.com/settings/personal-access-tokens/new"
+                  href={GITHUB_NEW_TOKEN_PREFILLED_URL}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="text-[var(--color-accent-ink)] hover:underline"
                 >
                   New token ↗
