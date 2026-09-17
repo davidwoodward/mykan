@@ -5,8 +5,8 @@ follow-up were confirmed by David and moved to Done. Next: KANBAN-38 (entry pane
 page), once KANBAN-44 is confirmed and its open question is answered.**
 
 **Later on 2026-09-17: KANBAN-44 is Done (David confirmed it and answered its question, see
-below). KANBAN-38 is in flight in PR #124 (open, not merged; no migration). David verifies it on
-prod after merge.**
+below). KANBAN-38 merged in PR #124 (no migration) and deployed to prod; it is in Testing until David
+verifies it on prod (steps in the PR body).**
 
 ## At a glance
 
@@ -23,7 +23,7 @@ prod after merge.**
   5. KANBAN-42 — Done (PRs #118, #119). Not a child.
   6. KANBAN-44 — Done (PR #120). Not a child. (Was Testing; David confirmed 2026-09-17.)
   7. KANBAN-45 — Done (PRs #121, #122). Not a child.
-  8. **KANBAN-38 — in flight** (PR #124, open for review; see "KANBAN-38 in flight" below)
+  8. **KANBAN-38 — Testing** (PR #124, merged and deployed; David verifies on prod)
   9. KANBAN-39
   10. KANBAN-40
 - **Resolved 2026-09-17 (the three items that were open before KANBAN-38):**
@@ -128,9 +128,9 @@ prod after merge.**
 - **Entry body is plain text**; markdown rendering is probably wanted.
 - Read `docs/DESIGN.md` and `~/dev/me/standards/ui-ux.md` first.
 
-## KANBAN-38 in flight (PR #124, 2026-09-17)
+## KANBAN-38 in Testing (PR #124, merged 2026-09-17)
 
-- **Status:** built, open PR, not merged. **No migration** (entries tables already exist; RLS is on
+- **Status:** merged (c6ee2a9) and deployed to prod; Testing until David verifies. **No migration** (entries tables already exist; RLS is on
   with no policies and the server client bypasses it, like items). Merging deploys it; David then
   follows the click-by-click steps in the PR body on prod.
 - **What's in it:**
