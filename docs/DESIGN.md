@@ -618,7 +618,10 @@ the top of the visible part of that row, and scrolls away only with the row's en
   phones in landscape) the page scrolls under the pinned header, so the offset is
   `top: calc(var(--app-header-h) + 1.25rem)`. `--app-header-h` (`app/globals.css`, 3rem) is
   also the header row's `min-height` in `app/[ref]/page.tsx`, so the offset follows the header
-  rather than guessing it. If the header gets taller, change the variable, not the row.
+  rather than guessing it. 3rem is the row's natural height (32px controls + `py-2`), so the
+  `min-height` changes nothing today. The home page and not-found headers must stay the same
+  height (Header & nav), so if the header ever gets taller, change it on all three and update
+  the variable to match.
 - **The 1.25rem cushion** leaves room above the pinned ref for its floating "Copied"
   confirmation (KANBAN-14), which would otherwise be clipped by the scroll region or hidden
   under the header.
