@@ -434,8 +434,16 @@ function ItemRow({
             onChange={(s) => void onPatch(item.id, { status: s })}
           />
         </div>
-        <div className="w-16 shrink-0">
-          <RefBadge number={item.number} className="sm:mt-1.5" />
+        {/* The ref column spans the whole row at sm+ (self-stretch), so the ref
+            can stay pinned at the top of the visible part of a tall row and only
+            scroll away with the row's end (KANBAN-13). It is its own column, so
+            it never overlaps the text. Offsets: below lg the page scrolls under
+            the pinned header, so clear it; at lg the list is its own scroll
+            region. The 1.75rem cushion gives the "Copied" bubble clearance. */}
+        <div className="w-16 shrink-0 sm:self-stretch">
+          <div className="sm:sticky sm:top-[calc(var(--app-header-h)+1.75rem)] lg:top-7">
+            <RefBadge number={item.number} className="sm:mt-1.5" />
+          </div>
         </div>
       </div>
       <div className="min-w-0 flex-1">
