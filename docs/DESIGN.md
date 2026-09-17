@@ -52,6 +52,27 @@ archived view) and stays tap-visible below `sm`. Every icon in the cluster uses 
 styled tooltip (below), not a native `title`. The archived view's Restore / Delete forever
 words are unchanged.
 
+## Paragraph spacing on list rows and board cards (KANBAN-15, 2026-09-17)
+
+Card text on list rows and board cards honors paragraph breaks with a **small gap
+(0.4em)** so longer descriptions read more easily. Rules:
+
+- The gap goes **between top-level blocks only** (paragraphs, headings, a code block, a
+  whole list). A **hard break** (Shift+Enter) stays a plain new line, and a **list stays
+  tight** (its items on consecutive lines, no gap between bullets).
+- **Blank paragraphs are kept** as a blank line (plus the gap), so empty lines typed to
+  separate sections still separate them; the spaced text is exactly the old text, only
+  with gaps added.
+- **Where:** every List view row, and every Board column **except Done**, which stays
+  compact (the old single flattened text, blank lines and all) because Done piles up.
+- **Unchanged:** the first line (title) sits exactly where it did (no gap above it); the
+  line clamp and Show more/less still count lines across the blocks (margins don't use up a
+  line); text stays plain and selectable; single click selects, double-click / pencil /
+  Enter opens. The card page editor is not affected.
+- **How:** `richDocBlocks` in `lib/types.ts` splits the rich body into block strings;
+  `ClampedText` takes them as an optional `blocks` prop and renders each as its own `div`
+  with the gap above all but the first. Leave `blocks` off for compact text.
+
 ## Header & nav
 
 - **One app-shell width, every page.** This is an **app layout, not per-page** — every page's
