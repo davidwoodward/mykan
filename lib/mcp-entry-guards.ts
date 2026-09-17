@@ -26,6 +26,17 @@ export const CONTENT_BOUNDARY =
   "Boundary: the card holds the work (description = a clean living spec), decisions and status; lobe holds durable lessons; repo _continue/ docs hold handoffs, linked from the card and never copied into it.";
 
 /**
+ * Appended to create_item's description (KANBAN-48). Sessions kept writing
+ * "Open question for design:" into new card bodies because create_item never
+ * mentioned questions or decisions, and a tool no other description names is
+ * never loaded by the client. The trigger is the SHAPE of the text, not who
+ * would answer it — "questions for David" lets a session reclassify its own
+ * question as spec.
+ */
+export const CREATE_ITEM_QUESTION_GUIDANCE =
+  "A card's body is a spec, not a scratchpad. Anything this card leaves undecided belongs in neither `name` nor `body`: create the card, then file it with ask_question. Go by the shape of the text, not by who would answer it — \"open question\", \"TBD\", \"to be decided\", \"to confirm\", \"needs input\" / \"needs David's input\", or any question about scope, behaviour or acceptance. Open questions show on David's board; body text doesn't. Something David has ALREADY decided goes in record_decision (what he decided, never your own judgement).";
+
+/**
  * Server-level usage guidance sent to every MCP client on connect (the MCP
  * `instructions` field). The one place a session learns the whole card model
  * before calling any tool; tool descriptions repeat the parts they need.
@@ -36,7 +47,7 @@ export const MCP_SERVER_INSTRUCTIONS = [
   "How a card is organised:",
   "- The description (card body) is a clean, living spec: objective, scope, current plan, acceptance. Edit it in place with set_item_body when the plan changes; item history keeps old versions. Never append progress, corrections or session logs to it.",
   "- Progress goes in progress entries (append_item_note). One short checkpoint per meaningful step: what changed, where (PR, commit, file), what's next.",
-  "- Questions for David go in question entries (ask_question). When David answers, record the answer with answer_question.",
+  "- Anything the card leaves undecided goes in question entries (ask_question), never in the body.",
   "- Decisions are David's. record_decision records what David decided; never record your own judgement as a decision. When a decision changes, record the new one with supersedes rather than editing history away.",
   "- Entries are editable and versioned: fix a wrong entry with update_item_entry, don't add a correction on top.",
   `- Every entry is capped at ${MCP_ENTRY_MAX_CHARS} characters. Over the cap nothing is saved: put the detail in the repo (a doc, a _continue/ handoff, the PR description) and record a short entry that links to it.`,
@@ -45,6 +56,9 @@ export const MCP_SERVER_INSTRUCTIONS = [
   "- The card: the work, what was decided, where it stands.",
   "- lobe: durable lessons and traps worth remembering beyond this card.",
   "- Repo _continue/ docs: session handoffs. Link them from the card; never copy them into it.",
+  "- Anything you would ask David about a card that changes scope, behaviour or acceptance, or that he would otherwise have to decide twice, is filed with ask_question FIRST and then summarised in chat: chat scrolls away, the card is the record. When he answers, close it with answer_question, which records the decision and links it to the question. Quick clarifications inside a working session stay in chat — don't file trivia.",
+  "- record_decision on its own is for a decision no question was filed for (David often decides unprompted).",
+  "- The description is a living spec and IS updated when a decision changes the plan — but tightly: state the current behaviour only. No attributions, dates, \"David decided\" notes, restated decisions or open-question sections; the decision entry is the record of who decided and when.",
   "",
   "Reading: list_items returns titles only. get_item returns the description plus active decisions, open questions and a progress summary; call list_item_entries when you need the progress log or older entries.",
   "",
@@ -141,4 +155,13 @@ export function answerArgsError(args: { decision_id?: string; decision?: string 
 /** The plain sentence append_item_note returns with the created entry. */
 export function progressRecordedMessage(itemRef: string): string {
   return `Recorded as a progress entry on ${itemRef} (not in the card body). Read it back with list_item_entries (item: ${itemRef}, kind: progress).`;
+}
+
+/**
+ * The plain sentence create_item returns with the new card (KANBAN-48). The
+ * description is read before the call; this is read at the moment the session
+ * picks its next tool, which is where undecided text used to go into the body.
+ */
+export function itemCreatedMessage(itemRef: string): string {
+  return `Created ${itemRef}. Anything this card leaves undecided goes in ask_question, not the body — open questions show on David's board; body text doesn't.`;
 }

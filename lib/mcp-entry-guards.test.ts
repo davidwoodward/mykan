@@ -3,12 +3,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  CREATE_ITEM_QUESTION_GUIDANCE,
   ITEM_BODY_BUDGET_CHARS,
   MCP_ENTRY_MAX_CHARS,
   MCP_SERVER_INSTRUCTIONS,
   answerArgsError,
   bodyBudgetWarning,
   entryCapError,
+  itemCreatedMessage,
   progressRecordedMessage,
   summarizeEntries,
 } from "./mcp-entry-guards.ts";
@@ -127,4 +129,56 @@ test("server instructions state the card model and the real cap", () => {
   assert.match(MCP_SERVER_INSTRUCTIONS, /append_item_note/);
   assert.ok(MCP_SERVER_INSTRUCTIONS.includes(`${MCP_ENTRY_MAX_CHARS} characters`));
   assert.match(MCP_SERVER_INSTRUCTIONS, /nothing is saved/);
+});
+
+test("create_item's description names ask_question and record_decision (KANBAN-48)", () => {
+  // Tools load on demand by name: a tool no other description mentions is
+  // never loaded, which is how ask_question stayed invisible.
+  assert.match(CREATE_ITEM_QUESTION_GUIDANCE, /ask_question/);
+  assert.match(CREATE_ITEM_QUESTION_GUIDANCE, /record_decision/);
+  assert.match(CREATE_ITEM_QUESTION_GUIDANCE, /spec, not a scratchpad/);
+});
+
+test("create_item's guidance triggers on the shape of the text, not the audience", () => {
+  for (const shape of [
+    "open question",
+    "TBD",
+    "to be decided",
+    "to confirm",
+    "needs input",
+    "David's input",
+    "scope, behaviour or acceptance",
+  ]) {
+    assert.ok(
+      CREATE_ITEM_QUESTION_GUIDANCE.includes(shape),
+      `create_item guidance should name the trigger ${JSON.stringify(shape)}`,
+    );
+  }
+  assert.match(CREATE_ITEM_QUESTION_GUIDANCE, /shape of the text, not by who would answer/);
+  // Neither create_item argument is a place to park something undecided.
+  assert.match(CREATE_ITEM_QUESTION_GUIDANCE, /neither `name` nor `body`/);
+});
+
+test("create_item's result points the next call at ask_question", () => {
+  const m = itemCreatedMessage("FPOON-50");
+  assert.match(m, /^Created FPOON-50\./);
+  assert.match(m, /ask_question/);
+  assert.match(m, /not the body/);
+  assert.match(m, /board/);
+});
+
+test("server instructions file open questions on the card first (KANBAN-48)", () => {
+  assert.match(MCP_SERVER_INSTRUCTIONS, /filed with ask_question FIRST and then summarised in chat/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /chat scrolls away, the card is the record/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /changes scope, behaviour or acceptance/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /answer_question, which records the decision and links it/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /stay in chat/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /record_decision on its own is for a decision no question was filed for/);
+});
+
+test("server instructions carry the anti-bloat rule for the description", () => {
+  assert.match(MCP_SERVER_INSTRUCTIONS, /living spec and IS updated when a decision changes the plan/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /current behaviour only/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /No attributions, dates, "David decided" notes/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /the decision entry is the record of who decided and when/);
 });

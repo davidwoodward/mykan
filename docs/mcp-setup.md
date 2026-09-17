@@ -110,6 +110,40 @@ Guardrails (constants in `lib/mcp-entry-guards.ts`):
   repo `_continue/` docs hold handoffs, linked from the card and never copied
   into it.
 
+**Steering open questions into `ask_question` (KANBAN-48).** A question that
+changes scope, behaviour or acceptance — or that David would otherwise have to
+decide twice — is filed with `ask_question` **first**, then summarised in chat:
+chat scrolls away, the card is the record. `answer_question` closes it when he
+answers, linking the decision to the question. Quick clarifications inside a
+working session stay in chat. `record_decision` on its own is for a decision no
+question was filed for.
+
+The trigger is the **shape** of the text, not who would answer it: "open
+question", TBD, "to be decided", "to confirm", "needs input" / "needs David's
+input", or any question about scope, behaviour or acceptance. Three places say
+so, because the rule used to live only on `set_item_body` — read *after* the
+mistake — and tools load on demand *by name*, so `ask_question` was never even
+loaded:
+
+- `create_item`'s description ends with `CREATE_ITEM_QUESTION_GUIDANCE`
+  (`lib/mcp-entry-guards.ts`), which names both `ask_question` and
+  `record_decision`: the body is a spec, not a scratchpad, and undecided text
+  belongs in neither `name` nor `body`.
+- `create_item`'s *result* carries a `message` (like `append_item_note`'s),
+  read at the moment the next tool is chosen: "Created FPOON-50. Anything this
+  card leaves undecided goes in ask_question, not the body — open questions
+  show on David's board; body text doesn't." The rest of the payload is
+  unchanged `get_item` detail.
+- `MCP_SERVER_INSTRUCTIONS`, under *Where things belong*, sent on connect.
+
+**Anti-bloat (David, 2026-09-17).** The description *is* updated when a decision
+changes the plan — but tightly: current behaviour only. No attributions, dates,
+"David decided" notes, restated decisions or open-question sections. The
+decision entry is the record of who decided and when.
+
+All three are text: a session already connected keeps the old wording until it
+reconnects (`/mcp` → `mykan` → **Reconnect**).
+
 `set_item_type(item, type)` changes an item's type (feature, bug, task, idea,
 epic) through the same path as the web: recorded in history, and refused with a
 clear message when an epic still has children or when an item with a parent
