@@ -10,8 +10,8 @@
  *
  * - Icon only: a counter-clockwise arrow (revert), never a trash can or red, so
  *   it doesn't read as delete.
- * - `title` (hover tooltip) + `aria-label`, plus a styled tooltip shown on
- *   keyboard focus, where the native title never appears.
+ * - `aria-label`, plus a styled tooltip shown ~150ms after hover and at once on
+ *   keyboard focus (no native `title`: it is far too slow to appear).
  * - The press does NOT take focus (mousedown/pointerdown are prevented), so a
  *   blur-commits field being edited doesn't save the very draft being abandoned.
  */
@@ -42,7 +42,6 @@ export function AbandonButton({
         onMouseDown={(e) => e.preventDefault()}
         onClick={onAbandon}
         disabled={disabled}
-        title={label}
         aria-label={label}
         className={`peer grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-wait disabled:opacity-50`}
       >
@@ -63,7 +62,7 @@ export function AbandonButton({
       <span
         role="presentation"
         aria-hidden="true"
-        className={`pointer-events-none absolute top-full z-50 mt-1 hidden whitespace-nowrap rounded bg-[var(--color-ink)] px-1.5 py-0.5 text-[11px] font-normal normal-case tracking-normal text-[var(--color-surface)] shadow peer-focus-visible:block ${
+        className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded bg-[var(--color-ink)] px-1.5 py-0.5 text-[11px] font-normal normal-case tracking-normal text-[var(--color-surface)] opacity-0 shadow transition-opacity duration-100 peer-hover:opacity-100 peer-hover:delay-150 peer-focus-visible:opacity-100 ${
           tooltipAlign === "right" ? "right-0" : "left-0"
         }`}
       >

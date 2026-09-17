@@ -527,3 +527,9 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
 - **Every icon is labeled.** Decorative SVGs get `aria-hidden="true"`; the icon **button** gets
   both `title` (hover tooltip) and `aria-label` (accessible name). Row/control actions are
   icons, not text labels.
+- **Prompt tooltips where the icon isn't self-evident** (David, 2026-09-17: the native `title`
+  tooltip is far too slow, and the entry panels' Answer ↶ icon read as Undo). The entry-panel icon
+  buttons and the abandon icon drop `title` and show a styled tooltip ~150ms after hover and at
+  once on keyboard focus (`IconTip` in `components/EntryPanels.tsx`, the same styling in
+  `components/AbandonButton.tsx`). They keep `aria-label`. Don't show both a native and a styled
+  tooltip on one button.

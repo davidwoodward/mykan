@@ -711,31 +711,53 @@ function IconButton({
   danger?: boolean;
   children: ReactNode;
 }) {
+  // No native `title`: it takes a second or more to appear (David, 2026-09-17).
+  // The styled tooltip shows ~150ms after hover, and at once on keyboard focus.
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      aria-pressed={active === undefined ? undefined : active}
-      className={`grid h-6 w-6 place-items-center rounded transition-colors disabled:opacity-40 ${
-        active ? "text-[var(--color-accent)]" : "text-[var(--color-faint)]"
-      } ${danger ? "hover:text-[var(--color-bug)]" : "hover:text-[var(--color-accent)]"}`}
-    >
-      <svg
-        className="h-4 w-4"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
+    <span className="relative inline-flex shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        aria-pressed={active === undefined ? undefined : active}
+        className={`peer grid h-6 w-6 place-items-center rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-40 ${
+          active ? "text-[var(--color-accent)]" : "text-[var(--color-faint)]"
+        } ${danger ? "hover:text-[var(--color-bug)]" : "hover:text-[var(--color-accent)]"}`}
       >
-        {children}
-      </svg>
-    </button>
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          {children}
+        </svg>
+      </button>
+      <IconTip label={label} />
+    </span>
+  );
+}
+
+/**
+ * A prompt tooltip for an icon button: the button is its `peer`. Right-aligned,
+ * since entry row actions sit at the row's right edge.
+ */
+function IconTip({ label, align = "right" }: { label: string; align?: "left" | "right" }) {
+  return (
+    <span
+      role="presentation"
+      aria-hidden="true"
+      className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded bg-[var(--color-ink)] px-1.5 py-0.5 text-[11px] font-normal normal-case tracking-normal text-[var(--color-surface)] opacity-0 shadow transition-opacity duration-100 peer-hover:opacity-100 peer-hover:delay-150 peer-focus-visible:opacity-100 ${
+        align === "right" ? "right-0" : "left-0"
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 
