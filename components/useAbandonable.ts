@@ -38,8 +38,8 @@ export type PendingRestore<T> = {
  *   editor to offer: `applyRestore()` puts it back as unsaved changes and bumps
  *   `revision` (remount uncontrolled inputs with it), `discardRestore()` forgets it.
  *
- * Reused by any editor of saved data: the item modal today; entry editors
- * (KANBAN-38) and the card page (KANBAN-44) next.
+ * Reused by any editor of saved data: the card page (KANBAN-44); entry editors
+ * (KANBAN-38) next.
  */
 export function useAbandonable<T extends Record<string, unknown>>({
   opened,

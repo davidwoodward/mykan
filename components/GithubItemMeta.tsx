@@ -11,7 +11,7 @@ import { shortDate } from "@/lib/format";
  * it OVERWRITES the item's title/body + tags with the issue's current state
  * (recoverable from history) — so it confirms first. Renders nothing for an
  * unlinked item. `className` lets callers control layout/visibility (e.g. the
- * list row shows it far-right on large screens only; the detail modal always).
+ * list row shows it far-right on large screens only; the card page always).
  */
 export function GithubItemMeta({
   item,

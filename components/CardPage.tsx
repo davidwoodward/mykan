@@ -67,7 +67,7 @@ const PANELS: PanelDef[] = [
 
 /**
  * A card's own page, /KEY-N (KANBAN-44). One layout for every card, replacing
- * the item modal: the description is the main column; child items,
+ * the item modal (there is one layout): the description is the main column; child items,
  * attachments and history sit beside it as tabbed sections (stacked below it on
  * a phone). On desktop the page is locked to the viewport and each column
  * scrolls on its own, so a long description never pushes the rest off screen.

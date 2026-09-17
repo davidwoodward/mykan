@@ -31,7 +31,7 @@ const itemEqual = (key: string, a: unknown, b: unknown) =>
 
 type ItemFields = { body: RichDoc | null; tags: string[] };
 
-/** The item modal's wiring: a draft session over the fields it edits. */
+/** The card page's wiring (the item modal before KANBAN-44): a draft session over the fields it edits. */
 function openItemEditor(
   stored: ItemFields,
   store: DraftStore = memoryDraftStore(),

@@ -151,7 +151,9 @@ app/
     items/[id]/images/route.ts     ← inline image upload
     images/[...path]/route.ts      ← authed image serving
   mcp/route.ts                     ← canonical MCP endpoint /mcp (basePath ""), token-gated
-  projects/[id]/page.tsx           ← project detail (list + board)
+  [ref]/page.tsx                   ← /KEY (project list + board) and /KEY-N (card page)
+  projects/[id]/page.tsx           ← old GUID links: 308 to /KEY
+  not-found.tsx                    ← the one 404 (unknown, or not shared with you)
   signin/page.tsx                  ← sign-in screen
   page.tsx                         ← projects list
 components/
@@ -160,7 +162,7 @@ components/
   ProjectDetailView.tsx            ← toolbar, filters, grouping (Status/Area/Flat)
   ProjectHeader.tsx                ← inline edit of name/desc/key/visibility (the nav pencil)
   ItemList.tsx                     ← list rows; DraggableRows (sortable sections + Flat)
-  ItemDetailModal.tsx · RichTextEditor.tsx (Tiptap)
+  CardPage.tsx · RichTextEditor.tsx (Tiptap) ← a card's page, /KEY-N (KANBAN-44)
   RefBadge.tsx                     ← KEY-# reference badge (+ project-key context)
   CategoryPicker.tsx · CategoryManager.tsx ← Area picker + tree manager
   AssigneePicker.tsx               ← multi-assignee picker (shared projects)

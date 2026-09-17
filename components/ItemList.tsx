@@ -462,7 +462,7 @@ function ItemRow({
             <ItemAssignees item={item} />
           </div>
           {/* GitHub provenance for linked items: far-right on the area/tags line,
-              large screens only (small screens use the detail modal). */}
+              large screens only (small screens use the card page). */}
           <GithubItemMeta
             item={item}
             onItemChange={onItemChange}

@@ -126,6 +126,49 @@ create trigger items_set_number
   before insert on items
   for each row execute function set_item_number();
 
+-- Project keys are required, well-formed, unique, never a reserved word, and
+-- permanent (KANBAN-44): the key is the board URL (/FPOON) and the prefix of
+-- every card URL (/FPOON-42). 2 to 10 uppercase letters/digits starting with a
+-- letter; the reserved list mirrors RESERVED_KEYS in lib/card-url.ts (every
+-- top-level app route plus likely future ones). Migration, which also gave the
+-- Standards project the key STD:
+--   supabase/migrations/2026-09-16-4-project-keys.sql
+alter table projects alter column key set not null;
+do $$ begin
+  alter table projects
+    add constraint projects_key_format check ((key collate "C") ~ '^[A-Z][A-Z0-9]{1,9}$');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter table projects
+    add constraint projects_key_not_reserved check (key <> all (array[
+      'API', 'MCP', 'PROJECTS', 'SIGNIN', 'ICON',
+      'AUTH', 'LOGIN', 'LOGOUT', 'SIGNOUT', 'SETTINGS', 'ADMIN', 'NEW', 'HOME',
+      'STATIC', 'PUBLIC', 'FAVICON', 'ROBOTS', 'SITEMAP'
+    ]));
+exception when duplicate_object then null;
+end $$;
+create unique index if not exists projects_key_unique on projects (key);
+
+create or replace function projects_key_permanent() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+begin
+  if old.key is not null and new.key is distinct from old.key then
+    raise exception 'project key is permanent once set: % cannot become %',
+      old.key, coalesce(new.key, 'NULL')
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists projects_key_permanent on projects;
+create trigger projects_key_permanent
+  before update of key on projects
+  for each row execute function projects_key_permanent();
+
 -- Per-project hierarchical categories (Areas). A node references its parent
 -- (depth capped app-side at 5); an item is filed at one node. Renaming ripples
 -- via the id reference; filtering can include a node's whole subtree.

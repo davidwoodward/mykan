@@ -10,10 +10,11 @@ import {
 } from "react";
 import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AddItemModal } from "@/components/AddItemModal";
 import {
   boardSearch,
+  boardStateFromParams,
   normAreaPath,
   type BoardState,
 } from "@/lib/board-state";
@@ -65,17 +66,23 @@ export function ProjectDetailView({
   members,
   isPrivate,
   keyboardDefault,
-  initialState,
 }: {
   projectId: string;
   projectKey: string | null;
   members: string[];
   isPrivate: boolean;
   keyboardDefault: boolean;
-  /** View, grouping, filters and search, read from the board's URL. */
-  initialState: BoardState;
 }) {
   const router = useRouter();
+  // View, grouping, filters and search, read from the board's URL when the
+  // board mounts. Read on the client (not passed from the server page): after
+  // Back from a card page, the URL carries the filters as last written here by
+  // replaceState, while a cached server render would carry the ones the board
+  // was first loaded with.
+  const searchParams = useSearchParams();
+  const [initialState] = useState<BoardState>(() =>
+    boardStateFromParams(new URLSearchParams(searchParams.toString())),
+  );
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // View, grouping, filters and search start from the URL and are written back

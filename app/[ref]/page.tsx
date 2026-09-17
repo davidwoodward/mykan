@@ -12,7 +12,6 @@ import { McpTokenSettings } from "@/components/McpTokenSettings";
 import { Brand } from "@/components/Brand";
 import { itemByNumber, visibleProjectByKey } from "@/lib/route-resolve";
 import { lookupDecision, routeDecision, type RootSegment } from "@/lib/card-url";
-import { boardStateFromParams } from "@/lib/board-state";
 import { richDocTitle, type Item, type Project } from "@/lib/types";
 
 // The root segment is a project key (/FPOON, the board) or a card ref
@@ -132,7 +131,6 @@ export default async function RootRefPage({ params, searchParams }: Props) {
             members={members}
             isPrivate={project.is_private}
             keyboardDefault={isOwner(email)}
-            initialState={boardStateFromParams(query)}
           />
         )}
       </main>
