@@ -42,12 +42,14 @@ import {
 } from "@/lib/item-entries";
 import {
   CONTENT_BOUNDARY,
+  CREATE_ITEM_QUESTION_GUIDANCE,
   ITEM_BODY_BUDGET_CHARS,
   MCP_ENTRY_MAX_CHARS,
   MCP_SERVER_INSTRUCTIONS,
   answerArgsError,
   bodyBudgetWarning,
   entryCapError,
+  itemCreatedMessage,
   progressRecordedMessage,
 } from "@/lib/mcp-entry-guards";
 
@@ -137,7 +139,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "create_item",
-    "Create a new item in a project. `project` is a key (current or old), name, or id; defaults to type 'feature', status 'new'. An item has NO separate title field: `name` becomes the first line of the item's rich-text body, and the optional `body` is appended after it as further paragraphs of the description (not a progress entry) — both end up in one body. So keep `name` to a short one-line title and put any detail in `body` (don't dump a long description into `name`, or the whole thing becomes the card's first line). Optionally file it under an `area` path (created if missing) and `assignees` (member emails). Type 'epic' makes a card that groups other cards; set `parent` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project.",
+    `Create a new item in a project. \`project\` is a key (current or old), name, or id; defaults to type 'feature', status 'new'. An item has NO separate title field: \`name\` becomes the first line of the item's rich-text body, and the optional \`body\` is appended after it as further paragraphs of the description (not a progress entry) — both end up in one body. So keep \`name\` to a short one-line title and put any detail in \`body\` (don't dump a long description into \`name\`, or the whole thing becomes the card's first line). Optionally file it under an \`area\` path (created if missing) and \`assignees\` (member emails). Type 'epic' makes a card that groups other cards; set \`parent\` to an epic's ref (e.g. KANBAN-41) to create the item as that epic's child. Epics are one level only (an epic can't have a parent) and the parent must be a non-archived epic in the same project. ${CREATE_ITEM_QUESTION_GUIDANCE}`,
     {
       project: z.string().describe("project key (current or old), name, or id"),
       name: z
@@ -181,8 +183,11 @@ function registerTools(server: McpServer) {
         const noted = await appendItemNote(sb, actor(), created.data.id, a.body.trim());
         if (!noted.ok) return out(noted);
       }
-      // Return the full detail (ref, area, assignees) of the created item.
-      return out(await getItem(sb, actor(), created.data.id));
+      // Return the full detail (ref, area, assignees) of the created item, led
+      // by the line that steers undecided text into ask_question (KANBAN-48).
+      const detail = await getItem(sb, actor(), created.data.id);
+      if (!detail.ok) return out(detail);
+      return json({ message: itemCreatedMessage(detail.data.ref), ...detail.data });
     },
   );
 
