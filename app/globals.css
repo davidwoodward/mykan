@@ -122,6 +122,14 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Height of the pinned app header's inner row (`app/[ref]/page.tsx` sets it as
+   that row's min-height, so this is definitional, not a guess). Sticky content
+   in the page-scrolled layout (below lg) offsets by it so the header never
+   covers it — e.g. the list view's pinned card ref (KANBAN-13). */
+:root {
+  --app-header-h: 3rem;
+}
+
 /* Rich-text body editor (Tiptap). Scoped to .prose-mykan to avoid leaking into
    the rest of the app. Kept deliberately spare to match the compact UI. */
 .prose-mykan {

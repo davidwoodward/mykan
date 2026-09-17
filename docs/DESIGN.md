@@ -599,3 +599,31 @@ separate doc. First use: GitHub setup (`GithubHelpButton`, `components/GithubHel
   are also stopped at the backdrop, since they bubble to the portal's React parents (the
   Areas backdrop closes on mousedown). Reuse this component's approach for any future help
   dialog that opens from inside another overlay.
+
+## Pinned card ref in the list view (KANBAN-13, 2026-09-17)
+
+In the List view a row's ref (`KANBAN-13`) **stays in view for as long as the row's text
+does**: when a tall row's top scrolls past the top of the scroll area, the ref stays pinned at
+the top of the visible part of that row, and scrolls away only with the row's end.
+
+- **How:** at `sm+` the ref column (`w-16`) is `self-stretch`, so it spans the whole row
+  (the `<li>` is `items-start`, which would otherwise make the column only as tall as the
+  badge and leave `sticky` nothing to stick within). Inside it a wrapper is `sticky`. The
+  wrapper, not `RefBadge`, carries `sticky`, because the badge is `relative` and is shared
+  with board cards and the card page.
+- **It never covers text.** The ref has its own fixed-width column, so pinning it can't
+  overlap the body. Row heights don't change.
+- **Two scroll containers, two offsets.** At `lg` the list is its own scroll region below the
+  header, so the offset is `lg:top-5` from that region's top. Between `sm` and `lg` (tablets,
+  phones in landscape) the page scrolls under the pinned header, so the offset is
+  `top: calc(var(--app-header-h) + 1.25rem)`. `--app-header-h` (`app/globals.css`, 3rem) is
+  also the header row's `min-height` in `app/[ref]/page.tsx`, so the offset follows the header
+  rather than guessing it. If the header gets taller, change the variable, not the row.
+- **The 1.25rem cushion** leaves room above the pinned ref for its floating "Copied"
+  confirmation (KANBAN-14), which would otherwise be clipped by the scroll region or hidden
+  under the header.
+- **Below `sm` (phones in portrait) the ref does not pin.** There the ref is on the stacked
+  status line above the text (see Small-screen item rows); pinning that line would slide it
+  over the body text. It stays where it is and scrolls with the row.
+- Clicking behaviour is unchanged: a click on the ref still copies it; the row still selects
+  on click and opens with the pencil, double-click or Enter.
