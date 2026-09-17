@@ -639,6 +639,10 @@ function EntryEditor({
     return p;
   }, [session, close, save, onDone]);
   useRegisterFinisher(finish);
+  const finishRef = useRef(finish);
+  useEffect(() => {
+    finishRef.current = finish;
+  }, [finish]);
 
   const onAbandon = useCallback(() => {
     ended.current = true;
@@ -683,7 +687,11 @@ function EntryEditor({
     window.addEventListener("pagehide", beacon);
     return () => {
       window.removeEventListener("pagehide", beacon);
-      beacon();
+      // An ordinary unmount (switching tabs by keyboard, a client-side
+      // navigation): finish normally, so the saved entry is applied to the
+      // page's list and the draft is cleared. Only when something changed, so
+      // a no-op remount never closes the editor.
+      if (!ended.current && session.patch()) trackPendingSave(finishRef.current());
     };
   }, [session, url]);
 

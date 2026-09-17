@@ -365,6 +365,12 @@ export interface Item {
   /** Write-back sync state for the linked issue; see {@link GithubSync}. */
   github_sync: GithubSync;
   /**
+   * Open (unanswered, not deleted) questions on this item (KANBAN-38). Derived
+   * by GET /api/projects/[id]/items only, absent when 0, never written; item
+   * PATCH responses don't carry it, so the board keeps the counts apart.
+   */
+  open_questions?: number;
+  /**
    * When the item most recently entered the Done column (null otherwise).
    * Drives the Done ordering on the list and board; cleared when it leaves Done.
    */
