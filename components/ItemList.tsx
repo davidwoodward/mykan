@@ -32,7 +32,7 @@ import { GithubItemMeta } from "@/components/GithubItemMeta";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
-import { IconTip } from "@/components/IconTip";
+import { DeleteIconButton } from "@/components/DeleteIconButton";
 import { RefBadge, useProjectKey } from "@/components/RefBadge";
 import { cardPath } from "@/lib/card-url";
 import { ItemAssignees } from "@/components/AssigneePicker";
@@ -449,7 +449,7 @@ function ItemRow({
       <div className="min-w-0 flex-1">
         <ClampedText
           text={text}
-          blocks={richDocBlocks(item.body)}
+          blocks={item.status === "done" ? undefined : richDocBlocks(item.body)}
           onOpen={() => onOpen(item)}
           clampLines={CLAMP_LINES[item.status]}
           className="block w-full whitespace-pre-wrap break-words text-left text-sm leading-6"
@@ -539,30 +539,11 @@ function ItemRow({
           // trash icon (KANBAN-12). Still last, after the type pill, so it isn't
           // beside the pencil; still hover-only at sm+ and always shown below sm
           // (touch has no hover).
-          <span className="relative inline-flex shrink-0 self-center sm:invisible sm:group-hover:visible">
-            <button
-              type="button"
-              onClick={() => onArchive(item.id)}
-              aria-label={`Delete ${text || "item"}`}
-              className="peer grid h-6 w-6 place-items-center rounded text-[var(--color-faint)] outline-none transition-colors hover:text-[var(--color-bug)] focus-visible:text-[var(--color-bug)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-            >
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 6h18" />
-                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              </svg>
-            </button>
-            <IconTip label="Delete" />
-          </span>
+          <DeleteIconButton
+            onDelete={() => onArchive(item.id)}
+            label={`Delete ${text || "item"}`}
+            className="self-center sm:invisible sm:group-hover:visible"
+          />
         )}
       </div>
     </li>

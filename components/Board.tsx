@@ -32,6 +32,7 @@ import { ItemAssignees } from "@/components/AssigneePicker";
 import { ItemCategory } from "@/components/CategoryPicker";
 import { EpicProgress, ParentChip } from "@/components/EpicLinks";
 import { OpenQuestionsBadge } from "@/components/OpenQuestionsBadge";
+import { DeleteIconButton } from "@/components/DeleteIconButton";
 import { computePosition } from "@/lib/position";
 import {
   CLAMP_LINES,
@@ -490,14 +491,11 @@ function Card({
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => onArchive(item.id)}
-            className="invisible text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] group-hover:visible"
-            aria-label={`Delete ${text || "item"}`}
-          >
-            Delete
-          </button>
+          <DeleteIconButton
+            onDelete={() => onArchive(item.id)}
+            label={`Delete ${text || "item"}`}
+            className="invisible group-hover:visible"
+          />
         )}
       </div>
     </li>
