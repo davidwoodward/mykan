@@ -116,6 +116,36 @@ html {
 html.dark .theme-moon { display: none; }
 html.dark .theme-sun { display: block; }
 
+/* The app-wide tooltip (KANBAN-47, lib/tooltip-layer.ts): one fixed element on
+   <body> for every `title` in the app, placed from the anchor's viewport rect so
+   scroll containers never clip it. Looks like the old IconTip. */
+.app-tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(20rem, calc(100vw - 8px));
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--color-ink);
+  color: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.app-tooltip[data-open] { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip { transition: none; }
+}
+
 /* Reserve the scrollbar gutter so layouts don't shift when content height crosses
    the viewport — important for the board view, which has its own scroll. */
 html {

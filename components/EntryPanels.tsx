@@ -12,7 +12,6 @@ import {
   type ReactNode,
 } from "react";
 import { AbandonButton } from "@/components/AbandonButton";
-import { IconTip } from "@/components/IconTip";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { EntryMarkdown } from "@/components/EntryMarkdown";
 import { useAbandonable, type PendingRestore } from "@/components/useAbandonable";
@@ -712,17 +711,18 @@ function IconButton({
   danger?: boolean;
   children: ReactNode;
 }) {
-  // No native `title`: it takes a second or more to appear (David, 2026-09-17).
-  // The styled tooltip shows ~150ms after hover, and at once on keyboard focus.
+  // `title` shows promptly (~150ms after hover, at once on keyboard focus) via
+  // the app-wide tooltip layer (KANBAN-47).
   return (
-    <span className="relative inline-flex shrink-0">
+    <span className="inline-flex shrink-0">
       <button
         type="button"
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
+        title={label}
         aria-pressed={active === undefined ? undefined : active}
-        className={`peer grid h-6 w-6 place-items-center rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-40 ${
+        className={`grid h-6 w-6 place-items-center rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-40 ${
           active ? "text-[var(--color-accent)]" : "text-[var(--color-faint)]"
         } ${danger ? "hover:text-[var(--color-bug)]" : "hover:text-[var(--color-accent)]"}`}
       >
@@ -739,7 +739,6 @@ function IconButton({
           {children}
         </svg>
       </button>
-      <IconTip label={label} />
     </span>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { IconTip } from "@/components/IconTip";
 import {
   GITHUB_HELP_SECTIONS,
   GITHUB_HELP_TITLE,
@@ -17,8 +16,8 @@ import {
  * repo bindings). It opens a dialog rendered from the one content source,
  * `lib/github-help.ts`.
  *
- * - Icon button: `aria-label` plus the prompt styled tooltip (~150ms after hover,
- *   at once on keyboard focus: the shared `IconTip`), no native `title`. Enter/Space/click/tap open.
+ * - Icon button: `aria-label` plus `title`, which the app-wide tooltip layer
+ *   shows promptly (KANBAN-47). Enter/Space/click/tap open.
  * - Esc, the ✕, or a press on the backdrop closes the help ONLY, and focus goes
  *   back to the "?". The surfaces it sits in own Esc and click-off themselves
  *   (the Connect popover, the project panel, the Areas modal, the card page), so:
@@ -33,14 +32,7 @@ import {
  *       since they bubble to the portal's React parents.
  * - Tab stays inside the dialog while it is open.
  */
-export function GithubHelpButton({
-  tooltipAlign = "right",
-  className = "",
-}: {
-  /** Which edge of the button the tooltip lines up with. */
-  tooltipAlign?: "left" | "right";
-  className?: string;
-}) {
+export function GithubHelpButton({ className = "" }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -110,15 +102,16 @@ export function GithubHelpButton({
   }
 
   return (
-    <span className={`relative inline-flex shrink-0 ${className}`}>
+    <span className={`inline-flex shrink-0 ${className}`}>
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-label="GitHub setup help"
+        title="GitHub setup help"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="peer grid h-6 w-6 place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        className="grid h-6 w-6 place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       >
         <svg
           className="h-4 w-4"
@@ -135,7 +128,6 @@ export function GithubHelpButton({
           <path d="M12 17h.01" />
         </svg>
       </button>
-      <IconTip label="GitHub setup help" align={tooltipAlign} />
 
       {open && host
         ? createPortal(

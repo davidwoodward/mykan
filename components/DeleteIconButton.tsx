@@ -1,7 +1,5 @@
 "use client";
 
-import { IconTip } from "@/components/IconTip";
-
 /**
  * The soft-delete (archive, restorable from the archived view) trash icon on a
  * list row or board card (KANBAN-12). Always last in its row, never beside the
@@ -18,12 +16,13 @@ export function DeleteIconButton({
   className?: string;
 }) {
   return (
-    <span className={`relative inline-flex shrink-0 ${className}`}>
+    <span className={`inline-flex shrink-0 ${className}`}>
       <button
         type="button"
         onClick={onDelete}
         aria-label={label}
-        className="peer grid h-6 w-6 place-items-center rounded text-[var(--color-faint)] outline-none transition-colors hover:text-[var(--color-bug)] focus-visible:text-[var(--color-bug)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        title="Delete"
+        className="grid h-6 w-6 place-items-center rounded text-[var(--color-faint)] outline-none transition-colors hover:text-[var(--color-bug)] focus-visible:text-[var(--color-bug)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       >
         <svg
           className="h-4 w-4"
@@ -40,7 +39,6 @@ export function DeleteIconButton({
           <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
         </svg>
       </button>
-      <IconTip label="Delete" />
     </span>
   );
 }

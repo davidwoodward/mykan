@@ -304,7 +304,7 @@ export function ProjectHeader({
       <div className="flex min-w-0 items-baseline gap-2">
         <h1
           className="truncate text-base font-semibold tracking-tight"
-          title={project.description ?? undefined}
+          title={project.description ?? ""}
         >
           {project.name}
         </h1>

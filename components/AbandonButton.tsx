@@ -10,8 +10,8 @@
  *
  * - Icon only: a counter-clockwise arrow (revert), never a trash can or red, so
  *   it doesn't read as delete.
- * - `aria-label`, plus a styled tooltip shown ~150ms after hover and at once on
- *   keyboard focus (no native `title`: it is far too slow to appear).
+ * - `aria-label` plus `title`, which the app-wide tooltip layer shows ~150ms
+ *   after hover and at once on keyboard focus (KANBAN-47).
  * - The press does NOT take focus (mousedown/pointerdown are prevented), so a
  *   blur-commits field being edited doesn't save the very draft being abandoned.
  */
@@ -20,7 +20,6 @@ export function AbandonButton({
   size = "md",
   disabled = false,
   label = "Abandon changes",
-  tooltipAlign = "right",
   className = "",
 }: {
   onAbandon: () => void;
@@ -28,14 +27,12 @@ export function AbandonButton({
   size?: "md" | "sm";
   disabled?: boolean;
   label?: string;
-  /** Which edge of the button the focus tooltip lines up with. */
-  tooltipAlign?: "left" | "right";
   className?: string;
 }) {
   const box = size === "md" ? "h-7 w-7" : "h-6 w-6";
   const icon = size === "md" ? "h-[18px] w-[18px]" : "h-4 w-4";
   return (
-    <span className={`relative inline-flex shrink-0 ${className}`}>
+    <span className={`inline-flex shrink-0 ${className}`}>
       <button
         type="button"
         onPointerDown={(e) => e.preventDefault()}
@@ -43,7 +40,8 @@ export function AbandonButton({
         onClick={onAbandon}
         disabled={disabled}
         aria-label={label}
-        className={`peer grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-wait disabled:opacity-50`}
+        title={label}
+        className={`grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-wait disabled:opacity-50`}
       >
         <svg
           className={icon}
@@ -59,15 +57,6 @@ export function AbandonButton({
           <path d="M3 3v5.28h5.28" />
         </svg>
       </button>
-      <span
-        role="presentation"
-        aria-hidden="true"
-        className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded bg-[var(--color-ink)] px-1.5 py-0.5 text-[11px] font-normal normal-case tracking-normal text-[var(--color-surface)] opacity-0 shadow transition-opacity duration-100 peer-hover:opacity-100 peer-hover:delay-150 peer-focus-visible:opacity-100 ${
-          tooltipAlign === "right" ? "right-0" : "left-0"
-        }`}
-      >
-        {label}
-      </span>
     </span>
   );
 }

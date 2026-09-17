@@ -48,8 +48,9 @@ the first line of text, in this order: open pencil · GitHub not-synced flag (wh
 attachments clip · history clock (hover) · **type pill** · **delete trash icon** (hover). Delete
 is an icon, not the word, and stays last (after the pill, never beside the pencil) so it isn't
 easy to hit by accident; it is the same one-click soft delete (archive, restorable from the
-archived view) and stays tap-visible below `sm`. Every icon in the cluster uses the prompt
-styled tooltip (below), not a native `title`. The archived view's Restore / Delete forever
+archived view) and stays tap-visible below `sm`. Every icon in the cluster has a prompt
+styled tooltip (below; since KANBAN-47 that is simply its `title`, shown by the app-wide
+tooltip layer). The archived view's Restore / Delete forever
 words are unchanged. Board cards use the same trash icon (hover-only), from the shared
 `components/DeleteIconButton.tsx` (David, 2026-09-17).
 
@@ -181,7 +182,8 @@ Every editor has one explicit way out without saving: the **Abandon changes** ic
   "abandoned edit reverted" history label are gone.)
 - **The icon:** `AbandonButton` (`components/AbandonButton.tsx`), a counter-clockwise revert
   arrow, icon only, never a trash can and never red (it must not read as delete). `title` +
-  `aria-label` "Abandon changes", plus a styled tooltip on keyboard focus (where a native title
+  `aria-label` "Abandon changes" (the `title` is shown promptly on hover and keyboard focus by the
+  app-wide tooltip layer, KANBAN-47; earlier: a styled tooltip on keyboard focus, where a native title
   never shows). Muted ink, hover/focus to full ink with a canvas wash and an accent focus ring;
   28px in modal/panel headers and action rows, 24px beside an inline field. It sits **next to
   the ✕** in a modal header, in the action row of a panel, and **right after the field** for
@@ -581,12 +583,51 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   buttons and the abandon icon drop `title` and show a styled tooltip ~150ms after hover and at
   once on keyboard focus (`IconTip` in `components/EntryPanels.tsx`, the same styling in
   `components/AbandonButton.tsx`). They keep `aria-label`. Don't show both a native and a styled
-  tooltip on one button.
+  tooltip on one button. *Superseded by the app-wide tooltip layer below (KANBAN-47).*
 - **`IconTip` is shared** (`components/IconTip.tsx`, KANBAN-12): wrap the button in a `relative`
   span, give the button `peer`, put `<IconTip label="…" />` after it. The tooltip text is short
   ("Delete", "Open card"); the `aria-label` can be longer and name the item. Also used by the
   row/card pencil (`EditButton`), attachments clip (`InlineAttachments`, hidden while its
   popover is open), history clock (`ItemHistory`) and the list row's delete icon.
+  *Removed in KANBAN-47:* every one of those now uses a plain `title` (same short text) and the
+  layer below; `IconTip` and `AbandonButton`'s inline copy (and their `tooltipAlign` props) are gone.
+
+## Tooltips: one app-wide layer (KANBAN-47, 2026-09-17)
+
+David, 2026-09-17: "I need tool tips to popup … They are SLOOOOOOW to appear!" (the header GitHub
+icon's native "Connect GitHub account" was the example). So **every tooltip in the app is fast**,
+through one mechanism, and the rule for authors is simply: **put the tip in `title`.**
+
+- **How it works.** `components/TooltipLayer.tsx` is mounted once in `app/layout.tsx`; the logic is
+  framework-free in `lib/tooltip-layer.ts` (placement and the a11y decision are pure and tested in
+  `lib/tooltip.ts` / `lib/tooltip.test.ts`). It listens on `window` in the capture phase (so
+  surfaces that stop events from bubbling, like the GitHub help dialog, still get tips) and shows
+  a styled tip for the nearest element with a `title` under the pointer: **~150ms after a mouse/pen
+  hover**, at once when moving on from a tip that was just showing, and **at once on keyboard focus**
+  (`:focus-visible`, the focused element's own `title` only). **No tips on touch.**
+- **The native tooltip never also appears.** On first hover/focus the element's `title` moves to
+  `data-tip`, and is read from there afterwards. If the app sets a new `title` later, the fresh one
+  wins and moves again. **To switch a tip off conditionally use `title=""`, not `undefined`**
+  (React can't remove an attribute the layer already moved): `title=""` means no tip here, and
+  hides an ancestor's too (e.g. `InlineAttachments` while its popover is open).
+- **Hidden** on pointer leave, blur, pointerdown (and not again until the pointer leaves that
+  element), Esc (the key still reaches the page), any scroll, resize, window blur, or when the
+  element leaves the DOM.
+- **Look.** One `role="tooltip"` element at the end of `<body>`, `.app-tooltip` in `globals.css`:
+  `--color-ink` background, `--color-surface` text, 11px, rounded, small shadow (so it inverts
+  with the theme), wraps at max 20rem, 100ms fade that `prefers-reduced-motion` turns off. It is
+  `position: fixed`, placed from the element's viewport rect: below and centred, **flipped above**
+  when it doesn't fit, **clamped** 4px inside the viewport. Scroll containers never clip it (the
+  old absolutely-positioned `IconTip` could be).
+- **Accessibility is kept.** A `title` is the accessible name of an element with no other name,
+  and otherwise its description. In the same step that moves it, the layer sets `aria-label` from
+  it when the element has no `aria-label`/`aria-labelledby`/`<label>`/text, or `aria-description`
+  when the element's name says something different (a byline time "3h ago" gets the full date);
+  nothing when the name already contains the tip ("Delete" on "Delete Fix the board").
+- **Still the standard:** icon buttons carry `title` **and** `aria-label` (`ui-ux.md` §5). The layer
+  is what makes that `title` a prompt tooltip; nothing else is needed, and there is no second
+  tooltip component to reach for. Plain spans with a `title` (byline times, "edited", the entry
+  character cap) get the same fast tip.
 
 ## In-app help: the "?" dialog (KANBAN-28, 2026-09-17)
 
@@ -603,7 +644,8 @@ separate doc. First use: GitHub setup (`GithubHelpButton`, `components/GithubHel
   GitHub's current docs.
 - **The trigger** is a 24px icon button (circle with a question mark): `aria-label`, the prompt
   styled tooltip (~150ms after hover, at once on keyboard focus: the shared `IconTip`), no
-  native `title`. Click, tap, Enter or Space opens.
+  native `title`. Click, tap, Enter or Space opens. (KANBAN-47: now `aria-label` + `title`
+  "GitHub setup help", shown promptly by the app-wide tooltip layer.)
 - **The dialog** is modal (`role="dialog"`, `aria-modal`), centred, `max-w-lg`, capped at
   `88svh` with its body scrolling, token colours only, fine at phone width. Focus starts on
   its ✕, Tab stays inside, and every close (Esc, ✕, a press on the backdrop) returns focus to
