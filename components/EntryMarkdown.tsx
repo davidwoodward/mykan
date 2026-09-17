@@ -13,7 +13,7 @@ import remarkGfm from "remark-gfm";
  * or written over MCP can inject markup. Its default urlTransform already
  * blanks unsafe link protocols (javascript:, data: …). Links open in a new tab
  * with rel="noopener noreferrer". Images are not rendered (an entry is text; a
- * remote image would also be a tracking pixel): their alt text shows instead.
+ * remote image would also be a tracking pixel): an image renders as nothing.
  * GFM adds bare-URL autolinks (PR links), strikethrough, task lists and tables.
  */
 const components: Components = {

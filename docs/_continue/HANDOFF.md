@@ -135,15 +135,15 @@ prod after merge.**
   follows the click-by-click steps in the PR body on prod.
 - **What's in it:**
   - Card page tabs: Child items (epics) · **Progress** · **Decisions & Questions** · Attachments ·
-    History. Non-epic cards now open on Progress.
+    History. Non-epic cards still open on Attachments (David, 2026-09-17).
   - Add / edit / soft-delete / restore entries, answer a question (new decision or link an active
     one), supersede a decision, per-entry history with restore. All via new web routes under
     `app/api/items/[id]/entries/…` (source `web`).
   - "N open questions" badge on board cards and list rows (one grouped query in
     `GET /api/projects/[id]/items`; click behaviour untouched).
 - **Editing:** entry edits follow KANBAN-42 exactly (draft only, one save on Esc / click-off /
-  leaving, abandon = no write, Restore/Discard per entry). New-entry composers only write on the
-  explicit Add (⌘/Ctrl+Enter); Esc there keeps the text. Draft keys are per editor:
+  leaving, abandon = no write, Restore/Discard per entry). New-entry composers behave the same (David,
+  2026-09-17): Esc, click-off, Add, ⌘/Ctrl+Enter or leaving posts once; empty posts nothing. Draft keys are per editor:
   `entry:<entryId>`, `entry-new:<itemId>:<kind>`, `entry-answer:<questionId>`,
   `entry-supersede:<decisionId>`. Leaving the card page finishes every open editor
   (`components/cardFinish.ts`).
@@ -154,8 +154,9 @@ prod after merge.**
   packages in the lock). No raw HTML, safe links (new tab, `noopener noreferrer`), no images. The
   in-house `lib/markdown-tiptap.ts` was not reused: it italicises across `snake_case`
   identifiers and doesn't autolink bare URLs, both common in entries written by Claude.
-- **Known limits / follow-ups:** the panel loads up to 200 entries per card (the list cap);
-  badge counts refresh with the board (load, Refresh, returning from a card), not live.
+- **Known limits / follow-ups:** open questions and active decisions always load; the rest pages
+  100 at a time ("Load older entries"). Badge counts refresh with the board (load, Refresh,
+  returning from a card), not live; the badge count query was judged fine at current volume.
 - Full detail: `docs/DESIGN.md` → "Entry panels" and "Open-questions badge".
 
 ## After that

@@ -100,7 +100,8 @@ export function CardPage({
   // GitHub refresh).
   const [epoch, setEpoch] = useState(0);
   const [panel, setPanel] = useState<PanelId>(
-    initialItem.type === "epic" ? "children" : "progress",
+    // Attachments stays the default for a non-epic card (David, 2026-09-17).
+    initialItem.type === "epic" ? "children" : "attachments",
   );
   // The card's progress notes, questions and decisions (KANBAN-38), loaded
   // once here so both panels and the tab counts share them, and so they (and
@@ -193,6 +194,16 @@ export function CardPage({
     const results = await Promise.all([...finishers.current].map((f) => f()));
     return results.every(Boolean);
   }, []);
+  // Switching tabs unmounts the panel's open editors: finish them first, and
+  // stay on this tab (the failed editor showing why) if a save fails.
+  const switchPanel = useCallback(
+    (p: PanelId) => {
+      void (async () => {
+        if (await finishAll()) setPanel(p);
+      })();
+    },
+    [finishAll],
+  );
   // Set by the description editor while mounted: take a change made to this
   // card by a section beside it (attachments, history restore).
   const itemChangeRef = useRef<((item: Item) => void) | null>(null);
@@ -263,7 +274,7 @@ export function CardPage({
             <CardSections
               item={item}
               panel={panel}
-              onPanel={setPanel}
+              onPanel={switchPanel}
               entries={entries}
               onItemChange={onPanelItemChange}
             />

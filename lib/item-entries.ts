@@ -6,6 +6,12 @@ import type { HistorySource } from "@/lib/item-history";
 import type { Item, Project } from "@/lib/types";
 import { summarizeEntries, type ItemEntrySummary } from "@/lib/mcp-entry-guards";
 import {
+  encodeEntryCursor,
+  mergeEntries,
+  missingLinkIds,
+  parseEntryCursor,
+} from "@/lib/entry-panels";
+import {
   answerError,
   buildEntryListFilter,
   changedEntryFields,
@@ -13,6 +19,7 @@ import {
   createThenMark,
   deletePatch,
   editPatch,
+  ENTRY_LIST_MAX_LIMIT,
   entrySnapshotOf,
   initialState,
   isRuleError,
@@ -335,7 +342,11 @@ export async function answerQuestion(
   if (hasId) {
     const id = String(input.decisionId);
     decision = UUID_RE.test(id) ? await fetchEntry(sb, id) : null;
-    if (!decision) return coreErr(`Entry not found: ${id}`, 404);
+    // A decision on another item is reported exactly like a missing one, so an
+    // id from a project the caller can't see doesn't reveal that it exists.
+    if (!decision || decision.item_id !== question.item_id) {
+      return coreErr(`Entry not found: ${id}`, 404);
+    }
   }
   const e = answerError(question, decision);
   if (e) return fromRule(e);
@@ -440,6 +451,85 @@ export async function listEntries(
     .limit(f.limit);
   if (error) return coreErr(error.message, 500);
   return coreOk((data ?? []) as ItemEntry[]);
+}
+
+export const CARD_ENTRY_PAGE = 100;
+
+/**
+ * The card page's entries (KANBAN-38), for an item the caller may see. The
+ * FIRST page (no cursor) always carries every live open question and active
+ * decision, however old (isPinnedEntry). Everything else (progress notes,
+ * superseded, answered, deleted) is paged newest first, `limit` at a time
+ * (default CARD_ENTRY_PAGE); `before` is the cursor from the previous page.
+ * Entries that loaded rows link to (answered_by / supersedes) are included, so
+ * "Answered by" and "Superseded by" always have their other end.
+ */
+export async function listCardEntries(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+  input: { before?: unknown; limit?: unknown } = {},
+): Promise<CoreResult<{ entries: ItemEntry[]; hasMore: boolean; before: string | null }>> {
+  const hasCursor = input.before !== undefined && input.before !== null && input.before !== "";
+  const cursor = hasCursor ? parseEntryCursor(input.before) : null;
+  if (hasCursor && !cursor) return coreErr("before must be a cursor from a previous page", 400);
+  const n = input.limit === undefined ? CARD_ENTRY_PAGE : Number(input.limit);
+  if (!Number.isInteger(n) || n < 1 || n > ENTRY_LIST_MAX_LIMIT) {
+    return coreErr(`limit must be a whole number from 1 to ${ENTRY_LIST_MAX_LIMIT}`, 400);
+  }
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const itemId = r.data.item.id;
+
+  let rest = sb
+    .from("item_entries")
+    .select("*")
+    .eq("item_id", itemId)
+    .or("deleted_at.not.is.null,state.in.(current,superseded,answered)");
+  // At or before the cursor time; rows sharing its exact timestamp that were
+  // already on the previous page are dropped below (a few spare rows cover it).
+  if (cursor) rest = rest.lte("created_at", cursor.createdAt);
+  const spare = cursor ? 20 : 0;
+  const [pinned, page] = await Promise.all([
+    cursor
+      ? Promise.resolve({ data: [] as ItemEntry[], error: null })
+      : sb
+          .from("item_entries")
+          .select("*")
+          .eq("item_id", itemId)
+          .is("deleted_at", null)
+          .or("and(kind.eq.question,state.eq.open),and(kind.eq.decision,state.eq.active)"),
+    rest
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(n + 1 + spare),
+  ]);
+  const failed = pinned.error ?? page.error;
+  if (failed) return coreErr(failed.message, 500);
+
+  const pageRows = ((page.data ?? []) as ItemEntry[]).filter(
+    (e) => !cursor || e.created_at !== cursor.createdAt || e.id < cursor.id,
+  );
+  const hasMore = pageRows.length > n;
+  const paged = pageRows.slice(0, n);
+  let rows = mergeEntries((pinned.data ?? []) as ItemEntry[], paged);
+
+  const missing = missingLinkIds(rows);
+  if (missing.length) {
+    const { data, error } = await sb
+      .from("item_entries")
+      .select("*")
+      .eq("item_id", itemId)
+      .in("id", missing);
+    if (error) return coreErr(error.message, 500);
+    rows = mergeEntries(rows, (data ?? []) as ItemEntry[]);
+  }
+  const last = paged[paged.length - 1];
+  return coreOk({
+    entries: rows,
+    hasMore,
+    before: hasMore && last ? encodeEntryCursor(last) : null,
+  });
 }
 
 /** An entry's versions, newest first. */

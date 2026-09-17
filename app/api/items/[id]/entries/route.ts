@@ -2,30 +2,26 @@ import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-server";
 import { denyItemAccess, requireSession } from "@/lib/api-auth";
 import { coreResponse } from "@/lib/api-entries";
-import {
-  ENTRY_LIST_MAX_LIMIT,
-  addEntry,
-  entryLengthError,
-  listEntries,
-} from "@/lib/item-entries";
+import { addEntry, entryLengthError, listCardEntries } from "@/lib/item-entries";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /**
- * The card page's entries (KANBAN-38): every progress note, question and
- * decision on the item, deleted ones included (the panels show them in a
- * collapsed "Deleted" group so they can be restored), newest first.
+ * The card page's entries (KANBAN-38), newest first, deleted ones included
+ * (the panels show them in a collapsed "Deleted" group so they can be
+ * restored). Every open question and active decision is always on the first
+ * page; the rest is paged: `?before=<cursor>` loads older (listCardEntries).
+ * Returns { entries, hasMore, before }.
  */
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
   const deny = await denyItemAccess(id, gate.email);
   if (deny) return deny;
   return coreResponse(
-    await listEntries(getSupabase(), gate.email, id, {
-      limit: ENTRY_LIST_MAX_LIMIT,
-      includeDeleted: true,
+    await listCardEntries(getSupabase(), gate.email, id, {
+      before: new URL(req.url).searchParams.get("before"),
     }),
   );
 }

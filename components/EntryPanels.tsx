@@ -6,23 +6,26 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import { AbandonButton } from "@/components/AbandonButton";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { EntryMarkdown } from "@/components/EntryMarkdown";
 import { useAbandonable, type PendingRestore } from "@/components/useAbandonable";
-import { useRegisterFinisher } from "@/components/cardFinish";
+import { useRegisterFinisher, type Finisher } from "@/components/cardFinish";
 import { trackPendingSave } from "@/components/boardReturn";
-import { browserDraftStore } from "@/lib/abandon";
+import { browserDraftStore, readFieldDraft, restoreDecision, type DraftStore } from "@/lib/abandon";
 import {
+  composerDraftLanded,
   entryDraftKey,
   entryDraftScope,
   entryEditorKey,
   groupDecisions,
   groupProgress,
-  leftoverEntryDraft,
+  mergeEntries,
   openQuestionsLabel,
   successorsById,
   type EntryDraftFields,
@@ -48,38 +51,61 @@ async function responseError(res: Response): Promise<string> {
   return msg ?? `HTTP ${res.status}`;
 }
 
-async function send<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(await responseError(res));
-  return (await res.json()) as T;
+/**
+ * One request. Writes can go out with `keepalive` (a save while the page is
+ * being left), and every write is tracked so the board, if it loads next,
+ * waits for it (its open-question badge must not be stale).
+ */
+async function send<T>(url: string, method: string, body?: unknown, keepalive = false): Promise<T> {
+  const p = (async () => {
+    const res = await fetch(url, {
+      method,
+      headers: body === undefined ? undefined : { "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      keepalive,
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return (await res.json()) as T;
+  })();
+  if (method !== "GET") trackPendingSave(p);
+  return p;
 }
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export type EntriesApi = {
   itemId: string;
-  /** Every entry on the card (deleted included), or null while loading. */
+  /** The loaded entries (deleted included), newest first, or null while loading. */
   entries: ItemEntry[] | null;
   error: string | null;
   /** Put written entries into local state (replace by id, or add). */
   apply: (...rows: ItemEntry[]) => void;
+  /** More (older) paged entries exist on the server. */
+  hasMore: boolean;
+  loadingOlder: boolean;
+  loadOlder: () => void;
 };
 
-/** The card's entries, loaded once per card page and shared by both panels. */
+type Page = { entries: ItemEntry[]; hasMore: boolean; before: string | null };
+
+/**
+ * The card's entries, loaded once per card page and shared by both panels.
+ * The first page always holds every open question and active decision; older
+ * progress, superseded, answered and deleted entries come with "Load older".
+ */
 export function useItemEntries(itemId: string): EntriesApi {
   const [entries, setEntries] = useState<ItemEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    send<ItemEntry[]>(`/api/items/${itemId}/entries`, "GET")
+    send<Page>(`/api/items/${itemId}/entries`, "GET")
       .then((d) => {
         if (cancelled) return;
-        setEntries(d);
+        setEntries((prev) => mergeEntries(prev ?? [], d.entries));
+        setCursor(d.hasMore ? d.before : null);
         setError(null);
       })
       .catch((e) => !cancelled && setError(errText(e, "Couldn't load entries")));
@@ -89,18 +115,25 @@ export function useItemEntries(itemId: string): EntriesApi {
   }, [itemId]);
 
   const apply = useCallback((...rows: ItemEntry[]) => {
-    setEntries((prev) => {
-      const list = prev ? [...prev] : [];
-      for (const r of rows) {
-        const i = list.findIndex((e) => e.id === r.id);
-        if (i >= 0) list[i] = r;
-        else list.unshift(r);
-      }
-      return list;
-    });
+    setEntries((prev) => mergeEntries(prev ?? [], rows));
   }, []);
 
-  return useMemo(() => ({ itemId, entries, error, apply }), [itemId, entries, error, apply]);
+  const loadOlder = useCallback(() => {
+    if (!cursor || loadingOlder) return;
+    setLoadingOlder(true);
+    send<Page>(`/api/items/${itemId}/entries?before=${encodeURIComponent(cursor)}`, "GET")
+      .then((d) => {
+        setEntries((prev) => mergeEntries(prev ?? [], d.entries));
+        setCursor(d.hasMore ? d.before : null);
+      })
+      .catch((e) => setError(errText(e, "Couldn't load older entries")))
+      .finally(() => setLoadingOlder(false));
+  }, [cursor, loadingOlder, itemId]);
+
+  return useMemo(
+    () => ({ itemId, entries, error, apply, hasMore: cursor !== null, loadingOlder, loadOlder }),
+    [itemId, entries, error, apply, cursor, loadingOlder, loadOlder],
+  );
 }
 
 const entryUrl = (e: Pick<ItemEntry, "item_id" | "id">, rest = "") =>
@@ -113,6 +146,82 @@ export function entryTabCounts(entries: ItemEntry[] | null): { progress: number;
     progress: groupProgress(entries).current.length,
     open: groupDecisions(entries).openQuestions.length,
   };
+}
+
+// ── Browser drafts, read hydration-safely ───────────────────────────────────
+
+const DRAFTS_EVENT = "mykan:drafts";
+
+function subscribeDrafts(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(DRAFTS_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(DRAFTS_EVENT, onChange);
+  };
+}
+
+/**
+ * The raw stored draft under `key`. Null on the server and during hydration
+ * (no localStorage read in the server render), then the real value; re-read
+ * on every render and whenever a draft is forgotten.
+ */
+function useStoredDraft(key: string): string | null {
+  return useSyncExternalStore(
+    subscribeDrafts,
+    () => browserDraftStore().get(key),
+    () => null,
+  );
+}
+
+/** Forget one stored draft and let every prompt re-read storage. */
+function forgetDraft(key: string) {
+  browserDraftStore().remove(key);
+  window.dispatchEvent(new Event(DRAFTS_EVENT));
+}
+
+type Leftover = Pick<PendingRestore<EntryDraftFields>, "startedAt" | "stale">;
+
+/**
+ * A leftover draft for one editor, from its raw stored value: an offer, or null.
+ * `forget` is true when the draft should just be dropped (its save or post
+ * already landed).
+ */
+function leftoverOf(
+  t: EntryDraftTarget,
+  raw: string | null,
+  stored: string,
+  entries: ItemEntry[] | null,
+): { offer: Leftover | null; forget: boolean } {
+  if (!raw) return { offer: null, forget: false };
+  const key = entryDraftKey(t);
+  const store: DraftStore = { get: (k) => (k === key ? raw : null), set() {}, remove() {} };
+  const draft = readFieldDraft(store, key);
+  if (!draft) return { offer: null, forget: false };
+  if (t.kind !== "edit") {
+    // Wait for the entries before deciding a composer's draft didn't land.
+    if (!entries) return { offer: null, forget: false };
+    if (composerDraftLanded(t, draft, entries)) return { offer: null, forget: true };
+  }
+  const d = restoreDecision<EntryDraftFields>({ body: draft }, { body: stored });
+  if (d.kind === "clear") return { offer: null, forget: true };
+  if (d.kind !== "offer") return { offer: null, forget: false };
+  return { offer: { startedAt: d.startedAt, stale: d.stale }, forget: false };
+}
+
+/** useStoredDraft + leftoverOf, forgetting drafts that already landed. */
+function useLeftover(t: EntryDraftTarget, stored: string, entries: ItemEntry[] | null, enabled: boolean) {
+  const key = entryDraftKey(t);
+  const raw = useStoredDraft(key);
+  const { offer, forget } = useMemo(
+    () => (enabled ? leftoverOf(t, raw, stored, entries) : { offer: null, forget: false }),
+    // t is described by key.
+    [enabled, raw, stored, entries, key], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  useEffect(() => {
+    if (forget) forgetDraft(key);
+  }, [forget, key]);
+  return offer;
 }
 
 // ── Panels ──────────────────────────────────────────────────────────────────
@@ -153,12 +262,11 @@ export function ProgressPanel({ api }: { api: EntriesApi }) {
         api={api}
       />
       <Loading api={api} />
-      {api.entries && g.current.length === 0 ? (
-        <Empty>No progress notes yet.</Empty>
-      ) : null}
+      {api.entries && g.current.length === 0 ? <Empty>No progress notes yet.</Empty> : null}
       <EntryList rows={g.current} ctx={ctx} />
       <Collapsed title="Superseded" rows={g.superseded} ctx={ctx} />
       <Collapsed title="Deleted" rows={g.deleted} ctx={ctx} />
+      <LoadOlder api={api} />
     </div>
   );
 }
@@ -205,6 +313,7 @@ export function DecisionsPanel({ api }: { api: EntriesApi }) {
       <Collapsed title="Answered questions" rows={g.answeredQuestions} ctx={ctx} />
       <Collapsed title="Superseded decisions" rows={g.supersededDecisions} ctx={ctx} />
       <Collapsed title="Deleted" rows={g.deleted} ctx={ctx} />
+      <LoadOlder api={api} />
     </div>
   );
 }
@@ -215,6 +324,20 @@ function Loading({ api }: { api: EntriesApi }) {
     return <p className="py-4 text-center text-sm text-[var(--color-faint)]">Loading…</p>;
   }
   return null;
+}
+
+function LoadOlder({ api }: { api: EntriesApi }) {
+  if (!api.hasMore) return null;
+  return (
+    <button
+      type="button"
+      onClick={api.loadOlder}
+      disabled={api.loadingOlder}
+      className="self-center rounded-md px-2.5 py-1 text-xs text-[var(--color-muted)] ring-1 ring-inset ring-[var(--color-line-strong)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)] disabled:opacity-50"
+    >
+      {api.loadingOlder ? "Loading…" : "Load older entries"}
+    </button>
+  );
 }
 
 function Empty({ children }: { children: ReactNode }) {
@@ -305,8 +428,6 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
   const [history, setHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Bumped when a leftover draft is discarded, to check storage again.
-  const [draftCheck, setDraftCheck] = useState(0);
 
   const deleted = !!entry.deleted_at;
   const canAnswer = !deleted && entry.kind === "question" && entry.state === "open";
@@ -314,35 +435,37 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
 
   // Leftover drafts for this entry's editors (from an earlier visit), offered
   // right in the row without opening an editor. Each resolves on its own.
-  const leftovers = useMemo(() => {
-    void draftCheck;
-    if (mode !== null) return [];
-    const store = browserDraftStore();
-    const targets: { mode: Exclude<Mode, null>; target: EntryDraftTarget; stored: string; what: string }[] = [];
-    if (!deleted) {
-      targets.push({ mode: "edit", target: { kind: "edit", entryId: entry.id }, stored: entry.body, what: "edit to this entry" });
-    }
-    if (canAnswer) {
-      targets.push({ mode: "answer", target: { kind: "answer", questionId: entry.id }, stored: "", what: "answer to this question" });
-    }
-    if (canSupersede) {
-      targets.push({ mode: "supersede", target: { kind: "supersede", entryId: entry.id }, stored: "", what: "replacement for this decision" });
-    }
-    return targets.flatMap((t) => {
-      const d = leftoverEntryDraft(store, t.target, t.stored);
-      return d.kind === "offer" ? [{ ...t, restore: d }] : [];
-    });
-  }, [mode, deleted, canAnswer, canSupersede, entry.id, entry.body, draftCheck]);
+  const editT = useMemo<EntryDraftTarget>(() => ({ kind: "edit", entryId: entry.id }), [entry.id]);
+  const answerT = useMemo<EntryDraftTarget>(() => ({ kind: "answer", questionId: entry.id }), [entry.id]);
+  const supersedeT = useMemo<EntryDraftTarget>(() => ({ kind: "supersede", entryId: entry.id }), [entry.id]);
+  const closed = mode === null;
+  const leftovers = [
+    { mode: "edit" as const, target: editT, what: "edit to this entry", offer: useLeftover(editT, entry.body, api.entries, closed && !deleted) },
+    { mode: "answer" as const, target: answerT, what: "answer to this question", offer: useLeftover(answerT, "", api.entries, closed && canAnswer) },
+    { mode: "supersede" as const, target: supersedeT, what: "replacement for this decision", offer: useLeftover(supersedeT, "", api.entries, closed && canSupersede) },
+  ].filter((l) => l.offer);
 
-  const open = (m: Mode, restore = false) => {
+  // The open editor's finish, and which open it belongs to: switching to
+  // another editor first finishes the open one (a failed save stays in it),
+  // and a late finish of an earlier open never closes a newer one.
+  const current = useRef<Finisher | null>(null);
+  const opens = useRef(0);
+  const [openId, setOpenId] = useState(0);
+
+  async function open(m: Mode, restore = false) {
+    const f = current.current;
+    if (f && !(await f())) return; // the open editor shows why; nothing lost
+    opens.current += 1;
+    setOpenId(opens.current);
     setError(null);
     setAutoRestore(restore);
     setMode(m);
-  };
-  const done = useCallback(() => {
+  }
+  const doneFor = (id: number) => () => {
+    if (opens.current !== id) return;
     setMode(null);
     setAutoRestore(false);
-  }, []);
+  };
 
   async function act(run: () => Promise<void>, fallback: string) {
     setBusy(true);
@@ -364,6 +487,7 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
   const successor = ctx.successors.get(entry.id);
   const state = stateLabel(entry);
   const edited = entry.updated_at !== entry.created_at && !deleted;
+  const onDone = doneFor(openId);
 
   return (
     <li
@@ -415,13 +539,21 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
           ) : (
             <>
               {canAnswer ? (
-                <IconButton label="Answer this question" onClick={() => open(mode === "answer" ? null : "answer")} active={mode === "answer"}>
+                <IconButton
+                  label="Answer this question"
+                  onClick={() => void open(mode === "answer" ? null : "answer")}
+                  active={mode === "answer"}
+                >
                   <path d="M9 14 4 9l5-5" />
                   <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
                 </IconButton>
               ) : null}
               {canSupersede ? (
-                <IconButton label="Supersede with a new decision" onClick={() => open(mode === "supersede" ? null : "supersede")} active={mode === "supersede"}>
+                <IconButton
+                  label="Supersede with a new decision"
+                  onClick={() => void open(mode === "supersede" ? null : "supersede")}
+                  active={mode === "supersede"}
+                >
                   <path d="m17 2 4 4-4 4" />
                   <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
                   <path d="m7 22-4-4 4-4" />
@@ -429,19 +561,28 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
                 </IconButton>
               ) : null}
               {mode !== "edit" ? (
-                <IconButton label="Edit this entry" onClick={() => open("edit")}>
+                <IconButton label="Edit this entry" onClick={() => void open("edit")}>
                   <path d="M12 20h9" />
                   <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                 </IconButton>
               ) : null}
-              <IconButton label="Delete this entry" onClick={() => void remove()} disabled={busy || mode === "edit"} danger>
+              <IconButton
+                label="Delete this entry"
+                onClick={() => void remove()}
+                disabled={busy || mode === "edit"}
+                danger
+              >
                 <path d="M3 6h18" />
                 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
               </IconButton>
             </>
           )}
-          <IconButton label={history ? "Hide history" : "History of this entry"} onClick={() => setHistory((h) => !h)} active={history}>
+          <IconButton
+            label={history ? "Hide history" : "History of this entry"}
+            onClick={() => setHistory((h) => !h)}
+            active={history}
+          >
             <circle cx="12" cy="12" r="8.5" />
             <path d="M12 7.5V12l3 2" />
           </IconButton>
@@ -451,21 +592,42 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
       {leftovers.map((l) => (
         <div key={l.mode} className="mt-1.5">
           <DraftPrompt
-            restore={l.restore}
+            restore={l.offer!}
             what={l.what}
-            staleNote={l.mode === "edit" ? "This entry changed since then. Restoring replaces the newer text when you save." : null}
-            onRestore={() => open(l.mode, true)}
-            onDiscard={() => {
-              browserDraftStore().remove(entryDraftKey(l.target));
-              setDraftCheck((n) => n + 1);
-            }}
+            staleNote={
+              l.mode === "edit"
+                ? "This entry changed since then. Restoring replaces the newer text when you save."
+                : null
+            }
+            onRestore={() => void open(l.mode, true)}
+            onDiscard={() => forgetDraft(entryDraftKey(l.target))}
           />
         </div>
       ))}
 
       <div className="mt-1">
         {mode === "edit" ? (
-          <EntryEditor entry={entry} api={api} autoRestore={autoRestore} onDone={done} />
+          <DraftEditor
+            key={openId}
+            target={editT}
+            opened={entry.body}
+            baseUpdatedAt={entry.updated_at}
+            isNew={false}
+            autoRestore={autoRestore}
+            finishRef={current}
+            label="Edit entry text"
+            onDone={onDone}
+            commit={async (body, keepalive, editSession) => {
+              api.apply(
+                await send<ItemEntry>(
+                  entryUrl(entry),
+                  "PATCH",
+                  { body, edit_session: editSession },
+                  keepalive,
+                ),
+              );
+            }}
+          />
         ) : (
           <EntryMarkdown text={entry.body} />
         )}
@@ -488,22 +650,36 @@ function EntryCard({ entry, ctx }: { entry: ItemEntry; ctx: Ctx }) {
 
       {mode === "answer" ? (
         <div className="mt-2 border-t border-[var(--color-line)] pt-2">
-          <AnswerComposer question={entry} ctx={ctx} autoRestore={autoRestore} onDone={done} />
+          <AnswerComposer
+            key={openId}
+            question={entry}
+            target={answerT}
+            ctx={ctx}
+            autoRestore={autoRestore}
+            finishRef={current}
+            onDone={onDone}
+          />
         </div>
       ) : null}
       {mode === "supersede" ? (
         <div className="mt-2 border-t border-[var(--color-line)] pt-2">
-          <Composer
-            target={{ kind: "supersede", entryId: entry.id }}
+          <DraftEditor
+            key={openId}
+            target={supersedeT}
+            opened=""
+            isNew
+            autoRestore={autoRestore}
+            finishRef={current}
+            label="The new decision that replaces this one"
             placeholder="The new decision that replaces this one"
             submitLabel="Supersede"
-            autoRestore={autoRestore}
-            onDone={done}
-            onSubmit={async (body) => {
+            onDone={onDone}
+            commit={async (body, keepalive) => {
               const r = await send<{ superseded: ItemEntry; entry: ItemEntry }>(
                 entryUrl(entry, "/supersede"),
                 "POST",
                 { body },
+                keepalive,
               );
               api.apply(r.superseded, r.entry);
             }}
@@ -563,137 +739,177 @@ function IconButton({
   );
 }
 
-// ── Editing an entry (save on finish, KANBAN-42) ────────────────────────────
+// ── The one entry editor: save on finish (KANBAN-42) ────────────────────────
 
 /**
- * Edits one entry's text exactly like the card description: nothing written
- * while typing (localStorage draft under entry:<id>); Esc, ⌘/Ctrl+Enter, a
- * press outside the editor, or leaving the page saves ONCE (one version, one
- * edit session); the abandon icon discards with no write. Registered with the
- * card page so leaving waits for this save too.
+ * Every entry editor, for an existing entry (`isNew` false) and for new ones
+ * (a progress note, question, decision, an answer, a superseding decision).
+ * Both follow the card body's model exactly (David, 2026-09-17):
+ *
+ * - Nothing is written while typing; the text is a browser draft under its own
+ *   key (entryDraftScope), so several editors can be open at once.
+ * - Esc, ⌘/Ctrl+Enter, a press outside the editor, the Add button, or leaving
+ *   the page (it registers with the card page's finishers) writes ONCE: a PATCH
+ *   (with the open's edit_session) or a POST. A new entry left empty or
+ *   whitespace writes nothing and just closes. An existing entry can't be
+ *   emptied ("abandon to keep the old text").
+ * - The abandon icon discards the draft, no write.
+ * - A failed write keeps the editor open with the text ("Esc to retry").
+ * - Tab close / reload finishes with a keepalive request; while a write is in
+ *   flight nothing else is sent, so one edit is one version and one post.
  */
-function EntryEditor({
-  entry,
-  api,
+function DraftEditor({
+  target,
+  opened,
+  baseUpdatedAt = null,
+  isNew,
   autoRestore,
+  finishRef,
+  label,
+  placeholder,
+  submitLabel,
   onDone,
+  commit,
+  discardRef,
+  children,
 }: {
-  entry: ItemEntry;
-  api: EntriesApi;
+  target: EntryDraftTarget;
+  opened: string;
+  baseUpdatedAt?: string | null;
+  isNew: boolean;
   autoRestore: boolean;
+  /** Set to this editor's finish while mounted (the entry row awaits it). */
+  finishRef?: MutableRefObject<Finisher | null>;
+  label: string;
+  placeholder?: string;
+  submitLabel?: string;
   onDone: () => void;
+  commit: (body: string, keepalive: boolean, editSession: string) => Promise<void>;
+  /** Set to "discard this draft without writing or closing" while mounted. */
+  discardRef?: MutableRefObject<(() => void) | null>;
+  /** Extra controls inside the editor (presses there aren't click-offs). */
+  children?: ReactNode;
 }) {
   const draft = useAbandonable<EntryDraftFields>({
-    opened: { body: entry.body },
-    ...entryDraftScope({ kind: "edit", entryId: entry.id }),
-    baseUpdatedAt: entry.updated_at,
+    opened: { body: opened },
+    ...entryDraftScope(target),
+    baseUpdatedAt,
     restoreOnOpen: autoRestore,
   });
   const { session, set, close, abandon, restore, applyRestore, discardRestore } = draft;
-  const url = entryUrl(entry);
 
-  // One edit session per open: the save and a keepalive save of the same edit
-  // fold into one version.
   const editSession = useRef("");
   useEffect(() => {
     editSession.current = crypto.randomUUID();
   }, []);
   const root = useRef<HTMLDivElement>(null);
   const ended = useRef(false);
+  // Typed since opening: only then may an unmount write (a StrictMode
+  // remount of an editor opened with a restored draft must not post it).
+  const typed = useRef(false);
+  const closing = useRef<Promise<boolean> | null>(null);
+  const restorePending = useRef(restore !== null);
+  useEffect(() => {
+    restorePending.current = restore !== null;
+  }, [restore]);
+  const latest = useRef({ commit, onDone });
+  useEffect(() => {
+    latest.current = { commit, onDone };
+  });
   const [invalid, setInvalid] = useState<string | null>(null);
 
-  const save = useCallback(
-    async (patch: Partial<EntryDraftFields>) => {
-      api.apply(
-        await send<ItemEntry>(url, "PATCH", { body: patch.body, edit_session: editSession.current }),
-      );
-    },
-    [api, url],
-  );
-
-  const closing = useRef<Promise<boolean> | null>(null);
-  const finish = useCallback((): Promise<boolean> => {
-    if (ended.current) return Promise.resolve(true);
-    if (closing.current) return closing.current;
-    if (session.patch()) {
-      const err = entryLengthError(session.values.body);
-      if (err) {
-        setInvalid(
-          entryTextLength(session.values.body) === 0
-            ? "Text is required. Abandon changes to keep the old text."
-            : err,
-        );
-        return Promise.resolve(false);
-      }
-    }
-    setInvalid(null);
-    const p = close(save).then((ok) => {
-      closing.current = null;
-      if (ok) {
+  const finish = useCallback(
+    (keepalive = false): Promise<boolean> => {
+      if (ended.current) return Promise.resolve(true);
+      if (closing.current) return closing.current;
+      const body = session.values.body;
+      if (isNew && entryTextLength(body) === 0 && !restorePending.current) {
+        // Nothing to add: close, and drop a whitespace-only draft.
         ended.current = true;
-        onDone();
+        abandon();
+        latest.current.onDone();
+        return Promise.resolve(true);
       }
-      return ok;
-    });
-    closing.current = p;
-    return p;
-  }, [session, close, save, onDone]);
+      if (session.patch()) {
+        const err = entryLengthError(body);
+        if (err) {
+          setInvalid(
+            entryTextLength(body) === 0 ? "Text is required. Abandon changes to keep the old text." : err,
+          );
+          return Promise.resolve(false);
+        }
+      }
+      setInvalid(null);
+      const p = close((patch) =>
+        latest.current.commit(patch.body ?? body, keepalive, editSession.current),
+      ).then((ok) => {
+        closing.current = null;
+        if (ok) {
+          ended.current = true;
+          latest.current.onDone();
+        }
+        return ok;
+      });
+      closing.current = p;
+      return p;
+    },
+    [session, isNew, abandon, close],
+  );
   useRegisterFinisher(finish);
-  const finishRef = useRef(finish);
+  const finishLatest = useRef(finish);
   useEffect(() => {
+    finishLatest.current = finish;
+    if (!finishRef) return;
     finishRef.current = finish;
-  }, [finish]);
+    return () => {
+      if (finishRef.current === finish) finishRef.current = null;
+    };
+  }, [finish, finishRef]);
 
-  const onAbandon = useCallback(() => {
+  const discard = useCallback(() => {
     ended.current = true;
     abandon();
-    onDone();
-  }, [abandon, onDone]);
+  }, [abandon]);
+  useEffect(() => {
+    if (!discardRef) return;
+    discardRef.current = discard;
+    return () => {
+      discardRef.current = null;
+    };
+  }, [discard, discardRef]);
+  const onAbandon = useCallback(() => {
+    discard();
+    latest.current.onDone();
+  }, [discard]);
 
-  // Click-off: a press outside this editor finishes it (one save if changed).
+  // Click-off: a press outside this editor finishes it.
   useEffect(() => {
     function onDown(e: PointerEvent) {
       const el = root.current;
       const t = e.target as Node | null;
       if (!el || !t || el.contains(t)) return;
       if (t instanceof Element && t.closest("[data-keep-draft]")) return;
-      void finish();
+      void finishLatest.current();
     }
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [finish]);
+  }, []);
 
-  // Leaving the page (tab close, reload, client-side navigation that unmounts
-  // this editor): a best-effort keepalive save. The draft stays in storage in
-  // case it doesn't land, and is forgotten next time if it did.
+  // Leaving: tab close / reload finishes with keepalive. An unmount that
+  // wasn't preceded by a finish (browser Back) does the same, but only for
+  // text typed in this open. finish() never sends while a write is in flight.
   useEffect(() => {
-    function beacon() {
-      if (ended.current) return;
-      const patch = session.patch();
-      if (!patch || entryLengthError(patch.body)) return;
-      try {
-        const p = fetch(url, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ body: patch.body, edit_session: editSession.current }),
-          keepalive: true,
-        });
-        trackPendingSave(p);
-        void p.catch(() => {});
-      } catch {
-        // The page is going away: the draft stays.
-      }
+    function onPageHide() {
+      if (!ended.current && session.patch()) trackPendingSave(finishLatest.current(true));
     }
-    window.addEventListener("pagehide", beacon);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
-      window.removeEventListener("pagehide", beacon);
-      // An ordinary unmount (switching tabs by keyboard, a client-side
-      // navigation): finish normally, so the saved entry is applied to the
-      // page's list and the draft is cleared. Only when something changed, so
-      // a no-op remount never closes the editor.
-      if (!ended.current && session.patch()) trackPendingSave(finishRef.current());
+      window.removeEventListener("pagehide", onPageHide);
+      if (!ended.current && typed.current && session.patch()) {
+        trackPendingSave(finishLatest.current(true));
+      }
     };
-  }, [session, url]);
+  }, [session]);
 
   function onKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
     if (restore) return; // the prompt answers its own keys
@@ -710,170 +926,75 @@ function EntryEditor({
   }
 
   const body = draft.values.body;
+  const failed = draft.status === "failed";
+  const status =
+    draft.status === "saving"
+      ? isNew
+        ? "Adding…"
+        : "Saving…"
+      : failed
+        ? `${isNew ? "Not added" : "Save failed"}${draft.error ? ` (${draft.error})` : ""}. Nothing lost. Esc to retry.`
+        : (invalid ?? (!isNew && draft.dirty ? "Unsaved · Esc or click away to save" : null));
+
   return (
     <div ref={root} onKeyDown={onKeyDown} className="flex flex-col gap-1.5">
       {restore ? (
         <DraftPrompt
           restore={restore}
-          what="edit to this entry"
-          staleNote="This entry changed since then. Restoring replaces the newer text when you save."
+          what={isNew ? "draft here" : "edit to this entry"}
+          staleNote={
+            isNew ? null : "This entry changed since then. Restoring replaces the newer text when you save."
+          }
           onRestore={applyRestore}
           onDiscard={discardRestore}
           autoFocus
         />
       ) : null}
       <div inert={restore ? true : undefined} className={restore ? "opacity-60" : ""}>
-        <EntryTextarea
+        <AutoGrowTextarea
           value={body}
-          onChange={(v) => set("body", v)}
-          label="Edit entry text"
+          onChange={(e) => {
+            typed.current = true;
+            set("body", e.target.value);
+          }}
+          aria-label={label}
+          placeholder={placeholder}
           autoFocus={!restore}
+          maxHeight={320}
+          className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-canvas)] px-2 py-1.5 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
         />
       </div>
       <EditorFooter
         count={entryTextLength(body)}
-        status={
-          draft.status === "saving"
-            ? "Saving…"
-            : draft.status === "failed"
-              ? `Save failed${draft.error ? ` (${draft.error})` : ""}. Nothing lost. Esc to retry.`
-              : invalid ?? (draft.dirty ? "Unsaved · Esc or click away to save" : "Esc or click away to finish")
-        }
-        failed={draft.status === "failed" || invalid !== null}
-        hint="Enter for newline · ⌘/Ctrl+Enter to save"
+        status={status}
+        failed={failed || invalid !== null}
+        hint={`Enter for newline · Esc, ⌘/Ctrl+Enter or click away to ${isNew ? "add" : "save"}`}
       >
         <span data-keep-draft className="inline-flex">
-          <AbandonButton onAbandon={onAbandon} size="sm" disabled={draft.status === "saving"} />
+          <AbandonButton
+            onAbandon={onAbandon}
+            size="sm"
+            label={isNew ? "Discard this draft" : "Abandon changes"}
+            disabled={draft.status === "saving"}
+          />
         </span>
-      </EditorFooter>
-    </div>
-  );
-}
-
-// ── Composers (new entries, answers, superseding decisions) ─────────────────
-
-/**
- * Writing a NEW entry. Nothing is created until the explicit Add (the button
- * or ⌘/Ctrl+Enter), so a stray Esc can't post a note or a decision. The text is
- * a browser draft while you type (its own key per item and kind, or per
- * question / decision), so it survives a crash or leaving the page and is
- * offered back. Esc settles (blurs, keeps the text); an empty composer closes.
- * The abandon icon discards the draft and closes, with no write.
- */
-function Composer({
-  target,
-  placeholder,
-  submitLabel,
-  autoRestore,
-  onSubmit,
-  onDone,
-  autoFocus = true,
-  children,
-}: {
-  target: EntryDraftTarget;
-  placeholder: string;
-  submitLabel: string;
-  autoRestore: boolean;
-  onSubmit: (body: string) => Promise<void>;
-  onDone: () => void;
-  autoFocus?: boolean;
-  children?: ReactNode;
-}) {
-  const draft = useAbandonable<EntryDraftFields>({
-    opened: { body: "" },
-    ...entryDraftScope(target),
-    restoreOnOpen: autoRestore,
-  });
-  const { set, close, abandon, restore, applyRestore, discardRestore } = draft;
-  const [invalid, setInvalid] = useState<string | null>(null);
-  const body = draft.values.body;
-
-  async function submit() {
-    const err = entryLengthError(body);
-    if (err) {
-      setInvalid(entryTextLength(body) === 0 ? "Write something first." : err);
-      return;
-    }
-    setInvalid(null);
-    if (await close(async (patch) => onSubmit(patch.body ?? body))) onDone();
-  }
-
-  function onKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
-    if (restore) return;
-    const k = entryEditorKey({
-      key: e.key,
-      metaKey: e.metaKey,
-      ctrlKey: e.ctrlKey,
-      isComposing: e.nativeEvent.isComposing,
-    });
-    if (!k) return;
-    e.preventDefault();
-    if (k === "submit") {
-      void submit();
-    } else if (!draft.dirty) {
-      onDone();
-    } else if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-  }
-
-  return (
-    <div onKeyDown={onKeyDown} className="flex flex-col gap-1.5">
-      {restore ? (
-        <DraftPrompt
-          restore={restore}
-          what="draft here"
-          staleNote={null}
-          onRestore={applyRestore}
-          onDiscard={discardRestore}
-          autoFocus
-        />
-      ) : null}
-      <div inert={restore ? true : undefined} className={restore ? "opacity-60" : ""}>
-        <EntryTextarea
-          value={body}
-          onChange={(v) => set("body", v)}
-          label={placeholder}
-          placeholder={placeholder}
-          autoFocus={autoFocus && !restore}
-        />
-      </div>
-      <EditorFooter
-        count={entryTextLength(body)}
-        status={
-          draft.status === "saving"
-            ? "Adding…"
-            : draft.status === "failed"
-              ? `Not added${draft.error ? ` (${draft.error})` : ""}. Nothing lost.`
-              : invalid
-        }
-        failed={draft.status === "failed" || invalid !== null}
-        hint="Enter for newline · ⌘/Ctrl+Enter to add"
-      >
-        <AbandonButton
-          onAbandon={() => {
-            abandon();
-            onDone();
-          }}
-          size="sm"
-          label="Discard this draft"
-          disabled={draft.status === "saving"}
-        />
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={draft.status === "saving" || restore !== null}
-          className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {submitLabel}
-        </button>
+        {submitLabel ? (
+          <button
+            type="button"
+            onClick={() => void finish()}
+            disabled={draft.status === "saving" || restore !== null}
+            className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {submitLabel}
+          </button>
+        ) : null}
       </EditorFooter>
       {children}
     </div>
   );
 }
 
-/** A collapsed "+ Add …" button that opens a composer for a new entry. */
+/** A collapsed "+ Add …" button that opens an editor for a new entry. */
 function NewEntry({
   itemId,
   kind,
@@ -889,25 +1010,22 @@ function NewEntry({
 }) {
   const [open, setOpen] = useState(false);
   const [autoRestore, setAutoRestore] = useState(false);
-  const [draftCheck, setDraftCheck] = useState(0);
+  const [opens, setOpens] = useState(0);
   const target = useMemo<EntryDraftTarget>(() => ({ kind: "new", itemId, entryKind: kind }), [itemId, kind]);
+  const leftover = useLeftover(target, "", api.entries, !open);
 
-  const leftover = useMemo(() => {
-    void draftCheck;
-    if (open) return null;
-    const d = leftoverEntryDraft(browserDraftStore(), target, "");
-    return d.kind === "offer" ? d : null;
-  }, [open, target, draftCheck]);
+  const show = (restore: boolean) => {
+    setAutoRestore(restore);
+    setOpens((n) => n + 1);
+    setOpen(true);
+  };
 
   if (!open) {
     return (
       <div className="flex flex-col gap-1.5">
         <button
           type="button"
-          onClick={() => {
-            setAutoRestore(false);
-            setOpen(true);
-          }}
+          onClick={() => show(false)}
           className="flex items-center gap-1.5 self-start rounded-md px-2 py-1 text-xs font-medium text-[var(--color-muted)] ring-1 ring-inset ring-[var(--color-line-strong)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
         >
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -920,14 +1038,8 @@ function NewEntry({
             restore={leftover}
             what={`${KIND_LABEL[kind].toLowerCase()} draft`}
             staleNote={null}
-            onRestore={() => {
-              setAutoRestore(true);
-              setOpen(true);
-            }}
-            onDiscard={() => {
-              browserDraftStore().remove(entryDraftKey(target));
-              setDraftCheck((n) => n + 1);
-            }}
+            onRestore={() => show(true)}
+            onDiscard={() => forgetDraft(entryDraftKey(target))}
           />
         ) : null}
       </div>
@@ -935,17 +1047,20 @@ function NewEntry({
   }
   return (
     <div className="rounded-md border border-[var(--color-line)] p-2">
-      <Composer
+      <DraftEditor
+        key={opens}
         target={target}
+        opened=""
+        isNew
+        autoRestore={autoRestore}
+        label={placeholder}
         placeholder={placeholder}
         submitLabel={kind === "progress" ? "Add note" : kind === "question" ? "Ask" : "Record"}
-        autoRestore={autoRestore}
-        onDone={() => {
-          setOpen(false);
-          setDraftCheck((n) => n + 1);
-        }}
-        onSubmit={async (body) => {
-          api.apply(await send<ItemEntry>(`/api/items/${itemId}/entries`, "POST", { kind, body }));
+        onDone={() => setOpen(false)}
+        commit={async (body, keepalive) => {
+          api.apply(
+            await send<ItemEntry>(`/api/items/${itemId}/entries`, "POST", { kind, body }, keepalive),
+          );
         }}
       />
     </div>
@@ -953,22 +1068,28 @@ function NewEntry({
 }
 
 /**
- * Answer an open question: write a new decision (recorded and linked), or link
- * one of the card's active decisions.
+ * Answer an open question: write a new decision (recorded and linked on
+ * finish, like any new entry), or link one of the card's active decisions.
  */
 function AnswerComposer({
   question,
+  target,
   ctx,
   autoRestore,
+  finishRef,
   onDone,
 }: {
   question: ItemEntry;
+  target: EntryDraftTarget;
   ctx: Ctx;
   autoRestore: boolean;
+  finishRef: MutableRefObject<Finisher | null>;
   onDone: () => void;
 }) {
   const [linking, setLinking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const discardRef = useRef<(() => void) | null>(null);
 
   async function link(decisionId: string) {
     setLinking(decisionId);
@@ -981,7 +1102,7 @@ function AnswerComposer({
       );
       ctx.api.apply(r.question, r.decision);
       // Answered by linking: a drafted new decision for this question is moot.
-      browserDraftStore().remove(entryDraftKey({ kind: "answer", questionId: question.id }));
+      discardRef.current?.();
       onDone();
     } catch (e) {
       setError(errText(e, "Link failed"));
@@ -991,77 +1112,57 @@ function AnswerComposer({
   }
 
   return (
-    <Composer
-      target={{ kind: "answer", questionId: question.id }}
+    <DraftEditor
+      target={target}
+      opened=""
+      isNew
+      autoRestore={autoRestore}
+      finishRef={finishRef}
+      label="The decision that answers this question"
       placeholder="The decision that answers this question"
       submitLabel="Record decision"
-      autoRestore={autoRestore}
       onDone={onDone}
-      onSubmit={async (body) => {
+      discardRef={discardRef}
+      commit={async (body, keepalive) => {
         const r = await send<{ question: ItemEntry; decision: ItemEntry }>(
           entryUrl(question, "/answer"),
           "POST",
           { body },
+          keepalive,
         );
         ctx.api.apply(r.question, r.decision);
       }}
     >
       {ctx.activeDecisions.length > 0 ? (
-        <div className="mt-1 flex flex-col gap-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
-            Or link an active decision
-          </p>
-          <ul className="flex flex-col gap-1">
-            {ctx.activeDecisions.map((d) => (
-              <li key={d.id} className="flex items-start gap-2 text-xs">
-                <span className="min-w-0 flex-1 break-words text-[var(--color-muted)]">{snippet(d.body)}</span>
-                <button
-                  type="button"
-                  onClick={() => void link(d.id)}
-                  disabled={linking !== null}
-                  title="Answer the question with this decision"
-                  aria-label={`Answer with the decision: ${snippet(d.body)}`}
-                  className="shrink-0 rounded px-1.5 py-0.5 font-medium text-[var(--color-accent)] ring-1 ring-inset ring-[var(--color-line-strong)] transition-colors hover:bg-[var(--color-accent-soft)] disabled:opacity-50"
-                >
-                  {linking === d.id ? "Linking…" : "Link"}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {error ? <p className="text-xs text-[var(--color-bug)]">{error}</p> : null}
-        </div>
-      ) : null}
-    </Composer>
+          <div className="mt-1 flex flex-col gap-1">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+              Or link an active decision
+            </p>
+            <ul className="flex flex-col gap-1">
+              {ctx.activeDecisions.map((d) => (
+                <li key={d.id} className="flex items-start gap-2 text-xs">
+                  <span className="min-w-0 flex-1 break-words text-[var(--color-muted)]">{snippet(d.body)}</span>
+                  <button
+                    type="button"
+                    onClick={() => void link(d.id)}
+                    disabled={linking !== null}
+                    title="Answer the question with this decision"
+                    aria-label={`Answer with the decision: ${snippet(d.body)}`}
+                    className="shrink-0 rounded px-1.5 py-0.5 font-medium text-[var(--color-accent)] ring-1 ring-inset ring-[var(--color-line-strong)] transition-colors hover:bg-[var(--color-accent-soft)] disabled:opacity-50"
+                  >
+                    {linking === d.id ? "Linking…" : "Link"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {error ? <p className="text-xs text-[var(--color-bug)]">{error}</p> : null}
+          </div>
+        ) : null}
+    </DraftEditor>
   );
 }
 
 // ── Shared editor pieces ────────────────────────────────────────────────────
-
-function EntryTextarea({
-  value,
-  onChange,
-  label,
-  placeholder,
-  autoFocus,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  label: string;
-  placeholder?: string;
-  autoFocus?: boolean;
-}) {
-  return (
-    <AutoGrowTextarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={label}
-      placeholder={placeholder}
-      autoFocus={autoFocus}
-      maxHeight={320}
-      className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-canvas)] px-2 py-1.5 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
-    />
-  );
-}
 
 function EditorFooter({
   count,
@@ -1119,7 +1220,7 @@ function DraftPrompt({
   onDiscard,
   autoFocus,
 }: {
-  restore: Pick<PendingRestore<EntryDraftFields>, "startedAt" | "stale">;
+  restore: Leftover;
   what: string;
   staleNote: string | null;
   onRestore: () => void;

@@ -79,6 +79,93 @@ export function leftoverEntryDraft(
   );
 }
 
+/** CRLF → LF, trimmed: how two entry texts are compared. */
+const sameText = (a: string, b: string) =>
+  a.replace(/\r\n/g, "\n").trim() === b.replace(/\r\n/g, "\n").trim();
+
+/** How far a server's created_at may trail the browser's draft start (clock skew). */
+const LANDED_SKEW_MS = 5 * 60_000;
+
+/**
+ * Did a leftover COMPOSER draft already reach the server? A composer posts on
+ * Esc, click-off or leaving the page, and a keepalive post on tab close can
+ * land without the page living long enough to clear its browser draft. Offering
+ * that draft back would post it twice, so a draft whose text matches an entry
+ * the composer would have created (same kind / same answered question's
+ * decision / same superseded entry, created no earlier than the draft began) is
+ * treated like an edit draft that matches what's stored: forgotten silently.
+ * Edit drafts never "land" here (restoreDecision compares them to the entry).
+ */
+export function composerDraftLanded(
+  t: EntryDraftTarget,
+  draft: { value: unknown; startedAt: string },
+  entries: ItemEntry[],
+): boolean {
+  if (t.kind === "edit" || typeof draft.value !== "string" || !draft.value.trim()) return false;
+  const since = Date.parse(draft.startedAt) - LANDED_SKEW_MS;
+  const text = draft.value;
+  return entries.some((e) => {
+    if (!sameText(e.body, text)) return false;
+    if (!Number.isNaN(since) && Date.parse(e.created_at) < since) return false;
+    switch (t.kind) {
+      case "new":
+        return e.item_id === t.itemId && e.kind === t.entryKind;
+      case "answer":
+        return e.kind === "decision";
+      case "supersede":
+        return e.supersedes_id === t.entryId;
+    }
+  });
+}
+
+// ── Paging: what the card always loads ─────────────────────────────────────
+
+/**
+ * Entries the card page always loads, however old: live open questions and
+ * live active decisions (what's waiting on David and what's been decided).
+ * Everything else (progress notes, superseded, answered, deleted) is paged,
+ * newest first, with "Load older".
+ */
+export function isPinnedEntry(e: Pick<ItemEntry, "kind" | "state" | "deleted_at">): boolean {
+  if (e.deleted_at) return false;
+  return (e.kind === "question" && e.state === "open") || (e.kind === "decision" && e.state === "active");
+}
+
+/** Ids a set of entries links to (answered_by / supersedes) that it doesn't hold. */
+export function missingLinkIds(rows: Pick<ItemEntry, "id" | "answered_by_id" | "supersedes_id">[]): string[] {
+  const have = new Set(rows.map((r) => r.id));
+  const out = new Set<string>();
+  for (const r of rows) {
+    for (const id of [r.answered_by_id, r.supersedes_id]) if (id && !have.has(id)) out.add(id);
+  }
+  return [...out];
+}
+
+/** Merge entry rows into a list: newer copies replace by id; newest first. */
+export function mergeEntries(prev: ItemEntry[], rows: ItemEntry[]): ItemEntry[] {
+  const m = new Map(prev.map((e) => [e.id, e]));
+  for (const r of rows) m.set(r.id, r);
+  return [...m.values()].sort(newestFirst);
+}
+
+/** The "Load older" cursor: the oldest paged entry's created_at and id. */
+export function encodeEntryCursor(e: Pick<ItemEntry, "created_at" | "id">): string {
+  return `${e.created_at}|${e.id}`;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Parse a cursor; null when absent or malformed. */
+export function parseEntryCursor(raw: unknown): { createdAt: string; id: string } | null {
+  if (typeof raw !== "string") return null;
+  const i = raw.lastIndexOf("|");
+  if (i <= 0) return null;
+  const createdAt = raw.slice(0, i);
+  const id = raw.slice(i + 1);
+  if (Number.isNaN(Date.parse(createdAt)) || !UUID_RE.test(id)) return null;
+  return { createdAt, id };
+}
+
 // ── Grouping and order ─────────────────────────────────────────────────────
 
 /** Newest first; ties broken by id (descending), matching the list query. */

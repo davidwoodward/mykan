@@ -4,7 +4,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  composerDraftLanded,
   countOpenQuestions,
+  encodeEntryCursor,
+  isPinnedEntry,
+  mergeEntries,
+  missingLinkIds,
+  parseEntryCursor,
   entryChangeSummary,
   entryDraftKey,
   entryDraftScope,
@@ -184,6 +190,74 @@ test("successors: only live superseding entries count", () => {
   const m = successorsById(rows);
   assert.equal(m.get("d1")?.id, "d2");
   assert.equal(m.has("d3"), false);
+});
+
+// ── Paging: pinned entries, links, merge, cursor ─────────────────────────────
+
+test("pinned: live open questions and active decisions only", () => {
+  assert.equal(isPinnedEntry(entry({ kind: "question", state: "open" })), true);
+  assert.equal(isPinnedEntry(entry({ kind: "decision", state: "active" })), true);
+  assert.equal(isPinnedEntry(entry({ kind: "question", state: "open", deleted_at: at(9) })), false);
+  assert.equal(isPinnedEntry(entry({ kind: "question", state: "answered" })), false);
+  assert.equal(isPinnedEntry(entry({ kind: "decision", state: "superseded" })), false);
+  assert.equal(isPinnedEntry(entry()), false);
+});
+
+test("an old open question and active decision still group on top past a page of newer progress", () => {
+  // The first page: every pinned entry however old, plus the newest page of the rest.
+  const oldQuestion = entry({ id: "q-old", kind: "question", state: "open", created_at: "2025-01-01T00:00:00.000Z" });
+  const oldDecision = entry({ id: "d-old", kind: "decision", state: "active", created_at: "2025-01-02T00:00:00.000Z" });
+  const progress = Array.from({ length: 150 }, (_, i) =>
+    entry({ id: `p${String(i).padStart(3, "0")}`, created_at: new Date(Date.UTC(2026, 8, 16, 0, i)).toISOString() }),
+  );
+  const page = [...progress].sort(newestFirst).slice(0, 100);
+  const rows = mergeEntries([oldQuestion, oldDecision], page);
+  assert.equal(rows.length, 102);
+  const g = groupDecisions(rows);
+  assert.deepEqual(ids(g.openQuestions), ["q-old"]);
+  assert.deepEqual(ids(g.activeDecisions), ["d-old"]);
+  assert.equal(groupProgress(rows).current.length, 100);
+});
+
+test("links a page holds but doesn't contain are fetched; merge replaces by id, newest first", () => {
+  const rows = [
+    entry({ id: "q1", kind: "question", state: "answered", answered_by_id: "d9" }),
+    entry({ id: "d2", kind: "decision", supersedes_id: "d1" }),
+    entry({ id: "d1", kind: "decision", state: "superseded" }),
+  ];
+  assert.deepEqual(missingLinkIds(rows), ["d9"]);
+  const merged = mergeEntries(
+    [entry({ id: "a", created_at: at(9), body: "old" })],
+    [entry({ id: "a", created_at: at(9), body: "new" }), entry({ id: "b", created_at: at(10) })],
+  );
+  assert.deepEqual(ids(merged), ["b", "a"]);
+  assert.equal(merged[1].body, "new");
+});
+
+test("cursor round-trips; malformed cursors are refused", () => {
+  const e = entry({ id: "0b6c9a8e-3f2d-4c1b-9a7e-5d4c3b2a1f0e", created_at: "2026-09-16T10:00:00.123456+00:00" });
+  assert.deepEqual(parseEntryCursor(encodeEntryCursor(e)), { createdAt: e.created_at, id: e.id });
+  assert.equal(parseEntryCursor("nope"), null);
+  assert.equal(parseEntryCursor(`not-a-date|${e.id}`), null);
+  assert.equal(parseEntryCursor(`${e.created_at}|x`), null);
+  assert.equal(parseEntryCursor(42), null);
+});
+
+test("a composer draft that already posted is recognised, so it isn't offered (and posted) twice", () => {
+  const started = { value: "PR #7 opened", startedAt: at(10) };
+  const posted = entry({ id: "p1", kind: "progress", body: "PR #7 opened\n", created_at: at(10) });
+  const t = { kind: "new", itemId: "item-1", entryKind: "progress" } as const;
+  assert.equal(composerDraftLanded(t, started, [posted]), true);
+  assert.equal(composerDraftLanded({ ...t, entryKind: "decision" }, started, [posted]), false);
+  assert.equal(composerDraftLanded(t, started, [{ ...posted, body: "Other" }]), false);
+  // An identical note from long before the draft began is someone else's.
+  assert.equal(composerDraftLanded(t, started, [{ ...posted, created_at: at(8) }]), false);
+  const decision = entry({ id: "d1", kind: "decision", body: "Yes", created_at: at(11) });
+  assert.equal(composerDraftLanded({ kind: "answer", questionId: "q1" }, { value: "Yes", startedAt: at(10) }, [decision]), true);
+  const successor = { ...decision, supersedes_id: "d0" };
+  assert.equal(composerDraftLanded({ kind: "supersede", entryId: "d0" }, { value: "Yes", startedAt: at(10) }, [successor]), true);
+  assert.equal(composerDraftLanded({ kind: "supersede", entryId: "dX" }, { value: "Yes", startedAt: at(10) }, [successor]), false);
+  assert.equal(composerDraftLanded({ kind: "edit", entryId: "p1" }, started, [posted]), false);
 });
 
 // ── Board counts ─────────────────────────────────────────────────────────────

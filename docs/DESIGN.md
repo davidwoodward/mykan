@@ -188,7 +188,7 @@ Every editor has one explicit way out without saving: the **Abandon changes** ic
 | History panel, and the card page's History section (Restore) | None | Restore is a confirmed action, itself recorded in history. |
 | Search, tag filter, area and status filters, view toggles | None | View state, not data. |
 | Item entry editors (KANBAN-38): editing a progress note, question or decision on the card page | After the textarea, in the editor footer | Built: draft only (`localStorage` key `entry:<entryId>`) → one PATCH on Esc, ⌘/Ctrl+Enter, a press outside the editor, or leaving the page (one version; `edit_session` per open) → abandon discards, no write. Details under **Entry panels** below. |
-| Entry composers (KANBAN-38): new progress note, question, decision; answer a question; supersede a decision | In the composer footer, beside Add | Nothing is written until the explicit Add (button or ⌘/Ctrl+Enter). The text is a browser draft while you type (its own key per item+kind, or per question/decision) and is offered back after a crash or leaving. Esc settles (blurs, keeps the text; an empty composer closes). Abandon ("Discard this draft") drops it, no write. |
+| Entry composers (KANBAN-38): new progress note, question, decision; answer a question; supersede a decision | In the composer footer, beside Add | Same as any edit (David, 2026-09-17): draft only (its own key per item+kind, or per question/decision) → ONE post on Esc, ⌘/Ctrl+Enter, the Add button, a press outside the composer, or leaving the page; an empty or whitespace-only composer posts nothing and just closes → abandon ("Discard this draft") drops it, no write. |
 | Entry actions (delete, restore a deleted entry, link an existing decision as the answer, restore a version) | None | One-click recorded writes; delete is soft and restorable from the collapsed Deleted group, version restore asks for a confirm and is itself versioned. |
 
 ## Card pages and clean URLs (KANBAN-44, David 2026-09-16)
@@ -233,8 +233,8 @@ Every card has its own page, and no user-facing URL carries a GUID.
   and **Decisions & Questions** join the `PANELS` list in `components/CardPage.tsx`;
   nothing else about the layout changes.
   *Built (KANBAN-38, 2026-09-17):* the tabs are now Child items (epics) · Progress ·
-  Decisions & Questions · Attachments · History. A non-epic card opens on **Progress**
-  (was Attachments); an epic still opens on Child items. Progress shows its live-note
+  Decisions & Questions · Attachments · History. A non-epic card still opens on
+  **Attachments** (David, 2026-09-17) and an epic on Child items. Progress shows its live-note
   count and Decisions & Questions an accent pill with the open-question count. The
   header is a grid row across the page and the tab column is a sibling of the
   description editor, **outside** its remount (abandon, a change underneath), so an open
@@ -300,23 +300,39 @@ The card page shows them in two tabs beside the description
   linked, or **Link** one of the card's active decisions); on an active decision
   **supersede** (swap arrows: a new decision replaces it, the old one is kept as
   superseded). Every icon has `title` + `aria-label`.
-- **Editing an entry is the card body's model exactly** (Save on finish, KANBAN-42 as
-  revised): nothing written while typing; **Esc**, **⌘/Ctrl+Enter**, a **press outside the
-  editor**, or **leaving the page** saves once, then the editor closes; the **abandon**
-  icon discards with no write; a failed save keeps the editor open with the text ("Save
-  failed (…). Nothing lost. Esc to retry."). Each open mints an `edit_session`, so a
-  keepalive save on leaving plus the finish still make one version.
-- **New entries are explicit.** Composers (new note/question/decision, answer,
-  supersede) create nothing until **Add/Ask/Record/Supersede** or **⌘/Ctrl+Enter**. A stray
-  Esc must never post a decision, so **Esc settles**: it blurs and keeps the text (an empty
-  composer just closes). Their text is still a browser draft, so it survives a crash or
-  leaving the page. The abandon icon ("Discard this draft") drops it.
+- **Every entry editor is the card body's model exactly** (Save on finish, KANBAN-42 as
+  revised), editing an existing entry and writing a new one alike (`DraftEditor`):
+  nothing written while typing; **Esc**, **⌘/Ctrl+Enter**, a **press outside the
+  editor**, the composer's **Add/Ask/Record/Supersede** button, or **leaving the page**
+  writes once (a PATCH for an edit, a POST for a new entry), then the editor closes; the
+  **abandon** icon discards with no write; a failed write keeps the editor open with the
+  text ("Save failed (…) / Not added (…). Nothing lost. Esc to retry.").
+  - **New entries (David, 2026-09-17):** Esc or click-off **posts** a composer, like any
+    edit. An **empty or whitespace-only** composer posts nothing and just closes. (The
+    first build made Esc keep the text instead; David reversed that.)
+  - An existing entry can't be emptied: finishing blank says "Text is required. Abandon
+    changes to keep the old text."
+  - **One edit, one write.** Each open mints an `edit_session` (edits coalesce). While a
+    write is in flight nothing else is sent: a second finish (Esc then click-off, tab
+    close during a save) shares it. Tab close or reload finishes with a `keepalive`
+    request; an unmount that wasn't preceded by a finish (browser Back) does too, but
+    only for text **typed in this open** (so a restored draft isn't posted by a
+    StrictMode remount). Every write is passed to `trackPendingSave`, so the board
+    waits for it and its badge isn't stale.
+  - **Switching editors, tabs or pages finishes first.** Opening another editor on an
+    entry (e.g. Answer while an edit is saving) awaits the open editor's finish; if it
+    fails, you stay in it and see why, and a late finish never closes the newer editor.
+    Switching card-page tabs goes through the same `finishAll` as leaving.
 - **Draft keys, one per editor** (several can be open on one page). All go through
   `draftKey(scope, id, field)` from `lib/abandon.ts`, with the scope/id from
   `entryDraftScope`: editing `mykan:draft:v1:entry:<entryId>:body`; composers
   `entry-new:<itemId>:<kind>`, `entry-answer:<questionId>`, `entry-supersede:<decisionId>`.
   The card's own description stays `item:<itemId>:<field>`, so nothing collides.
-- **Leftover drafts resolve per entry.** A row checks storage for its own editors (edit,
+- **Leftover drafts resolve per entry.** Storage is read with `useSyncExternalStore`
+  (nothing on the server render, so no hydration mismatch). A composer's leftover whose
+  text already exists as the entry it would have created (a keepalive post that landed
+  before the page could clear its draft) is forgotten silently (`composerDraftLanded`),
+  so it is never posted twice. A row checks storage for its own editors (edit,
   and answer/supersede where they apply) and shows a small prompt **in that row**:
   "Unsaved edit to this entry from 3:42 PM" with **Discard** and **Restore** (plus the
   stale warning when the entry changed since). A composer's leftover shows under its "+"
@@ -328,14 +344,14 @@ The card page shows them in two tabs beside the description
 - **Plain textarea with a count.** Entries are stored as **plain text** capped at
   **2,000 characters** (`ENTRY_MAX_CHARS` in `lib/item-entries-rules.ts`, the one number MCP
   and the web routes both enforce; over it nothing is saved, never truncated). The footer
-  shows `N / 2,000` (red past the cap) and the hint "Enter for newline · ⌘/Ctrl+Enter to
-  save/add" (the Enter exception above).
+  shows `N / 2,000` (red past the cap) and the hint "Enter for newline · Esc, ⌘/Ctrl+Enter
+  or click away to save/add" (the Enter exception above).
 - **Rendered as markdown, safely.** Bodies are displayed with `react-markdown` +
   `remark-gfm` (`components/EntryMarkdown.tsx`): bold, italics, lists, inline and fenced
   code, links, bare-URL autolinks, strikethrough, task lists, tables. **No raw HTML**
   (`skipHtml`, no rehype-raw), unsafe URL protocols are blanked by react-markdown's default
   `urlTransform`, links open in a new tab with `rel="noopener noreferrer nofollow"`, images
-  are not rendered (alt text only), and headings render as bold lines. Identifiers like
+  are not rendered (an image renders as nothing), and headings render as bold lines. Identifiers like
   `edit_session` stay literal (CommonMark's intraword-underscore rule), which is why the
   in-house `lib/markdown-tiptap.ts` (GitHub import only) was not reused. Styles: `.entry-md`
   on top of `.prose-mykan` in `globals.css`.
@@ -348,11 +364,17 @@ The card page shows them in two tabs beside the description
   handler lives on the editor itself: typing `j k l h 0 G / u d o` in an entry only types.
   An editor's Esc is marked handled, so the card page doesn't also finish the description
   or leave.
-- **Web write path:** `app/api/items/[id]/entries` (GET all incl. deleted, POST add),
+- **Loading.** The first page always carries **every** live open question and active
+  decision, however old (`isPinnedEntry`), plus the newest 100 of everything else
+  (progress, superseded, answered, deleted) and any entry those link to (answered by /
+  superseded by). A **Load older entries** button at the bottom of either panel fetches
+  the next 100 (`?before=<cursor>`).
+- **Web write path:** `app/api/items/[id]/entries` (GET paged as above, POST add),
   `…/[entryId]` (PATCH text with `edit_session`, DELETE soft), `…/restore`, `…/answer`,
   `…/supersede`, `…/versions`. Each checks the session, the entry's visibility through its
   item, and that the entry belongs to the item in the URL; writes are `source: 'web'`
-  (version restores `recovery`).
+  (version restores `recovery`). Answering with a `decision_id` from another item is the
+  same "Entry not found" 404 as a missing id (web and MCP), so it reveals nothing.
 
 ## Open-questions badge on board cards and list rows (KANBAN-38)
 
