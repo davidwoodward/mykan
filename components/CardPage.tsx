@@ -12,7 +12,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RichTextEditor, type EditorRead } from "@/components/RichTextEditor";
 import { AbandonButton } from "@/components/AbandonButton";
-import { IconTip } from "@/components/IconTip";
 import { useAbandonable, type PendingRestore } from "@/components/useAbandonable";
 import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
@@ -865,7 +864,7 @@ function CopyLinkButton({ path }: { path: string }) {
 function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolean }) {
   const label = "Save changes";
   return (
-    <span className="relative inline-flex shrink-0">
+    <span className="inline-flex shrink-0">
       <button
         type="button"
         onPointerDown={(e) => e.preventDefault()}
@@ -873,7 +872,8 @@ function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolea
         onClick={onSave}
         disabled={disabled}
         aria-label={label}
-        className="peer grid h-7 w-7 place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-faint)]"
+        title={label}
+        className="grid h-7 w-7 place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-faint)]"
       >
         {/* A floppy disk: body with a clipped corner, the label and the shutter. */}
         <svg
@@ -891,7 +891,6 @@ function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolea
           <path d="M7 3v4h7" />
         </svg>
       </button>
-      <IconTip label={label} />
     </span>
   );
 }

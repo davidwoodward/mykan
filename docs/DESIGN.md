@@ -283,7 +283,8 @@ Every card has its own page, and no user-facing URL carries a GUID.
   (KANBAN-46, David 2026-09-17): a floppy-disk outline that saves the description and tags
   once and **stays on the page**; disabled while nothing is unsaved or a save is in flight.
   Like abandon, a press doesn't take focus (the caret stays in the description) and isn't
-  a click-off; `aria-label` plus the shared `IconTip`, no native `title`.
+  a click-off; `aria-label` plus the shared `IconTip`, no native `title`. (KANBAN-47: now
+  `aria-label` + `title`, shown promptly by the app-wide tooltip layer.)
 - **Opening a card.** The pencil on a row/card is a real link to `/KEY-N` (Cmd/Ctrl-click
   opens a tab); a plain click, a double-click on the text, or **Enter** on the selected
   card (keyboard navigation on) goes to the page. Epic chips and child rows are links to
