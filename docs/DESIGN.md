@@ -42,6 +42,16 @@ to the single fixed-column row (status · ref · content · controls). The trans
 trailing controls, so the desktop row is byte-for-byte unchanged. (The hover-only Delete is
 made tap-visible below `sm`, since touch has no hover.)
 
+**Row actions sit up by the type pill (KANBAN-12).** At `sm+` the trailing controls are no longer
+`sm:contents`: they are one cluster pinned to the top of the row (`sm:self-start`), level with
+the first line of text, in this order: open pencil · GitHub not-synced flag (when present) ·
+attachments clip · history clock (hover) · **type pill** · **delete trash icon** (hover). Delete
+is an icon, not the word, and stays last (after the pill, never beside the pencil) so it isn't
+easy to hit by accident; it is the same one-click soft delete (archive, restorable from the
+archived view) and stays tap-visible below `sm`. Every icon in the cluster uses the prompt
+styled tooltip (below), not a native `title`. The archived view's Restore / Delete forever
+words are unchanged.
+
 ## Header & nav
 
 - **One app-shell width, every page.** This is an **app layout, not per-page** — every page's
@@ -533,3 +543,8 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   once on keyboard focus (`IconTip` in `components/EntryPanels.tsx`, the same styling in
   `components/AbandonButton.tsx`). They keep `aria-label`. Don't show both a native and a styled
   tooltip on one button.
+- **`IconTip` is shared** (`components/IconTip.tsx`, KANBAN-12): wrap the button in a `relative`
+  span, give the button `peer`, put `<IconTip label="…" />` after it. The tooltip text is short
+  ("Delete", "Open card"); the `aria-label` can be longer and name the item. Also used by the
+  row/card pencil (`EditButton`), attachments clip (`InlineAttachments`, hidden while its
+  popover is open), history clock (`ItemHistory`) and the list row's delete icon.

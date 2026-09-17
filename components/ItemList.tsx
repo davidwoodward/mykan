@@ -32,6 +32,7 @@ import { GithubItemMeta } from "@/components/GithubItemMeta";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
+import { IconTip } from "@/components/IconTip";
 import { RefBadge, useProjectKey } from "@/components/RefBadge";
 import { cardPath } from "@/lib/card-url";
 import { ItemAssignees } from "@/components/AssigneePicker";
@@ -480,14 +481,16 @@ function ItemRow({
           className="mt-1 block"
         />
       </div>
-      {/* Trailing controls: their own row below the content on small screens;
-          `display:contents` at sm+ lets them flow back into the row as before. */}
-      <div className="flex items-center gap-3 sm:contents">
+      {/* Trailing controls: their own row below the content on small screens.
+          At sm+ they are one cluster pinned to the TOP of the row, level with
+          the type pill and the first line of text (KANBAN-12), rather than
+          each icon floating to the vertical middle of a tall row. */}
+      <div className="flex items-center gap-3 sm:shrink-0 sm:self-start">
         <EditButton
           onClick={() => onOpen(item)}
           href={projectKey ? cardPath(projectKey, item.number) : undefined}
           label={text || "item"}
-          className="self-center sm:mt-0.5"
+          className="self-center"
         />
         <GithubSyncBadge item={item} onItemChange={onItemChange} />
         <InlineAttachments item={item} onItemChange={onItemChange} />
@@ -522,14 +525,34 @@ function ItemRow({
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => onArchive(item.id)}
-            className="self-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-bug)] sm:invisible sm:group-hover:visible"
-            aria-label={`Delete ${text || "item"}`}
-          >
-            Delete
-          </button>
+          // Delete (soft: archives, restorable from the archived view) as a
+          // trash icon (KANBAN-12). Still last, after the type pill, so it isn't
+          // beside the pencil; still hover-only at sm+ and always shown below sm
+          // (touch has no hover).
+          <span className="relative inline-flex shrink-0 self-center sm:invisible sm:group-hover:visible">
+            <button
+              type="button"
+              onClick={() => onArchive(item.id)}
+              aria-label={`Delete ${text || "item"}`}
+              className="peer grid h-6 w-6 place-items-center rounded text-[var(--color-faint)] outline-none transition-colors hover:text-[var(--color-bug)] focus-visible:text-[var(--color-bug)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              </svg>
+            </button>
+            <IconTip label="Delete" />
+          </span>
         )}
       </div>
     </li>
