@@ -13,6 +13,7 @@ import { Byline } from "@/components/Byline";
 import { AbandonButton } from "@/components/AbandonButton";
 import { ProjectShareControl } from "@/components/ProjectShareControl";
 import type { Project } from "@/lib/types";
+import { KEY_MAX, keyError, normalizeKeyInput, projectPath } from "@/lib/card-url";
 
 export function ProjectsView({
   viewerEmail,
@@ -71,15 +72,19 @@ export function ProjectsView({
     setSharedWith([]);
   }
 
-  // Live-suggested key from the typed name, matching the project-edit panel.
-  const suggestedKey = (name.match(/[A-Za-z0-9]/g) ?? [])
+  // Live-suggested key from the typed name (letters/digits, starting with a
+  // letter). A key is required and permanent (KANBAN-44): it is the project's
+  // URL (/KEY) and every card's ref (KEY-12). A blank field uses the suggestion.
+  const suggestedKey = (name.replace(/^[^A-Za-z]+/, "").match(/[A-Za-z0-9]/g) ?? [])
     .join("")
     .slice(0, 4)
     .toUpperCase();
+  const effectiveKey = normalizeKeyInput(key) || suggestedKey;
+  const keyProblem = name.trim() || key ? keyError(effectiveKey) : null;
 
   async function createProject() {
     const trimmed = name.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || keyError(effectiveKey)) return;
     setBusy(true);
     setError(null);
     try {
@@ -89,11 +94,17 @@ export function ProjectsView({
         body: JSON.stringify({
           name: trimmed,
           description: description.trim() || null,
-          key: key.trim().toUpperCase() || null,
+          key: effectiveKey,
           sharedWith,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const msg = await res
+          .json()
+          .then((d: { error?: unknown }) => (typeof d.error === "string" ? d.error : null))
+          .catch(() => null);
+        throw new Error(msg ?? `HTTP ${res.status}`);
+      }
       const created = (await res.json()) as Project;
       startTransition(() => {
         setProjects((prev) => (prev ? [created, ...prev] : [created]));
@@ -225,18 +236,26 @@ export function ProjectsView({
             <input
               value={key}
               onChange={(e) =>
-                setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))
+                setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, KEY_MAX))
               }
               onKeyDown={onKeyInputKeyDown}
               placeholder={suggestedKey || "KEY"}
-              maxLength={6}
+              maxLength={KEY_MAX}
               aria-label="Project key"
-              className="w-24 rounded border border-[var(--color-line)] bg-transparent px-2 py-1 font-mono text-sm uppercase tracking-wide outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
+              aria-invalid={keyProblem ? true : undefined}
+              className="w-28 rounded border border-[var(--color-line)] bg-transparent px-2 py-1 font-mono text-sm uppercase tracking-wide outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
             />
             <span className="font-mono text-xs text-[var(--color-faint)]">
-              {(key.trim() || suggestedKey || "KEY")}-12 · prefixes item refs
+              /{effectiveKey || "KEY"} · {effectiveKey || "KEY"}-12
             </span>
           </div>
+          <p
+            className={`mt-1 text-[11px] leading-snug ${
+              keyProblem ? "text-[var(--color-bug)]" : "text-[var(--color-faint)]"
+            }`}
+          >
+            {keyProblem ?? "The project's address and card prefix. Permanent: it can't be changed later."}
+          </p>
 
           <div className="mt-3 flex items-center justify-between gap-2">
             <span className="text-xs text-[var(--color-faint)]">Shared with</span>
@@ -259,7 +278,7 @@ export function ProjectsView({
             <button
               type="button"
               onClick={createProject}
-              disabled={busy || !name.trim()}
+              disabled={busy || !name.trim() || !!keyError(effectiveKey)}
               className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               Create
@@ -285,7 +304,7 @@ export function ProjectsView({
             {projects.map((p) => (
               <li key={p.id} className="group flex items-start gap-4 py-3">
                 <Link
-                  href={`/projects/${p.id}`}
+                  href={p.key ? projectPath(p.key) : `/projects/${p.id}`}
                   className="flex min-w-0 flex-1 flex-col py-0.5"
                 >
                   <span className="truncate font-medium group-hover:text-[var(--color-accent-ink)]">

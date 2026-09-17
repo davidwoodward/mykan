@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { itemRef } from "@/lib/format";
+import { cardPath } from "@/lib/card-url";
 import {
   STATUS_LABEL,
   epicProgress,
@@ -28,7 +29,7 @@ import { linkSequentially, sortByStatusThenNumber, type LinkFailure } from "@/li
  *
  * Where things live: board cards and list rows only SHOW a child's epic (a chip
  * that opens it) and an epic's "N/M done". Linking and unlinking — "Add parent",
- * "Remove parent", "Add child", remove-from-epic — live in the detail modal (and
+ * "Remove parent", "Add child", remove-from-epic — live on the card page (and
  * the Add Item modal), so the board isn't cluttered with a link control on every
  * card.
  */
@@ -41,7 +42,7 @@ type EpicValue = {
   epics: Item[];
   /** An epic's children, archived included, by status then number. */
   childrenOf: (epicId: string) => Item[];
-  /** Open an item's detail modal. */
+  /** Go to an item's card page (/KEY-N). */
   open: (id: string) => void;
   /** Link (or clear with null) an item's parent epic. */
   setParent: (id: string, parentId: string | null) => Promise<void>;
@@ -239,7 +240,7 @@ function CheckIcon() {
  * Item typeahead used by every epic link picker. Opens on focus (optionally
  * seeded with the current value's ref, selected so typing replaces it) and
  * filters by ref or title; ↑/↓ move, Enter picks the highlighted row, Esc closes
- * without changing anything (and without closing the modal underneath), Tab
+ * without changing anything (and without leaving the card page underneath), Tab
  * moves on (blur closes, never picks). The list is an overlay; mouse and touch
  * pick with a press. Each option shows its status.
  *
@@ -548,7 +549,47 @@ function ParentPicker({
   );
 }
 
-/** The epic chip: ref + title, click opens the epic. */
+/**
+ * A link to a card's page (/KEY-N, KANBAN-44). A real anchor, so the URL shows
+ * on hover and Cmd/Ctrl/middle-click opens it in a new tab; a plain click goes
+ * through the context's `open`, which lets the current page finish first (the
+ * board remembers its scroll; the card page saves an edit in progress).
+ */
+export function CardLink({
+  item,
+  className,
+  title,
+  ariaLabel,
+  children,
+}: {
+  item: Pick<Item, "id" | "number">;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+  children: React.ReactNode;
+}) {
+  const ctx = useEpics();
+  const key = useProjectKey();
+  return (
+    <a
+      href={key ? cardPath(key, item.number) : undefined}
+      onClick={(e) => {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+          return;
+        }
+        e.preventDefault();
+        ctx?.open(item.id);
+      }}
+      title={title}
+      aria-label={ariaLabel}
+      className={className}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** The epic chip: ref + title, a link to the epic's page. */
 function EpicChip({ epicId, className = "" }: { epicId: string; className?: string }) {
   const ctx = useEpics();
   const key = useProjectKey();
@@ -556,27 +597,38 @@ function EpicChip({ epicId, className = "" }: { epicId: string; className?: stri
   const parent = ctx.byId.get(epicId);
   const ref = parent ? itemRef(key, parent.number) : null;
   const title = parent ? titleOf(parent) : "Epic not loaded";
-  return (
-    <button
-      type="button"
-      onClick={() => parent && ctx.open(parent.id)}
-      disabled={!parent}
-      title={parent ? `Open epic ${ref}: ${title}` : title}
-      aria-label={parent ? `Open parent epic ${ref}: ${title}` : title}
-      className={`inline-flex min-w-0 max-w-[16rem] items-center gap-1 rounded bg-[var(--color-epic-bg)] px-1.5 py-0.5 text-[11px] text-[var(--color-epic)] ring-1 ring-inset ring-[var(--color-epic-line)] transition-opacity hover:opacity-90 ${className}`}
-    >
+  const chipClass = `inline-flex min-w-0 max-w-[16rem] items-center gap-1 rounded bg-[var(--color-epic-bg)] px-1.5 py-0.5 text-[11px] text-[var(--color-epic)] ring-1 ring-inset ring-[var(--color-epic-line)] transition-opacity hover:opacity-90 ${className}`;
+  const inner = (
+    <>
       <EpicIcon />
       {ref ? <span className="shrink-0 font-mono">{ref}</span> : null}
       <span className="truncate">{title}</span>
       {parent?.archived_at ? <span className="shrink-0 opacity-70">(archived)</span> : null}
-    </button>
+    </>
+  );
+  if (!parent) {
+    return (
+      <span title={title} className={chipClass}>
+        {inner}
+      </span>
+    );
+  }
+  return (
+    <CardLink
+      item={parent}
+      title={`Open epic ${ref}: ${title}`}
+      ariaLabel={`Open parent epic ${ref}: ${title}`}
+      className={chipClass}
+    >
+      {inner}
+    </CardLink>
   );
 }
 
 /**
  * Read-only parent link for board cards and list rows: the epic chip, which
  * opens the epic. Nothing when the item has no parent. Editing the link lives
- * in the detail modal.
+ * on the card page.
  */
 export function ParentChip({ item, className = "" }: { item: Item; className?: string }) {
   if (item.type === "epic" || !item.parent_id) return null;
@@ -584,7 +636,7 @@ export function ParentChip({ item, className = "" }: { item: Item; className?: s
 }
 
 /**
- * The "Parent epic" row in a non-epic item's detail modal: the epic chip with
+ * The "Parent epic" row on a non-epic card's page: the epic chip with
  * "Change parent" and "Remove parent" icon actions, or a labelled "Add parent"
  * action that opens the epic picker.
  */
@@ -593,7 +645,7 @@ export function ParentRow({ item }: { item: Item }) {
   const [editing, setEditing] = useState(false);
   if (!ctx || item.type === "epic") return null;
 
-  // A parent pick is its own immediate, recorded write, not part of the modal's
+  // A parent pick is its own immediate, recorded write, not part of the card page's
   // draft: the epic guards answer at pick time, and Abandon changes doesn't
   // undo it (relink to undo). See docs/DESIGN.md "Abandon changes".
   function setParent(parentId: string | null) {
@@ -724,7 +776,7 @@ export function DraftParent({
 }
 
 /**
- * The epic's children in its detail modal: "N/M done", an "Add child" action
+ * The epic's children on its card page: "N/M done", an "Add child" action
  * (typeahead over cards in the project that can become its child), and a
  * clickable list (ref, title, status) where each child has a remove-from-epic
  * icon action. Archived children still reference the epic but are left out of
@@ -732,7 +784,7 @@ export function DraftParent({
  * the child's history.
  */
 /**
- * The epic's children in its detail modal: "N/M done", an "Add child" action
+ * The epic's children on its card page: "N/M done", an "Add child" action
  * (a multi-select typeahead over cards in the project that can become its
  * child), and a clickable list (ref, title, status) where each child has a
  * remove-from-epic icon action. Both lists read status (board column order) then
@@ -880,11 +932,10 @@ export function EpicChildren({ item }: { item: Item }) {
             const title = titleOf(c);
             return (
               <li key={c.id} className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => ctx.open(c.id)}
+                <CardLink
+                  item={c}
                   title={`Open ${ref}: ${title}`}
-                  aria-label={`Open child item ${ref}: ${title}`}
+                  ariaLabel={`Open child item ${ref}: ${title}`}
                   className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
                 >
                   <span className="w-20 shrink-0 font-mono text-[11px] text-[var(--color-faint)]">
@@ -902,7 +953,7 @@ export function EpicChildren({ item }: { item: Item }) {
                   <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
                     {STATUS_LABEL[c.status]}
                   </span>
-                </button>
+                </CardLink>
                 <button
                   type="button"
                   onClick={() => ctx.setParent(c.id, null)}

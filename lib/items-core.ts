@@ -38,6 +38,7 @@ import {
 } from "@/lib/projects-core";
 import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
 import { deleteWithChildHistory, describeDeleteFailure } from "@/lib/epic-delete";
+import { cardUrl } from "@/lib/card-url";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,6 +48,11 @@ const REF_RE = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/;
 /** The display reference for an item: "{key}-{number}", or "#{number}" if keyless. */
 export function refOf(key: string | null, number: number): string {
   return key ? `${key}-${number}` : `#${number}`;
+}
+
+/** The card page's full URL, e.g. https://kanban.dbwoodward.com/AMOS-12 (KANBAN-44). */
+export function urlOf(key: string | null, number: number): string | null {
+  return key ? cardUrl(key, number) : null;
 }
 
 /**
@@ -97,6 +103,8 @@ export type ItemSummary = {
   id: string;
   /** "{KEY}-{N}" reference, e.g. "AMOS-12". */
   ref: string;
+  /** The card page, e.g. "https://kanban.dbwoodward.com/AMOS-12" (null if the project has no key). */
+  url: string | null;
   number: number;
   /** Title: the first non-empty line of the body (see `richDocTitle`). */
   name: string;
@@ -182,6 +190,7 @@ async function detailOf(
   return {
     id: it.id,
     ref: refOf(project.key, it.number),
+    url: urlOf(project.key, it.number),
     number: it.number,
     project_id: it.project_id,
     name: richDocTitle(it.body),
@@ -245,6 +254,7 @@ export async function listItems(
     rows.map((it) => ({
       id: it.id,
       ref: refOf(proj.data.key, it.number),
+      url: urlOf(proj.data.key, it.number),
       number: it.number,
       name: richDocTitle(it.body),
       type: it.type,

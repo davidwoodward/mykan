@@ -9,6 +9,7 @@ import { runAsMcpActor } from "@/lib/mcp-actor-context";
 import { looksLikeMcpToken, verifyMcpToken } from "@/lib/mcp-tokens";
 import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
+import { projectUrl } from "@/lib/card-url";
 import { refreshItemFromGithub } from "@/lib/github-core";
 import {
   appendItemNote,
@@ -67,14 +68,18 @@ const CAP = `${MCP_ENTRY_MAX_CHARS.toLocaleString("en-US")} characters`;
 function registerTools(server: McpServer) {
   server.tool(
     "list_projects",
-    "List mykan projects visible to the agent (id, name, privacy).",
+    "List mykan projects visible to the agent (id, name, key, privacy). Each row's `url` is the project's board, e.g. https://kanban.dbwoodward.com/KANBAN.",
     {},
-    async () => out(await listProjects(getSupabase(), actor())),
+    async () => {
+      const r = await listProjects(getSupabase(), actor());
+      if (!r.ok) return out(r);
+      return json(r.data.map((p) => ({ ...p, url: p.key ? projectUrl(p.key) : null })));
+    },
   );
 
   server.tool(
     "list_items",
-    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
+    "List non-archived items in a project. `project` is a name or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
     {
       project: z.string().describe("project name or id"),
       status: status.optional().describe("new | in_progress | blocked | testing | done"),
@@ -84,7 +89,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, and ref. `item` is the item id or a KEY-N reference (e.g. AMOS-12). `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body (the card's description, a living spec) as plain text, title line included. `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12). `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body (the card's description, a living spec) as plain text, title line included. `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z

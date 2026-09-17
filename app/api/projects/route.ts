@@ -4,6 +4,8 @@ import { requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { normalizeAssignees } from "@/lib/types";
 import { listProjects } from "@/lib/projects-core";
+import { normalizeKeyInput } from "@/lib/card-url";
+import { keyConstraintMessage, projectKeyWriteError } from "@/lib/project-keys";
 
 export async function GET() {
   const gate = await requireSession();
@@ -28,11 +30,11 @@ export async function POST(req: Request) {
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
   const description =
     typeof body.description === "string" ? body.description : null;
-  // Short uppercase reference key (e.g. AMOS), mirroring the project-edit panel.
-  const key =
-    typeof body.key === "string"
-      ? body.key.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null
-      : null;
+  // The project key (e.g. FPOON) is required and permanent (KANBAN-44): it is
+  // the board's URL (/FPOON) and every card's ref prefix (FPOON-42).
+  const key = normalizeKeyInput(body.key);
+  const keyErr = await projectKeyWriteError(getSupabase(), key);
+  if (keyErr) return NextResponse.json({ error: keyErr.error }, { status: keyErr.status });
 
   // The creator owns the project; optionally share it with whitelisted members
   // at creation. Empty (the default) means private. `is_private` mirrors it.
@@ -60,6 +62,9 @@ export async function POST(req: Request) {
     .insert(insert)
     .select()
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    const msg = keyConstraintMessage(error);
+    return NextResponse.json({ error: msg ?? error.message }, { status: msg ? 400 : 500 });
+  }
   return NextResponse.json(data, { status: 201 });
 }

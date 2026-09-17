@@ -28,6 +28,7 @@ export function RichTextEditor({
   onUploadImage,
   autoFocus = false,
   readRef,
+  contentClassName = "prose-mykan min-h-40 max-h-[60vh] overflow-y-auto px-3 py-2 outline-none",
 }: {
   value: RichDoc | null;
   /**
@@ -46,6 +47,12 @@ export function RichTextEditor({
    * hide) without waiting for the debounced `onChange`. Null while unmounted.
    */
   readRef?: MutableRefObject<(() => EditorRead) | null>;
+  /**
+   * Classes on the editable area. The default caps its height and scrolls
+   * inside (dialogs); the card page lets its column do the scrolling instead.
+   * Read once, when the editor is created.
+   */
+  contentClassName?: string;
 }) {
   // Keep the latest callbacks in refs so the editor's static editorProps
   // closures always call through to current values without re-initialising.
@@ -71,8 +78,7 @@ export function RichTextEditor({
     autofocus: autoFocus ? "end" : false,
     editorProps: {
       attributes: {
-        class:
-          "prose-mykan min-h-40 max-h-[60vh] overflow-y-auto px-3 py-2 outline-none",
+        class: contentClassName,
       },
       handlePaste: (_view, event) => handleImageFiles(event.clipboardData),
       handleDrop: (_view, event) => handleImageFiles(event.dataTransfer),
