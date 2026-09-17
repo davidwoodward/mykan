@@ -85,7 +85,6 @@ export function InlineTags({
           {/* The draft commits on Enter/blur; abandoning drops it. */}
           <AbandonButton
             size="sm"
-            tooltipAlign="left"
             onAbandon={() => {
               abandoned.current = true;
               setDraft("");

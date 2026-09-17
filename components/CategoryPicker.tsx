@@ -231,7 +231,6 @@ export function PathInput({
       {showAbandon ? (
         <AbandonButton
           size="sm"
-          tooltipAlign="left"
           onAbandon={() => {
             if (keepOpen) {
               setDraft("");
