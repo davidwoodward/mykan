@@ -413,8 +413,7 @@ function ItemRow({
             type="button"
             {...sortable.handleProps}
             aria-label="Drag to reorder"
-            title="Drag to reorder"
-            className="shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing sm:mt-1"
+              className="shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing sm:mt-1"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <circle cx="9" cy="6" r="1.4" />
