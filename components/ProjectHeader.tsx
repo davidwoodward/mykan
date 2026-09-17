@@ -342,6 +342,20 @@ export function ProjectHeader({
 
       {editing ? (
         <div className="absolute left-0 top-full z-30 mt-2 w-[min(90vw,24rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-lg">
+          {/* Header mirrors the card page: title left, abandon top-right.
+              Nothing saves until commit, so abandoning just drops the drafts. */}
+          <div className="-mt-1 mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-[var(--color-muted)]">Edit project</span>
+            <AbandonButton
+              disabled={status === "saving"}
+              onAbandon={() => {
+                setStatus("idle");
+                setSaveError(null);
+                setConfirmingKey(false);
+                setEditing(false);
+              }}
+            />
+          </div>
           <label className="block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
             Name
           </label>
@@ -513,17 +527,6 @@ export function ProjectHeader({
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </button>
-            {/* Nothing saves until commit, so abandoning drops the drafts. */}
-            <AbandonButton
-              tooltipAlign="left"
-              disabled={status === "saving"}
-              onAbandon={() => {
-                setStatus("idle");
-                setSaveError(null);
-                setConfirmingKey(false);
-                setEditing(false);
-              }}
-            />
             <span className="text-[10px] text-[var(--color-faint)]">
               {status === "saving"
                 ? "Saving…"
