@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { displayName, timeAgo } from "@/lib/format";
 import type { Item } from "@/lib/types";
+import { IconTip } from "@/components/IconTip";
 
 /** Mirrors HistoryEntry in app/api/items/[id]/history/route.ts. */
 type HistoryEntry = {
@@ -35,24 +36,27 @@ export function ItemHistory({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="History"
-        aria-label={label ? `History for ${label}` : "History"}
-        className={`inline-flex shrink-0 items-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-accent)] ${className}`}
-      >
-        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-          <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-          <path
-            d="M12 7.5V12l3 2"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+      {/* Prompt styled tooltip, no native `title`; `className` is on the wrapper. */}
+      <span className={`relative inline-flex shrink-0 ${className}`}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={label ? `History for ${label}` : "History"}
+          className="peer inline-flex shrink-0 items-center text-xs text-[var(--color-faint)] transition-colors hover:text-[var(--color-accent)]"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M12 7.5V12l3 2"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        <IconTip label="History" />
+      </span>
       {open ? (
         <HistoryPanel
           item={item}

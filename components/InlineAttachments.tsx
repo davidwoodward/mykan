@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Attachments } from "@/components/Attachments";
+import { IconTip } from "@/components/IconTip";
 import type { Item } from "@/lib/types";
 
 /**
@@ -20,6 +21,8 @@ export function InlineAttachments({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const count = item.attachments.length;
+  // Prompt styled tooltip (no native `title`: too slow); hidden while open.
+  const tip = count ? `${count} attachment${count > 1 ? "s" : ""}` : "Attach a file";
 
   useEffect(() => {
     if (!open) return;
@@ -42,9 +45,8 @@ export function InlineAttachments({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title={count ? `${count} attachment${count > 1 ? "s" : ""}` : "Attach a file"}
-        aria-label={count ? `${count} attachments` : "Attach a file"}
-        className={`inline-flex shrink-0 items-center gap-0.5 text-xs transition-colors hover:text-[var(--color-accent)] ${
+        aria-label={tip}
+        className={`peer inline-flex shrink-0 items-center gap-0.5 text-xs transition-colors hover:text-[var(--color-accent)] ${
           count > 0
             ? "text-[var(--color-faint)]"
             : "invisible text-[var(--color-faint)] group-hover:visible"
@@ -61,6 +63,7 @@ export function InlineAttachments({
         </svg>
         {count > 0 ? count : null}
       </button>
+      {open ? null : <IconTip label={tip} />}
 
       {open ? (
         <div className="absolute right-0 top-6 z-30 w-80 max-w-[80vw] rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-2.5 shadow-lg">

@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { AbandonButton } from "@/components/AbandonButton";
+import { IconTip } from "@/components/IconTip";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { EntryMarkdown } from "@/components/EntryMarkdown";
 import { useAbandonable, type PendingRestore } from "@/components/useAbandonable";
@@ -739,24 +740,6 @@ function IconButton({
         </svg>
       </button>
       <IconTip label={label} />
-    </span>
-  );
-}
-
-/**
- * A prompt tooltip for an icon button: the button is its `peer`. Right-aligned,
- * since entry row actions sit at the row's right edge.
- */
-function IconTip({ label, align = "right" }: { label: string; align?: "left" | "right" }) {
-  return (
-    <span
-      role="presentation"
-      aria-hidden="true"
-      className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded bg-[var(--color-ink)] px-1.5 py-0.5 text-[11px] font-normal normal-case tracking-normal text-[var(--color-surface)] opacity-0 shadow transition-opacity duration-100 peer-hover:opacity-100 peer-hover:delay-150 peer-focus-visible:opacity-100 ${
-        align === "right" ? "right-0" : "left-0"
-      }`}
-    >
-      {label}
     </span>
   );
 }
