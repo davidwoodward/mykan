@@ -627,6 +627,14 @@ and `lg:top-7` at `lg` (the list is its own scroll region), plus `sm:z-[1]` so a
 sits above the text it passes over. Phones in portrait (below `sm`) don't pin: there the strip is
 its own line above the text.
 
+## What a card's main text is called (David, 2026-09-18)
+
+In anything David reads, a card's main text is its **text** ("The card's text changed since
+then…", the editor's accessible name "Card text"). Not "description": that is the label on a
+PROJECT's description field, and it is the mykan MCP's name for this same field
+(`set_item_body` writes "the card's description"). Code and MCP keep `body`/"description"; the
+screen says "text".
+
 ## The card header's save and abandon icons (David, 2026-09-18)
 
 - **Save is green (`--color-save`) only while something is unsaved**, and grey otherwise — the
