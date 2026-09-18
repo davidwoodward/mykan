@@ -593,6 +593,18 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   *Removed in KANBAN-47:* every one of those now uses a plain `title` (same short text) and the
   layer below; `IconTip` and `AbandonButton`'s inline copy (and their `tooltipAlign` props) are gone.
 
+## A tall list row keeps its strip in view (KANBAN-13, widened 2026-09-17)
+
+David: the ref alone sticking looked half-done — "the edit/feature, and on the left side move it
+handle and the status do not stay visible". So in the List view at `sm+`, a row taller than the
+viewport keeps its whole top strip pinned while its text scrolls: the drag grip, the status menu,
+the ref (unchanged — it already worked) and the trailing actions (pencil, GitHub flag, clip,
+history, type pill, delete). Same offsets for all of them, one `PINNED`-shaped class string:
+`sm:top-[calc(var(--app-header-h)+1.75rem)]` below `lg` (the page scrolls under the pinned header)
+and `lg:top-7` at `lg` (the list is its own scroll region), plus `sm:z-[1]` so a pinned control
+sits above the text it passes over. Phones in portrait (below `sm`) don't pin: there the strip is
+its own line above the text.
+
 ## Refresh on the card page (2026-09-17)
 
 The card header has a refresh icon beside the ref's copy-link, matching the board's refresh
