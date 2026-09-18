@@ -655,7 +655,7 @@ function CardEditor({
         {/* Main column: the description (its own scroll region on desktop),
             then tags, the parent epic, and GitHub provenance. */}
         <section
-          aria-label="Description"
+          aria-label="Card text"
           className="flex min-w-0 flex-col rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] lg:col-start-1 lg:row-start-2 lg:min-h-0"
         >
           <div
@@ -989,7 +989,9 @@ function formatWhen(iso: string): string {
     : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-const FIELD_LABEL: Record<string, string> = { body: "description", tags: "tags" };
+// What David sees these called. The card's main text is its "text": "description"
+// is the label on a PROJECT's description field, and the MCP's name for this one.
+const FIELD_LABEL: Record<string, string> = { body: "text", tags: "tags" };
 
 /** Offer back a draft left by an earlier visit that never got saved. */
 function RestorePrompt({
