@@ -32,7 +32,12 @@ export function AbandonButton({
   const box = size === "md" ? "h-7 w-7" : "h-6 w-6";
   const icon = size === "md" ? "h-[18px] w-[18px]" : "h-4 w-4";
   return (
-    <span className={`inline-flex shrink-0 ${className}`}>
+    // A disabled button fires no pointer events, so its tip sits on the wrapper
+    // (the tooltip layer walks up to it).
+    <span
+      className={`inline-flex shrink-0 ${className}`}
+      title={disabled ? "Nothing to abandon" : undefined}
+    >
       <button
         type="button"
         onPointerDown={(e) => e.preventDefault()}
@@ -41,7 +46,7 @@ export function AbandonButton({
         disabled={disabled}
         aria-label={label}
         title={disabled ? undefined : label}
-        className={`grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-60`}
+        className={`grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-[var(--color-faint)]`}
       >
         <svg
           className={icon}
