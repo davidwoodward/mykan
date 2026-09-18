@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipLayer } from "@/components/TooltipLayer";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,10 +19,6 @@ export const metadata: Metadata = {
   description: "Projects, items, and a kanban board.",
 };
 
-// Runs before paint to apply the saved theme (or the OS preference) so there's
-// no flash of the wrong theme. Kept tiny and inline; mirrored by ThemeToggle.
-const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`;
-
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -32,7 +29,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Before paint: applies the saved theme (or the OS preference) so there
+            is no flash of the wrong one, and keeps it applied if React ever
+            client-renders the root and rewrites <html>'s className — see
+            lib/theme.ts (KANBAN-49). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         {children}
         <TooltipLayer />
       </body>
