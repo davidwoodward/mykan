@@ -605,6 +605,16 @@ and `lg:top-7` at `lg` (the list is its own scroll region), plus `sm:z-[1]` so a
 sits above the text it passes over. Phones in portrait (below `sm`) don't pin: there the strip is
 its own line above the text.
 
+## The card header's save and abandon icons (David, 2026-09-18)
+
+- **Save is green (`--color-save`) only while something is unsaved**, and grey otherwise — the
+  colour is the "you have work to lose" signal, so it never cries wolf.
+- **With nothing unsaved both icons are disabled** (grey, not pressable): there is nothing to save
+  and nothing to abandon. Their tooltips still work: a disabled button fires no pointer events, so
+  the tip moves to the wrapper span ("Nothing to save" / "Nothing to abandon"), which the tooltip
+  layer finds by walking up.
+- Abandon's disabled state is also used while a save is in flight (it keeps the same grey).
+
 ## Refresh on the card page (2026-09-17)
 
 The card header has a refresh icon beside the ref's copy-link, matching the board's refresh
