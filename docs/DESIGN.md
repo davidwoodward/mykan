@@ -593,6 +593,15 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   *Removed in KANBAN-47:* every one of those now uses a plain `title` (same short text) and the
   layer below; `IconTip` and `AbandonButton`'s inline copy (and their `tooltipAlign` props) are gone.
 
+## Refresh on the card page (2026-09-17)
+
+The card header has a refresh icon beside the ref's copy-link, matching the board's refresh
+control. It re-reads the card, the project's items and the card's entries from the server (the
+entries call replaces what's loaded, so entries deleted elsewhere drop out) — no full page load,
+and no lost work: unsaved edits stay, because the editor only remounts over new stored values
+when nothing is unsaved. It is for catching up with changes made by another session or by Claude
+over MCP.
+
 ## Tooltips: one app-wide layer (KANBAN-47, 2026-09-17)
 
 David, 2026-09-17: "I need tool tips to popup … They are SLOOOOOOW to appear!" (the header GitHub
