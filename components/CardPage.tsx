@@ -631,7 +631,10 @@ function CardEditor({
         <span className="ml-auto flex min-w-0 items-center gap-2 text-xs text-[var(--color-faint)]">
           <DraftIndicator status={draft.status} error={draft.error} dirty={draft.dirty} />
           <span data-keep-draft className="inline-flex items-center gap-1">
-            <AbandonButton onAbandon={onAbandon} disabled={draft.status === "saving"} />
+            <AbandonButton
+              onAbandon={onAbandon}
+              disabled={!draft.dirty || draft.status === "saving"}
+            />
             <SaveButton
               onSave={() => void finish()}
               disabled={!draft.dirty || draft.status === "saving"}
@@ -914,7 +917,7 @@ function RefreshButton({ onRefresh }: { onRefresh: () => Promise<void> }) {
 function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolean }) {
   const label = "Save changes";
   return (
-    <span className="inline-flex shrink-0">
+    <span className="inline-flex shrink-0" title={disabled ? "Nothing to save" : undefined}>
       <button
         type="button"
         onPointerDown={(e) => e.preventDefault()}
@@ -922,8 +925,14 @@ function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolea
         onClick={onSave}
         disabled={disabled}
         aria-label={label}
-        title={label}
-        className="grid h-7 w-7 place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--color-faint)]"
+        // A disabled button fires no pointer events, so its tip lives on the
+        // wrapper span instead (the tooltip layer walks up to it).
+        title={disabled ? undefined : label}
+        className={`grid h-7 w-7 place-items-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent ${
+          disabled
+            ? "text-[var(--color-faint)]"
+            : "text-[var(--color-save)] hover:bg-[var(--color-canvas)]"
+        }`}
       >
         {/* A floppy disk: body with a clipped corner, the label and the shutter. */}
         <svg

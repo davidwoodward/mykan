@@ -40,8 +40,8 @@ export function AbandonButton({
         onClick={onAbandon}
         disabled={disabled}
         aria-label={label}
-        title={label}
-        className={`grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-wait disabled:opacity-50`}
+        title={disabled ? undefined : label}
+        className={`grid ${box} place-items-center rounded-md text-[var(--color-faint)] outline-none transition-colors hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)] focus-visible:text-[var(--color-ink)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-default disabled:opacity-60`}
       >
         <svg
           className={icon}
