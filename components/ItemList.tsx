@@ -413,7 +413,7 @@ function ItemRow({
             type="button"
             {...sortable.handleProps}
             aria-label="Drag to reorder"
-              className="shrink-0 cursor-grab touch-none text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing sm:mt-1"
+              className="shrink-0 cursor-grab touch-none self-start text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing sm:mt-1 sm:sticky sm:top-[calc(var(--app-header-h)+1.75rem)] sm:z-[1] lg:top-7"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <circle cx="9" cy="6" r="1.4" />
@@ -427,7 +427,10 @@ function ItemRow({
         ) : null}
         {/* Fixed-width columns so the ref and content line up across every row,
             regardless of the status label's width. */}
-        <div className="w-[5.5rem] shrink-0">
+        {/* Status pins with the ref and the row actions (KANBAN-13, widened by
+            David 2026-09-17): a tall row keeps one strip in view, so it still
+            says what it is and can still be acted on. */}
+        <div className="w-[5.5rem] shrink-0 self-start sm:sticky sm:top-[calc(var(--app-header-h)+1.75rem)] sm:z-[1] lg:top-7">
           <StatusMenu
             value={item.status}
             onChange={(s) => void onPatch(item.id, { status: s })}
@@ -494,7 +497,7 @@ function ItemRow({
           At sm+ they are one cluster pinned to the TOP of the row, level with
           the type pill and the first line of text (KANBAN-12), rather than
           each icon floating to the vertical middle of a tall row. */}
-      <div className="flex items-center gap-3 sm:shrink-0 sm:self-start">
+      <div className="flex items-center gap-3 sm:shrink-0 sm:self-start sm:sticky sm:top-[calc(var(--app-header-h)+1.75rem)] sm:z-[1] lg:top-7">
         <EditButton
           onClick={() => onOpen(item)}
           href={projectKey ? cardPath(projectKey, item.number) : undefined}
