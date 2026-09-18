@@ -146,6 +146,12 @@ export function CardPage({
     }
   }, [projectId, own.id]);
 
+  // The header's refresh: re-read this card and its entries from the server,
+  // for when another session (or Claude over MCP) has changed them.
+  const reloadAll = useCallback(async () => {
+    await Promise.all([refresh(), entries.reload()]);
+  }, [refresh, entries]);
+
   // Parent/child link writes: the same PATCHes the board uses.
   const setParent = useCallback(
     async (id: string, parentId: string | null): Promise<void> => {
@@ -267,6 +273,7 @@ export function CardPage({
               error={error}
               itemChangeRef={itemChangeRef}
               onLeave={() => void leave()}
+              onRefresh={reloadAll}
               onSaved={applyItem}
               onItemChange={applyItem}
               onRemount={() => setEpoch((n) => n + 1)}
@@ -313,6 +320,7 @@ function CardEditor({
   error,
   itemChangeRef,
   onLeave,
+  onRefresh,
   onSaved,
   onItemChange,
   onRemount,
@@ -323,6 +331,7 @@ function CardEditor({
   error: string | null;
   itemChangeRef: React.MutableRefObject<((item: Item) => void) | null>;
   onLeave: () => void;
+  onRefresh: () => Promise<void>;
   onSaved: (item: Item) => void;
   onItemChange: (item: Item) => void;
   onRemount: () => void;
@@ -610,6 +619,7 @@ function CardEditor({
             {ref}
           </h2>
           <CopyLinkButton path={cardPath(projectKey, item.number)} />
+          <RefreshButton onRefresh={onRefresh} />
         </span>
         <TypeBadge type={item.type} />
         <EpicProgress item={item} />
@@ -861,6 +871,46 @@ function CopyLinkButton({ path }: { path: string }) {
  * unsaved. Like the abandon icon, a press doesn't take focus, so the caret
  * stays where it was and the press isn't a click-off.
  */
+/**
+ * Re-read the card and its entries from the server, without a full page load,
+ * so a card changed elsewhere (another session, Claude over MCP) catches up.
+ * Unsaved edits are kept: the editor only remounts over new stored values when
+ * there is nothing unsaved.
+ */
+function RefreshButton({ onRefresh }: { onRefresh: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => e.preventDefault()}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        if (busy) return;
+        setBusy(true);
+        void onRefresh().finally(() => setBusy(false));
+      }}
+      disabled={busy}
+      title="Refresh this card"
+      aria-label="Refresh this card"
+      className="grid h-6 w-6 shrink-0 place-items-center rounded text-[var(--color-faint)] outline-none transition-colors hover:text-[var(--color-accent)] focus-visible:text-[var(--color-accent)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-60"
+    >
+      <svg
+        className={`h-[15px] w-[15px] ${busy ? "animate-spin" : ""}`}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+        <path d="M21 3v6h-6" />
+      </svg>
+    </button>
+  );
+}
+
 function SaveButton({ onSave, disabled }: { onSave: () => void; disabled: boolean }) {
   const label = "Save changes";
   return (

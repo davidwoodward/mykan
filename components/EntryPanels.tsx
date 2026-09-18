@@ -80,6 +80,8 @@ export type EntriesApi = {
   error: string | null;
   /** Put written entries into local state (replace by id, or add). */
   apply: (...rows: ItemEntry[]) => void;
+  /** Re-read the first page from the server, replacing what's loaded. */
+  reload: () => Promise<void>;
   /** More (older) paged entries exist on the server. */
   hasMore: boolean;
   loadingOlder: boolean;
@@ -118,6 +120,19 @@ export function useItemEntries(itemId: string): EntriesApi {
     setEntries((prev) => mergeEntries(prev ?? [], rows));
   }, []);
 
+  // The refresh button: take the server's first page as the truth, so entries
+  // another session deleted or changed drop out instead of merging back in.
+  const reload = useCallback(async () => {
+    try {
+      const d = await send<Page>(`/api/items/${itemId}/entries`, "GET");
+      setEntries(d.entries);
+      setCursor(d.hasMore ? d.before : null);
+      setError(null);
+    } catch (e) {
+      setError(errText(e, "Couldn't load entries"));
+    }
+  }, [itemId]);
+
   const loadOlder = useCallback(() => {
     if (!cursor || loadingOlder) return;
     setLoadingOlder(true);
@@ -131,8 +146,8 @@ export function useItemEntries(itemId: string): EntriesApi {
   }, [cursor, loadingOlder, itemId]);
 
   return useMemo(
-    () => ({ itemId, entries, error, apply, hasMore: cursor !== null, loadingOlder, loadOlder }),
-    [itemId, entries, error, apply, cursor, loadingOlder, loadOlder],
+    () => ({ itemId, entries, error, apply, reload, hasMore: cursor !== null, loadingOlder, loadOlder }),
+    [itemId, entries, error, apply, reload, cursor, loadingOlder, loadOlder],
   );
 }
 
