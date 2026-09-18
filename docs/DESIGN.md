@@ -566,6 +566,28 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   `layout.tsx` sets it **before paint** from `localStorage.theme`, falling back to OS
   `prefers-color-scheme` (wrapped in try/catch for private mode). `ThemeToggle` flips the class
   and persists the choice. Storage key: `theme` (`"dark"`/`"light"`).
+- **The decision lives in `lib/theme.ts`** — `resolveTheme(stored, prefersDark)` (an explicit
+  stored choice wins; anything else follows the OS) and `THEME_SCRIPT`, the same rule written
+  out as the inline script. The script can't import the function (it is a standalone `<script>`
+  in the document, not part of any bundle), so they sit side by side and `lib/theme.test.ts`
+  pins the shared behaviour. Change one, change the other.
+- **The script also guards the class, and that is half its job** (KANBAN-49). `<html>` is an
+  element React owns, and React re-applies its `className` from the **server-rendered** value —
+  which never contains `dark` — whenever it client-renders the root. React does exactly that to
+  recover from a hydration mismatch *anywhere* in the tree, so one mismatch on one page turned
+  the whole app light on the next load. The script therefore keeps a `MutationObserver` on
+  `<html>`'s class and re-applies the resolved theme the moment something clears it; observer
+  callbacks run at the microtask checkpoint, before the next paint, so the correction is never
+  seen. It is a safety net, **not** a licence to leave a mismatch in place — a hydration
+  mismatch is still a bug and still gets fixed where it starts.
+- **Because the guard reads storage, `ThemeToggle` persists the choice *before* it flips the
+  class.** The other order looks to the guard like damage and gets undone.
+- **Nothing that only exists in the browser may be rendered on the client's first pass.**
+  `localStorage`/`sessionStorage`, `window`, the clock and time-zone-dependent formatting all
+  differ from what the server rendered, and the cost of the resulting mismatch is the whole
+  server tree (and the theme). Read them through `useSyncExternalStore` with a server snapshot
+  that matches the server's HTML — as `useAbandonable` does for a leftover draft offer and
+  `EntryPanels` does for its stored drafts — or in an effect.
 - **Tokens, never hardcoded colors.** All color comes from CSS variables defined in
   `globals.css` for both `:root` and `html.dark`. Use these — don't introduce raw hex/oklch in
   components. Main tokens: `--color-canvas`, `--color-surface`, `--color-ink`, `--color-muted`,

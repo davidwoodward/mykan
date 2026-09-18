@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   browserDraftStore,
   createDraftSession,
@@ -12,6 +19,15 @@ import {
 } from "@/lib/abandon";
 
 export type DraftEditorStatus = "idle" | "saving" | "failed";
+
+/**
+ * The leftover-draft offer is decided once, when the editor opens, and changes
+ * only through React state after that — so the "store" it is read from never
+ * has anything to announce.
+ */
+function subscribeNever(): () => void {
+  return () => {};
+}
 
 export type PendingRestore<T> = {
   values: Partial<T>;
@@ -95,7 +111,7 @@ export function useAbandonable<T extends Record<string, unknown>>({
     }
     return restoreDecision<T>(drafts, opened, equal);
   });
-  const [restore, setRestore] = useState<PendingRestore<T> | null>(() => {
+  const [pendingRestore, setRestore] = useState<PendingRestore<T> | null>(() => {
     if (initialDecision.kind !== "offer") return null;
     // The user already chose Restore before this editor opened (an entry row's
     // prompt, KANBAN-38): start with the draft as unsaved changes, no prompt.
@@ -110,6 +126,23 @@ export function useAbandonable<T extends Record<string, unknown>>({
       startedAt: initialDecision.startedAt,
     };
   });
+  // The offer is withheld from the server render AND from the hydrating render
+  // (KANBAN-49). A leftover draft only exists in localStorage, which the server
+  // can't read: rendering the prompt on the client's first pass makes the tree
+  // differ from the server HTML, React throws that HTML away and client-renders
+  // from the root, and on the way it rewrites <html>'s className from the
+  // server's value — which never contains `dark`. The card page (the one page
+  // with a draft editor in its server render) therefore came back light after
+  // every reload that had a draft waiting. useSyncExternalStore is the same
+  // shape EntryPanels already uses for its stored drafts: the server snapshot
+  // during hydration, the real value straight after — and on a client-side
+  // navigation, where there is no hydration, the real value immediately.
+  const restore = useSyncExternalStore(
+    subscribeNever,
+    () => pendingRestore,
+    () => null,
+  );
+
   const [status, setStatus] = useState<DraftEditorStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);

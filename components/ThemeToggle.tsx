@@ -1,5 +1,7 @@
 "use client";
 
+import { THEME_STORAGE_KEY } from "@/lib/theme";
+
 /**
  * Icon-only light/dark switch shown in the top bar. The actual theme is the
  * `dark` class on <html>; the inline script in layout.tsx sets it before paint
@@ -7,16 +9,22 @@
  * that class and remembers the choice — which icon shows is handled entirely in
  * CSS off the `dark` class (see globals.css), so there's no React state to drift
  * out of sync with the DOM.
+ *
+ * The choice is written to storage BEFORE the class flips: that script's guard
+ * re-applies the stored theme whenever <html>'s class stops matching it
+ * (KANBAN-49), so a flip it saw before the new choice was stored would be read
+ * as damage and undone.
  */
 export function ThemeToggle() {
   function toggle() {
     const root = document.documentElement;
-    const isDark = root.classList.toggle("dark");
+    const next = root.classList.contains("dark") ? "light" : "dark";
     try {
-      localStorage.setItem("theme", isDark ? "dark" : "light");
+      localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // Private mode / storage disabled — the toggle still works for this session.
     }
+    root.classList.toggle("dark", next === "dark");
   }
 
   return (
