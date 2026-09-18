@@ -1,18 +1,15 @@
 # mykan continuation handoff
 
-**Updated 2026-09-17, after KANBAN-45 (renameable project keys) and its project-panel abandon
-follow-up were confirmed by David and moved to Done. Next: KANBAN-38 (entry panels on the card
-page), once KANBAN-44 is confirmed and its open question is answered.**
-
-**Later on 2026-09-17: KANBAN-44 is Done (David confirmed it and answered its question, see
-below). KANBAN-38 is Done (PRs #124, #126; David verified on prod). Next: KANBAN-39.**
+**Updated 2026-09-18. Everything that was in Testing is Done (David verified on prod). Next:
+KANBAN-39 (convert BRAIN-8), then KANBAN-40. KANBAN-32 has three open questions waiting on David
+and must not be built before they are answered.**
 
 ## At a glance
 
 - **The epic in flight is KANBAN-34, "Clean cards".** Cards worked by Claude Code were bloating
   because progress was appended to the description (BRAIN-8 reached a 98K-character body). The
   description is now a clean living spec; progress, questions and decisions live in their own
-  versioned entries. Epic: https://kanban.dbwoodward.com/KANBAN-34 — 3 of 6 children done.
+  versioned entries. Epic: https://kanban.dbwoodward.com/KANBAN-34 — 4 of 6 children done.
 - **Work order (David, 2026-09-16), one card at a time by subagents; David is told after each
   card and decides when to continue:**
   1. KANBAN-35 — Done (PR #113)
@@ -25,22 +22,18 @@ below). KANBAN-38 is Done (PRs #124, #126; David verified on prod). Next: KANBAN
   8. KANBAN-38 — Done (PRs #124, #126)
   9. **KANBAN-39 — next**
   10. KANBAN-40
-- **Resolved 2026-09-17 (the three items that were open before KANBAN-38):**
-  - **Click behaviour, answered by David:** keep click-to-select exactly as is. A single click
-    selects a board card or list row; the pencil, a double-click or Enter opens its page. Don't
-    change it.
-  - **404 status, confirmed by David on prod while signed in:** an unknown ref (`/KANBA-22`)
-    returns a real **404 status** and the Not found page, so the DB lookup in the page's
-    `generateMetadata` stays.
-  - **KANBAN-43** (the throwaway smoke-test card) has been deleted.
-- **Open before KANBAN-38 (as it stood; kept for the record, all resolved above):**
-  - David verifies the KANBAN-44 card pages and answers its open question entry: should a single
-    click on a board/list card open its page, or keep select-then-open (pencil, double-click,
-    Enter)?
-  - Confirm `/ZZZZ-1` returns a real **404 status** when signed in (only checked signed out, where
-    every URL redirects to sign-in). If it's 200, drop the DB lookup from the page's
-    `generateMetadata`.
-  - Throwaway smoke-test card **KANBAN-43** can be deleted in the UI (MCP has no delete tool).
+- **Shipped and confirmed 2026-09-18** (all Done): KANBAN-12 (row actions by the type pill,
+  trash icon on list rows and board cards), KANBAN-13 (a tall list row pins its whole strip:
+  grip, status, ref, actions), KANBAN-15 (paragraph gaps on cards, Done cards stay compact),
+  KANBAN-28 (GitHub "?" help), KANBAN-38 (entry panels + open-questions badge), KANBAN-46 (Esc in
+  a card's text saves and returns; green save icon), KANBAN-47 (one app-wide prompt tooltip
+  layer), KANBAN-48 (MCP steers open questions into ask_question), KANBAN-49 (dark mode survives
+  a reload).
+- **Closed without building:** KANBAN-11, 17, 27 (already delivered elsewhere) and KANBAN-33
+  (dev environment: won't do, one environment).
+- **Waiting on David:** KANBAN-32's three questions (auto-fill the tester on Testing? My Queue per
+  project or global? keep a "Features only" start view?). KANBAN-29 (Notes) is a Thought: leave it
+  Not started.
 
 ## How this project runs (standing rules)
 
@@ -111,54 +104,22 @@ below). KANBAN-38 is Done (PRs #124, #126; David verified on prod). Next: KANBAN
 - **Boundary:** the card holds the work, decisions and status. lobe holds durable lessons.
   `docs/_continue/` holds handoffs (linked from cards, never copied into them).
 
-## Next: KANBAN-38 — entry panels on the card page
+## Next: KANBAN-39 — convert BRAIN-8 to the new model
 
-- **Scope:**
-  - Progress, and Decisions & Questions, panels on the card page.
-  - Add/edit/delete/restore entries.
-  - Answer a question.
-  - Supersede a decision.
-  - Per-entry history with restore.
-  - An "N open questions" badge on board/list cards.
-- **Where it plugs in:** the `PANELS` list in `components/CardPage.tsx`.
-- **Reuse:** the core functions in `lib/item-entries.ts` (rules in `lib/item-entries-rules.ts`),
-  and the save-on-finish + abandon mechanism (`lib/abandon.ts`, `components/useAbandonable.ts`,
-  `components/AbandonButton.tsx`).
-- **Entry body is plain text**; markdown rendering is probably wanted.
-- Read `docs/DESIGN.md` and `~/dev/me/standards/ui-ux.md` first.
-
-## KANBAN-38 Done (PRs #124, #126, 2026-09-17)
-
-- **Status:** Done; David verified on prod. #126 added prompt styled tooltips on entry icon
-  buttons (native `title` was too slow; the ↶ Answer icon read as Undo). Test entries on
-  KANBAN-38 (a "bob" question, test decisions) can be cleaned up in the UI. **No migration** (entries tables already exist; RLS is on
-  with no policies and the server client bypasses it, like items). Merging deploys it; David then
-  follows the click-by-click steps in the PR body on prod.
-- **What's in it:**
-  - Card page tabs: Child items (epics) · **Progress** · **Decisions & Questions** · Attachments ·
-    History. Non-epic cards still open on Attachments (David, 2026-09-17).
-  - Add / edit / soft-delete / restore entries, answer a question (new decision or link an active
-    one), supersede a decision, per-entry history with restore. All via new web routes under
-    `app/api/items/[id]/entries/…` (source `web`).
-  - "N open questions" badge on board cards and list rows (one grouped query in
-    `GET /api/projects/[id]/items`; click behaviour untouched).
-- **Editing:** entry edits follow KANBAN-42 exactly (draft only, one save on Esc / click-off /
-  leaving, abandon = no write, Restore/Discard per entry). New-entry composers behave the same (David,
-  2026-09-17): Esc, click-off, Add, ⌘/Ctrl+Enter or leaving posts once; empty posts nothing. Draft keys are per editor:
-  `entry:<entryId>`, `entry-new:<itemId>:<kind>`, `entry-answer:<questionId>`,
-  `entry-supersede:<decisionId>`. Leaving the card page finishes every open editor
-  (`components/cardFinish.ts`).
-- **Markdown decision (2026-09-17):** entry bodies stay **plain text** in the DB (2,000-character
-  cap, now `ENTRY_MAX_CHARS` in `lib/item-entries-rules.ts`, shared with MCP) and the web
-  **renders** them as markdown with `react-markdown` 10.1.0 + `remark-gfm` 4.0.1 (new
-  dependencies, installed under the existing `min-release-age=7` cooldown in `.npmrc`; 97
-  packages in the lock). No raw HTML, safe links (new tab, `noopener noreferrer`), no images. The
-  in-house `lib/markdown-tiptap.ts` was not reused: it italicises across `snake_case`
-  identifiers and doesn't autolink bare URLs, both common in entries written by Claude.
-- **Known limits / follow-ups:** open questions and active decisions always load; the rest pages
-  100 at a time ("Load older entries"). Badge counts refresh with the board (load, Refresh,
-  returning from a card), not live; the badge count query was judged fine at current volume.
-- Full detail: `docs/DESIGN.md` → "Entry panels" and "Open-questions badge".
+- **What it is:** BRAIN-8's description is ~98K characters of appended session log. Rewrite it as
+  a clean spec with every reversal applied (hybrid retrieval reversed, repo-scoped retrieval, one
+  lobe deployment with no ps-lobe, step 6 done including arming and teardown, steps 7-9 left),
+  extract roughly 20 decisions (linking reversed ones with `supersedes`), turn dated updates into
+  progress entries, and file the open questions (14 unresolved scope_proposal rows, the owed PII
+  pass, the step-7 approvals) with `ask_question`.
+- **Show David the rewritten description before replacing it.** The original stays in item
+  history either way.
+- "Traps" and "process learning" sections go to lobe, not the card.
+- Then list cards across projects whose body is over a size threshold and propose which to
+  convert.
+- **Then KANBAN-40:** record the card / lobe / handoff boundary in
+  `~/dev/me/standards/crew-conduct.md` (dated), the work-item skill, and any agent that writes
+  card notes. KANBAN-48 already shipped the MCP half of this.
 
 ## Board sweep, 2026-09-17 (outside the epic)
 
@@ -182,15 +143,6 @@ below). KANBAN-38 is Done (PRs #124, #126; David verified on prod). Next: KANBAN
 - **Prompt tooltips:** David finds native `title` tooltips too slow. New icon buttons use
   `IconTip`.
 
-## After that
-
-- **KANBAN-39:** convert BRAIN-8 to the new model (clean description with reversals applied,
-  roughly 20 decisions, progress entries, open questions; show David the rewritten description
-  before replacing it), then find other bloated cards.
-- **KANBAN-40:** record the card / lobe / handoff boundary in
-  `~/dev/me/standards/crew-conduct.md` (dated), the work-item skill, and any agent that writes
-  card notes.
-
 ## Decisions and corrections from David worth carrying forward
 
 - Records he can see must be editable and versioned; never propose immutable ones.
@@ -199,3 +151,12 @@ below). KANBAN-38 is Done (PRs #124, #126; David verified on prod). Next: KANBAN
 - `list_items` returning titles only is fine as long as Claude knows to call `get_item` for
   content.
 - One environment: `main` is prod, period.
+- **Prod check steps must be followable:** start from a screen he can find and use the words on
+  it, never internal names ("the pinned ref" cost a round trip). A static harness with copied
+  markup is not verification of layout — reproduce with the real component tree (KANBAN-13
+  shipped twice on harness evidence and failed twice on prod).
+- **Tooltips must appear promptly** — the native `title` delay is unusable. One app-wide layer
+  does this now (KANBAN-47); a tip on something the pointer rests on constantly is noise and gets
+  removed.
+- **Agents must not kill processes by name** (`pkill -f "next start"` killed a sibling session's
+  server). Kill your own by explicit PID, as with Chrome.
