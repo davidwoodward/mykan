@@ -89,8 +89,9 @@ its description: a clean living spec of the work. Everything that happens
   `restore_item_entry`.
 - `list_item_entries(item, kind?, state?, since?, limit?, include_deleted?)`
   reads background on demand, newest first (limit 1-200, default 50).
-- `get_item` stays compact: alongside the title (`name`), `body_text` and the
-  epic fields it returns `decisions` (active: `id, body, created_at,
+- `get_item` stays compact: alongside the title (`name`), `body_after_title`
+  (the description without its title line, so nothing in the response is said
+  twice — KANBAN-50) and the epic fields it returns `decisions` (active: `id, body, created_at,
   created_by, supersedes_id`), `open_questions` (`id, body, created_at`) and
   `progress` as a summary only (`{count, last_at}`, non-deleted progress
   entries, superseded included). The progress log itself is not returned.

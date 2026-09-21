@@ -63,7 +63,9 @@ The agent treats the text after "the task" as a **gist to resolve against mykan*
 
 1. Pick the project (by repo/context — e.g. cwd `…/asset-relay` → mykan project **"Asset Relay"**).
 2. `list_items` and fuzzy-match the gist to a card title (`name` is the title — the body's first
-   line — only). If no title fits, `get_item` the likely candidates and match on `body_text`.
+   line — only). If no title fits, `get_item` the likely candidates and match on
+   `body_after_title` (the rest of the description; it deliberately excludes the title line,
+   so `name` and it never repeat each other).
    ("Disposals should be a Bundle type" → the card *"Disposals are handled by Ed Tech … Disposals
    should be a Bundle type."*)
 3. **One match** → state it and move it to `in_progress`. **Several plausible** → ask which.
@@ -156,7 +158,7 @@ and any `lfg`/ship pipeline.
 |------|--------------|-------|
 | `mcp__mykan__list_projects` | 1 | id, name, privacy. Pick the project for this repo/context. |
 | `mcp__mykan__list_items` | 1 | `project` (name or id), optional `status` filter. Titles only (`name` = first line of the body). Source for fuzzy-matching. |
-| `mcp__mykan__get_item` | 1/1b | Title (`name`) plus full body (`body_text`, flattened) to confirm a match. Also active `decisions`, `open_questions` and a `progress` summary (`{count, last_at}`), with entry ids; not the progress log. |
+| `mcp__mykan__get_item` | 1/1b | Title (`name`) plus the rest of the description (`body_after_title`, flattened, title line removed — the two never overlap) to confirm a match. Also active `decisions`, `open_questions` and a `progress` summary (`{count, last_at}`), with entry ids; not the progress log. |
 | `mcp__mykan__create_item` | 1b | Ad-hoc/no-card path. Optional `parent` (epic ref) files it under an epic; `type: epic` creates an epic. |
 | `mcp__mykan__update_item_status` | 2, 5, 6 | `new` \| `in_progress` \| `done`. The load-bearing call. |
 | `mcp__mykan__append_item_note` | 4, 5 | Progress notes + the closing note. Writes a **progress entry** (KANBAN-37), no longer the card body; the response says where it went. Max 2,000 chars: put long detail in a repo doc and link it. |

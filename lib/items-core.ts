@@ -11,6 +11,7 @@ import {
   typeChangeError,
   epicProgress,
   richDocImageSrcs,
+  richDocBodyAfterTitle,
   richDocText,
   richDocTitle,
   type GithubSync,
@@ -134,8 +135,14 @@ export type ItemDetail = Omit<ItemSummary, "parent"> & {
   /** Epics only: "N/M done" over `children`. */
   children_progress?: string;
   project_id: string;
-  /** The whole body flattened to plain text (title line included). */
+  /**
+   * The whole body flattened to plain text (title line included). The web and
+   * Telegram read this; the MCP layer strips it in favour of the non-
+   * overlapping `name` + `body_after_title` pair (KANBAN-50).
+   */
   body_text: string;
+  /** The body WITHOUT its title line, so it never repeats `name`. */
+  body_after_title: string;
   attachments: Item["attachments"];
   /** Backlink to the source GitHub issue (`owner/repo#number`), or null. */
   github_issue: string | null;
@@ -197,6 +204,7 @@ async function detailOf(
     project_id: it.project_id,
     name: richDocTitle(it.body),
     body_text: richDocText(it.body),
+    body_after_title: richDocBodyAfterTitle(it.body),
     type: it.type,
     status: it.status,
     tags: it.tags,

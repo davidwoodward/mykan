@@ -53,8 +53,24 @@ import {
   progressRecordedMessage,
 } from "@/lib/mcp-entry-guards";
 
+/**
+ * The MCP view of an item detail. `body_text` holds the whole body, title line
+ * included, so a response carrying it alongside `name` states the title twice
+ * — which agents reliably report as a duplication bug (KANBAN-8, KANBAN-50).
+ * Over MCP they get `name` + `body_after_title`, which never overlap; the web
+ * and Telegram keep reading `body_text` off the same type.
+ */
+function forMcp(data: unknown): unknown {
+  if (data && typeof data === "object" && "body_text" in data && "body_after_title" in data) {
+    const rest: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+    delete rest.body_text;
+    return rest;
+  }
+  return data;
+}
+
 function json(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  return { content: [{ type: "text" as const, text: JSON.stringify(forMcp(data), null, 2) }] };
 }
 function out<T>(r: CoreResult<T>) {
   return json(r.ok ? r.data : { error: r.error });
@@ -91,7 +107,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. `name` is the item's title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars; `body_text` is the whole body (the card's description, a living spec) as plain text, title line included. `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
@@ -109,7 +125,7 @@ function registerTools(server: McpServer) {
       const content: (
         | { type: "text"; text: string }
         | { type: "image"; data: string; mimeType: string }
-      )[] = [{ type: "text", text: JSON.stringify(detail, null, 2) }];
+      )[] = [{ type: "text", text: JSON.stringify(forMcp(detail), null, 2) }];
       const imgs = await getItemImages(getSupabase(), actor(), a.item);
       if (imgs.ok) {
         for (const img of imgs.data.images) {
@@ -193,19 +209,25 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "set_item_body",
-    `REPLACE an item's entire body with new plain text (one paragraph per line; the first line becomes the item's title/name). The body is the card's description: a clean living spec of the work — rewrite it when the spec changes. Progress does NOT go here (append_item_note), nor do decisions (record_decision) or open questions (ask_question). Safe overwrite: the previous state is snapshotted to the item's history first, so it is always recoverable. The write always happens, but past ${ITEM_BODY_BUDGET_CHARS.toLocaleString("en-US")} characters the response carries a \`warning\`: a growing spec usually means progress is leaking back in. NOTE: inline images in the old body are dropped from the new body (they remain viewable in history). \`item\` is an id or KEY-N reference. ${CONTENT_BOUNDARY}`,
+    `REPLACE an item's entire body with new plain text (one paragraph per line). Pass \`title\` and \`body\` as the separate pair get_item returns (\`name\` and \`body_after_title\`); \`title\` becomes the card's title line and \`body\` everything under it. Omit \`title\` and the first line of \`body\` becomes the title instead. The body is the card's description: a clean living spec of the work — rewrite it when the spec changes. Progress does NOT go here (append_item_note), nor do decisions (record_decision) or open questions (ask_question). Safe overwrite: the previous state is snapshotted to the item's history first, so it is always recoverable. The write always happens, but past ${ITEM_BODY_BUDGET_CHARS.toLocaleString("en-US")} characters the response carries a \`warning\`: a growing spec usually means progress is leaking back in. NOTE: inline images in the old body are dropped from the new body (they remain viewable in history). \`item\` is an id or KEY-N reference. ${CONTENT_BOUNDARY}`,
     {
       item: z.string().describe("item id or KEY-N reference"),
+      title: z
+        .string()
+        .optional()
+        .describe("the card's title line; omit to take the first line of `body` as the title"),
       body: z
         .string()
         .describe(
-          "the full new body text; first line acts as the title, blank lines separate paragraphs",
+          "the new body text under the title (the whole body when `title` is omitted); blank lines separate paragraphs",
         ),
     },
     async (a) => {
-      const r = await setItemBody(getSupabase(), actor(), a.item, a.body);
+      const title = a.title?.trim();
+      const text = title ? `${title}\n${a.body.trim()}` : a.body;
+      const r = await setItemBody(getSupabase(), actor(), a.item, text);
       if (!r.ok) return out(r);
-      const warning = bodyBudgetWarning(a.body);
+      const warning = bodyBudgetWarning(text);
       return json(warning ? { ...r.data, warning } : r.data);
     },
   );

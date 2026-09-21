@@ -159,6 +159,29 @@ export function richDocTitle(body: RichDoc | null | undefined): string {
 }
 
 /**
+ * Everything in a body EXCEPT the title line: the counterpart to
+ * `richDocTitle`, so a response can carry a title and a body without repeating
+ * a single character. Blank lines left behind by removing the title are
+ * dropped, so the result starts at the first real paragraph.
+ *
+ * One exception keeps it lossless. When the first line is longer than
+ * TITLE_MAX_CHARS, `richDocTitle` returns a truncated title, so the full first
+ * line exists nowhere else; this then returns the WHOLE body, title line
+ * included. The pair is therefore always complete, and only ever overlaps for
+ * an item whose title had to be cut.
+ */
+export function richDocBodyAfterTitle(body: RichDoc | null | undefined): string {
+  const text = richDocText(body);
+  const lines = text.split("\n");
+  const first = lines.findIndex((l) => l.trim().length > 0);
+  if (first === -1) return "";
+  if (lines[first].trim().length > TITLE_MAX_CHARS) return text;
+  let rest = first + 1;
+  while (rest < lines.length && lines[rest].trim().length === 0) rest += 1;
+  return lines.slice(rest).join("\n");
+}
+
+/**
  * Collects the `src` of every image node in a rich-text body, in document
  * order. These are the inline screenshots pasted into an item; `richDocText`
  * drops them, so this is the only way to recover them from a body. Duplicates
