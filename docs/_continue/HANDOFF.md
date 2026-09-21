@@ -1,8 +1,10 @@
 # mykan continuation handoff
 
-**Updated 2026-09-18. Everything that was in Testing is Done (David verified on prod). Next:
-KANBAN-39 (convert BRAIN-8), then KANBAN-40. KANBAN-32 has three open questions waiting on David
-and must not be built before they are answered.**
+**Updated 2026-09-21. KANBAN-50 is in Testing and needs an MCP reconnect before it can be
+verified (see below). Next: KANBAN-39 (convert BRAIN-8), then KANBAN-40. KANBAN-32 has three
+open questions waiting on David and must not be built before they are answered.**
+
+**Updated 2026-09-18. Everything that was in Testing is Done (David verified on prod).**
 
 ## At a glance
 
@@ -29,6 +31,25 @@ and must not be built before they are answered.**
   a card's text saves and returns; green save icon), KANBAN-47 (one app-wide prompt tooltip
   layer), KANBAN-48 (MCP steers open questions into ask_question), KANBAN-49 (dark mode survives
   a reload).
+- **In Testing 2026-09-21: KANBAN-50** (PR #145, deployed to prod) — MCP card reads no longer
+  repeat the title. `get_item` used to return `name` (the title) and `body_text` (the whole body,
+  title line included), so `name` was always a strict prefix of `body_text` and every agent
+  reported it as a duplication bug. Responses now carry `name` + `body_after_title` (the
+  description with its title line removed); `body_text` stays on `ItemDetail` for the web and
+  Telegram and is stripped in `json()` by `forMcp()`, so every tool returning an item detail is
+  covered, not only `get_item`. `set_item_body` gained an optional `title` matching that pair —
+  without it a rewrite would have to reassemble the body from a title capped at 200 chars, which
+  would silently truncate long titles. No migration; the stored model is unchanged. A stored title
+  column was considered and rejected (decision on KANBAN-50): it needs a migration, does not remove
+  the overlap on its own, and brings back the two-field editing confusion from KANBAN-8.
+  - **Every MCP session must reconnect** (`/mcp` → mykan → Reconnect): both a response shape and an
+    arg schema changed, so a session on the cached schema sees `body_text` disappear.
+  - **To verify after reconnecting:** `get_item` on any card — the response should show
+    `body_after_title` and no `body_text`, and the title should NOT reappear inside
+    `body_after_title`. Then a mutator (`update_item_status`, or `create_item` on a throwaway
+    card): those return an item detail too and must also come back without `body_text`.
+  - `~/.claude/skills/work-item/SKILL.md` was updated to match; it lives outside this repo, so a
+    fresh machine needs that edit reapplied.
 - **Closed without building:** KANBAN-11, 17, 27 (already delivered elsewhere) and KANBAN-33
   (dev environment: won't do, one environment).
 - **Waiting on David:** KANBAN-32's three questions (auto-fill the tester on Testing? My Queue per
