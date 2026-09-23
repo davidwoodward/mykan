@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { whitelist } from "@/lib/auth";
+import { canonicalEmail } from "@/lib/types";
 
 // Per-user MCP tokens (KANBAN-30, Phase I.5a). A token is a user secret: the DB
 // stores ONLY its SHA-256 hash, never the plaintext. The plaintext `mk_…` value
@@ -69,7 +70,9 @@ export async function verifyMcpToken(
   if (row.revoked_at) return null;
   if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) return null;
 
-  const email = row.user_email.trim().toLowerCase();
+  // Canonicalised so the identity a token acts as is the exact spelling stored
+  // in shared_with / assignees, matching the session path (see lib/auth.ts).
+  const email = canonicalEmail(row.user_email);
   if (!whitelist().includes(email)) return null;
 
   // Best-effort last-used bump; ignore failures.

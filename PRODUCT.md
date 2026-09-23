@@ -12,7 +12,7 @@ A personal project + item tracker. Small whitelisted team. Lightweight projects 
 - **Matthew L.** (matthewL@experiencealign.com) — collaborator. Originates much of the feature list as SME, and verifies work. Not a builder — the board's machinery (columns, hierarchy, ordering) is overhead to him, not affordance.
 - **Dustin** (dwoody55@gmail.com, shown as "Woody") — collaborator.
 
-Authentication is gated to the whitelist in `lib/auth.ts` (overridable via `AUTH_ALLOWED_EMAILS`); every other Google account is rejected at sign-in.
+Authentication is gated to the whitelist in `lib/auth.ts` (overridable via `AUTH_ALLOWED_EMAILS`); every other Google account is rejected at sign-in. Addresses are canonicalised first, so a Gmail account matches however its dots and `+tags` are written (see README, “Editing the whitelist”).
 
 **Users differ in altitude, not privilege.** David works the whole board; Matthew works at the level of *what we want* and *what's waiting on me*. Design for that difference with **defaults and views**, never with permissions — see "Preference, not permission" below.
 

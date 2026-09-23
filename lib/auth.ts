@@ -1,24 +1,36 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { currentMcpActor } from "@/lib/mcp-actor-context";
+import { canonicalEmail } from "@/lib/types";
 
 const DEFAULT_WHITELIST = [
   "dawoodward@gmail.com",
   "matthewl@experiencealign.com",
   "dwoody55@gmail.com",
   "kenyon.congdon@permitsaige.com",
+  "cherie.woodward.27@gmail.com",
 ];
 const DEFAULT_OWNER = "dawoodward@gmail.com";
 
 /**
- * The whitelisted member emails (lowercased). These are the people who can sign
- * in, and — for shared projects — the candidate assignees. Override with the
- * AUTH_ALLOWED_EMAILS env var (comma-separated).
+ * The whitelisted member emails, canonicalised (see `canonicalEmail`). These are
+ * the people who can sign in, and — for shared projects — the candidate
+ * assignees. Override with the AUTH_ALLOWED_EMAILS env var (comma-separated).
+ *
+ * Canonicalising here means a Gmail address may be written either way in the
+ * list or the env var and still match; it is also the exact form stored in
+ * `projects.shared_with` and `items.assignees`, because the signed-in identity
+ * is canonicalised too (see the `jwt` callback).
  */
 export function whitelist(): string[] {
   const fromEnv = process.env.AUTH_ALLOWED_EMAILS;
   const raw = fromEnv ? fromEnv.split(",") : DEFAULT_WHITELIST;
-  return raw.map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const out: string[] = [];
+  for (const e of raw) {
+    const v = canonicalEmail(e);
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out;
 }
 
 /**
@@ -27,11 +39,11 @@ export function whitelist(): string[] {
  * only public projects. Override with the OWNER_EMAIL env var.
  */
 export function ownerEmail(): string {
-  return (process.env.OWNER_EMAIL ?? DEFAULT_OWNER).trim().toLowerCase();
+  return canonicalEmail(process.env.OWNER_EMAIL ?? DEFAULT_OWNER);
 }
 
 export function isOwner(email: string | null | undefined): boolean {
-  return !!email && email.trim().toLowerCase() === ownerEmail();
+  return !!email && canonicalEmail(email) === ownerEmail();
 }
 
 /**
@@ -52,7 +64,7 @@ export function mcpActorEmail(): string {
 
 /** The identity the shared MYKAN_SERVICE_API_KEY authenticates as (owner). */
 export function defaultMcpActorEmail(): string {
-  return (process.env.MCP_ACTOR_EMAIL ?? ownerEmail()).trim().toLowerCase();
+  return canonicalEmail(process.env.MCP_ACTOR_EMAIL ?? ownerEmail());
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -66,8 +78,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: { signIn: "/signin" },
   callbacks: {
     signIn({ profile }) {
-      const email = profile?.email?.toLowerCase();
+      const email = canonicalEmail(profile?.email);
       return !!email && whitelist().includes(email);
+    },
+    /**
+     * The signed-in identity, canonicalised. Everything downstream compares this
+     * email as an exact string — `listProjects` and `loadProjectForAccess`
+     * against `projects.shared_with`, `normalizeAssignees` against the whitelist
+     * — so it has to be the same spelling those hold. Auth.js builds
+     * `session.user.email` from `token.email` and runs this callback on every
+     * session read, so existing sessions are folded on their next request too.
+     *
+     * A no-op for every address whose canonical form is itself, which is all
+     * four accounts that predate this.
+     */
+    jwt({ token }) {
+      if (token.email) token.email = canonicalEmail(token.email);
+      return token;
     },
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
