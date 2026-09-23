@@ -29,7 +29,7 @@ import {
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
-import { itemRef, localPart } from "@/lib/format";
+import { displayName, itemRef } from "@/lib/format";
 import {
   ITEM_STATUSES,
   STATUS_LABEL,
@@ -1492,7 +1492,7 @@ function CreatorFilter({
       </FilterPill>
       {creators.map((c) => (
         <FilterPill key={c} active={value === c} onClick={() => onChange(c)}>
-          {localPart(c)}
+          {displayName(c)}
         </FilterPill>
       ))}
     </div>
