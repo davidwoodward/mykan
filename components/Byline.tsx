@@ -1,4 +1,4 @@
-import { localPart, timeAgo } from "@/lib/format";
+import { displayName, timeAgo } from "@/lib/format";
 
 export function Byline({
   createdBy,
@@ -15,8 +15,8 @@ export function Byline({
   activeCreator?: string | null;
   className?: string;
 }) {
-  const author = localPart(createdBy);
-  const editor = updatedBy && updatedBy !== createdBy ? localPart(updatedBy) : null;
+  const author = displayName(createdBy);
+  const editor = updatedBy && updatedBy !== createdBy ? displayName(updatedBy) : null;
   const when = timeAgo(updatedAt);
   if (!createdBy && !when) return null;
 

@@ -1,3 +1,8 @@
+// Relative + extension so `node --test` can load this file directly (it does
+// not resolve the "@/" tsconfig alias), the same reason the other tested lib
+// modules stay dependency-light.
+import { canonicalEmail } from "./types.ts";
+
 /**
  * A user-facing item reference: "AMOS-12" when the project has a key, else
  * "#12". Null when the item has no number yet (shouldn't happen post-migration).
@@ -18,18 +23,32 @@ export function localPart(email: string | null | undefined): string {
 }
 
 /**
- * Short display names for members whose email local-part would otherwise be
- * ambiguous or unwieldy. dwoody55 shows as "Woody" (initial "W") so it doesn't
- * collide with dawoodward's "D" on assignee avatars.
+ * What each member is called on screen. An email local-part is how the account
+ * is spelled, not what the person is called — "matthewl", "kenyon.congdon" and
+ * "cheriewoodward27" all read as addresses rather than names — so members get a
+ * short human name here and `displayName` falls back to the local-part only for
+ * anyone not listed (no current member is).
+ *
+ * The first letter is also the assignee avatar's initial, so the names must stay
+ * distinct on that letter: D / M / W / K / C today. "Woody" exists because
+ * dwoody55 would otherwise collide with dawoodward on "D"; format.test.ts
+ * asserts the set stays unique, so a new member needs a name that keeps it so.
+ *
+ * Keys are canonical (see `canonicalEmail`), which is the form member emails are
+ * stored in, so a Gmail address matches however its dots are written.
  */
 const DISPLAY_NAMES: Record<string, string> = {
+  "dawoodward@gmail.com": "David",
+  "matthewl@experiencealign.com": "Matthew",
   "dwoody55@gmail.com": "Woody",
+  "kenyon.congdon@permitsaige.com": "Kenyon",
+  "cheriewoodward27@gmail.com": "Cherie",
 };
 
 /** The name to show for a member — an override when set, else the local-part. */
 export function displayName(email: string | null | undefined): string {
   if (!email) return "—";
-  return DISPLAY_NAMES[email.trim().toLowerCase()] ?? localPart(email);
+  return DISPLAY_NAMES[canonicalEmail(email)] ?? localPart(email);
 }
 
 /** Compact absolute date, e.g. "Jul 2, 2026". Empty string for null/invalid. */
