@@ -476,17 +476,48 @@ export function normalizeTags(input: unknown): string[] {
 }
 
 /**
+ * One identity, one spelling. mykan compares member emails as exact strings —
+ * `listProjects` and `loadProjectForAccess` both test the signed-in email
+ * against `projects.shared_with` — so an account that can arrive under more
+ * than one spelling has to be folded to a single canonical form first, or the
+ * user signs in and then sees nothing.
+ *
+ * Gmail is the case that matters: it ignores dots in the local part and
+ * everything after a `+`, and serves googlemail.com as an alias, so
+ * `cherie.woodward.27@gmail.com`, `cheriewoodward27+kan@gmail.com` and
+ * `CherieWoodward27@googlemail.com` are all one mailbox. Those rules are
+ * Gmail's alone: a dot is significant on every other domain, so anything else
+ * is only trimmed and lowercased (this is what keeps
+ * `kenyon.congdon@permitsaige.com` intact).
+ *
+ * Pure, so client code and the auth layer can share it.
+ */
+export function canonicalEmail(email: string | null | undefined): string {
+  const raw = String(email ?? "").trim().toLowerCase();
+  const at = raw.lastIndexOf("@");
+  if (at <= 0 || at === raw.length - 1) return raw;
+  const local = raw.slice(0, at);
+  const domain = raw.slice(at + 1);
+  if (domain !== "gmail.com" && domain !== "googlemail.com") return raw;
+  const bare = local.split("+")[0].replaceAll(".", "");
+  // A local part that is only dots/tags would canonicalise to nothing; leave
+  // such an address alone rather than inventing "@gmail.com".
+  return bare ? `${bare}@gmail.com` : raw;
+}
+
+/**
  * Normalises an assignee list against the set of `allowed` member emails:
- * trimmed, lowercased, deduped, and filtered to known members. Pure — callers
- * pass `allowed` (e.g. `whitelist()`) so this stays usable from client code.
+ * trimmed, canonicalised (see `canonicalEmail`), deduped, and filtered to known
+ * members. Pure — callers pass `allowed` (e.g. `whitelist()`) so this stays
+ * usable from client code.
  */
 export function normalizeAssignees(input: unknown, allowed: string[]): string[] {
   if (!Array.isArray(input)) return [];
-  const ok = new Set(allowed.map((e) => e.trim().toLowerCase()));
+  const ok = new Set(allowed.map(canonicalEmail));
   const out: string[] = [];
   for (const raw of input) {
     if (typeof raw !== "string") continue;
-    const v = raw.trim().toLowerCase();
+    const v = canonicalEmail(raw);
     if (!v || !ok.has(v) || out.includes(v)) continue;
     out.push(v);
   }

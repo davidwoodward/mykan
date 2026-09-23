@@ -2,6 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canonicalEmail,
+  normalizeAssignees,
   richDocBlocks,
   richDocBodyAfterTitle,
   richDocText,
@@ -67,6 +69,87 @@ test("a long first line with no spaces is hard-cut with an ellipsis", () => {
 test("a first line at the cap is returned unchanged", () => {
   const exact = "y".repeat(TITLE_MAX_CHARS);
   assert.equal(richDocTitle(doc(p(exact))), exact);
+});
+
+// canonicalEmail / normalizeAssignees: one identity, one spelling. mykan matches
+// member emails as exact strings against projects.shared_with, so a Gmail
+// account that can arrive spelled several ways has to fold to one form.
+
+test("gmail ignores dots in the local part", () => {
+  assert.equal(canonicalEmail("cherie.woodward.27@gmail.com"), "cheriewoodward27@gmail.com");
+  assert.equal(canonicalEmail("cheriewoodward27@gmail.com"), "cheriewoodward27@gmail.com");
+});
+
+test("gmail ignores a +tag, and googlemail.com is the same mailbox", () => {
+  assert.equal(canonicalEmail("cherie.woodward.27+kanban@gmail.com"), "cheriewoodward27@gmail.com");
+  assert.equal(canonicalEmail("Cherie.Woodward.27@googlemail.com"), "cheriewoodward27@gmail.com");
+});
+
+test("every spelling of one gmail account folds to the same string", () => {
+  const forms = [
+    "cherie.woodward.27@gmail.com",
+    "cheriewoodward27@gmail.com",
+    "  Cherie.Woodward.27@Gmail.com  ",
+    "c.h.e.r.i.e.woodward.27+mykan@googlemail.com",
+  ];
+  const canon = forms.map(canonicalEmail);
+  assert.equal(new Set(canon).size, 1, `got ${JSON.stringify(canon)}`);
+});
+
+test("a dot is significant on every other domain", () => {
+  // The rule is Gmail's alone — folding it everywhere would break this address.
+  assert.equal(canonicalEmail("kenyon.congdon@permitsaige.com"), "kenyon.congdon@permitsaige.com");
+  assert.equal(canonicalEmail("first.last+tag@example.org"), "first.last+tag@example.org");
+});
+
+test("the accounts that predate canonicalisation are untouched", () => {
+  for (const e of [
+    "dawoodward@gmail.com",
+    "dwoody55@gmail.com",
+    "matthewl@experiencealign.com",
+    "kenyon.congdon@permitsaige.com",
+  ]) {
+    assert.equal(canonicalEmail(e), e, `${e} must canonicalise to itself`);
+  }
+});
+
+test("junk and edge-case addresses are left alone rather than mangled", () => {
+  assert.equal(canonicalEmail(null), "");
+  assert.equal(canonicalEmail(undefined), "");
+  assert.equal(canonicalEmail(""), "");
+  assert.equal(canonicalEmail("  "), "");
+  assert.equal(canonicalEmail("not-an-email"), "not-an-email");
+  assert.equal(canonicalEmail("@gmail.com"), "@gmail.com");
+  assert.equal(canonicalEmail("user@"), "user@");
+  // A local part of nothing but dots/tags would canonicalise away entirely.
+  assert.equal(canonicalEmail("...@gmail.com"), "...@gmail.com");
+  assert.equal(canonicalEmail("+tag@gmail.com"), "+tag@gmail.com");
+});
+
+test("an assignee matches a whitelist entry written the other way", () => {
+  const allowed = ["cheriewoodward27@gmail.com"];
+  assert.deepEqual(normalizeAssignees(["cherie.woodward.27@gmail.com"], allowed), [
+    "cheriewoodward27@gmail.com",
+  ]);
+  // ...and the reverse: whitelist dotted, input undotted.
+  assert.deepEqual(
+    normalizeAssignees(["cheriewoodward27@gmail.com"], ["cherie.woodward.27@gmail.com"]),
+    ["cheriewoodward27@gmail.com"],
+  );
+});
+
+test("assignees are still filtered to known members and deduped", () => {
+  const allowed = ["dawoodward@gmail.com", "kenyon.congdon@permitsaige.com"];
+  assert.deepEqual(
+    normalizeAssignees(
+      ["dawoodward@gmail.com", "DaWoodward@gmail.com", "stranger@gmail.com", 42, null],
+      allowed,
+    ),
+    ["dawoodward@gmail.com"],
+  );
+  assert.deepEqual(normalizeAssignees("not an array", allowed), []);
+  // A non-gmail near-miss must NOT be folded into a member.
+  assert.deepEqual(normalizeAssignees(["kenyoncongdon@permitsaige.com"], allowed), []);
 });
 
 // richDocBodyAfterTitle (KANBAN-50): the body without the title line, so an

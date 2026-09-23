@@ -193,3 +193,13 @@ supabase/
 ## Editing the whitelist
 
 Defaults are in `lib/auth.ts`. Override at runtime by setting `AUTH_ALLOWED_EMAILS` to a comma-separated list. Emails are matched case-insensitively against the Google-verified account email.
+
+Addresses are **canonicalised** first (`canonicalEmail` in `lib/types.ts`). For `gmail.com` and
+`googlemail.com` that means dots in the local part and anything after a `+` are ignored, and
+`googlemail.com` folds to `gmail.com` — so one Gmail account matches however it is spelled, and a
+whitelist entry may be written either way. Every other domain is only trimmed and lowercased,
+because a dot is significant there.
+
+This matters beyond sign-in: the canonical form is the identity stored in `projects.shared_with`
+and `items.assignees`, and `listProjects` / `loadProjectForAccess` compare it as an exact string.
+The `jwt` callback canonicalises the session email so all three always agree.
