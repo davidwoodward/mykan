@@ -87,6 +87,11 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   · **Filter** (area, tags, creator) · **Actions** (refresh, Areas manager, archived), with a
   thin divider between the view and filter clusters. Actions sit on the right; the **Areas**
   button is an action (folder icon, accent hover), not a filter.
+- **Add item is a floating action button** (KANBAN-53, David 2026-09-26), not a header
+  button: a 56px `#5b58d6` circle with a white "+", fixed bottom-right (offset by the safe-area
+  insets), identical on every form factor and in both themes. `aria-label` + `title` (the
+  tooltip layer shows it promptly). Hidden in the archived view. The list/board scroll region
+  carries `pb-24` so its last row can scroll clear of it.
 - **One global order; several lenses.** `items.position` is a single per-project order (not
   per-status) — and it follows creation order by default (`position ≈ number × 1024`). The
   List groups it by **Status** or **Area**, or shows it **Flat** (no grouping, status as a
