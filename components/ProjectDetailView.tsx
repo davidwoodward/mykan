@@ -967,38 +967,11 @@ export function ProjectDetailView({
       <CategoryProvider value={categoryCtx}>
       <EpicProvider value={epicCtx}>
       <OpenQuestionsProvider value={openQuestions}>
-      {!showArchived ? (
-        <div className="lg:shrink-0">
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="group inline-flex items-center gap-2 text-sm font-medium text-[var(--color-ink)] transition-opacity hover:opacity-80"
-          >
-            <span
-              className="grid h-8 w-8 place-items-center rounded-full bg-[#5b58d6] text-white shadow-sm"
-              aria-hidden="true"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-5 w-5"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-            Add item
-          </button>
-        </div>
-      ) : null}
-
       {error ? (
         <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
-      <div className="mt-4 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:shrink-0">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:shrink-0">
         {/* LEFT — how you look at items: view, then filters. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* View cluster */}
@@ -1236,7 +1209,7 @@ export function ProjectDetailView({
           full-page scroll, so only the pinned top bar stays put. */}
       <div
         ref={scrollRef}
-        className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
+        className="pb-24 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"
       >
       {items === null ? (
         <p className="text-sm text-[var(--color-faint)]">Loading…</p>
@@ -1292,6 +1265,32 @@ export function ProjectDetailView({
         />
       )}
       </div>
+
+      {/* Add item is a floating action button, the same on every form factor:
+          a 56px accent circle pinned bottom-right (clear of the phone's
+          safe-area inset), with a white "+". The list's bottom padding keeps
+          its last row from sitting under it. */}
+      {!showArchived ? (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          aria-label="Add item"
+          title="Add item"
+          className="fixed right-[calc(1.5rem+env(safe-area-inset-right,0px))] bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] z-30 grid h-14 w-14 place-items-center rounded-full bg-[#5b58d6] text-white shadow-lg transition-[filter,box-shadow] hover:shadow-xl hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] active:brightness-95"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            className="h-6 w-6"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      ) : null}
 
       {adding ? (
         <AddItemModal
