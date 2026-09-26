@@ -1269,14 +1269,17 @@ export function ProjectDetailView({
       {/* Add item is a floating action button, the same on every form factor:
           a 56px accent circle pinned bottom-right (clear of the phone's
           safe-area inset), with a white "+". The list's bottom padding keeps
-          its last row from sitting under it. */}
+          its last row from sitting under it. Its right offset is the app
+          shell's gutter (px-3, or sm: 2.5vw + px-4) plus 1.5rem, so it sits
+          inside the content column, clear of the desktop list's own
+          scrollbar at that column's right edge. */}
       {!showArchived ? (
         <button
           type="button"
           onClick={() => setAdding(true)}
           aria-label="Add item"
           title="Add item"
-          className="fixed right-[calc(1.5rem+env(safe-area-inset-right,0px))] bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] z-30 grid h-14 w-14 place-items-center rounded-full bg-[#5b58d6] text-white shadow-lg transition-[filter,box-shadow] hover:shadow-xl hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] active:brightness-95"
+          className="fixed right-[calc(2.25rem+env(safe-area-inset-right,0px))] sm:right-[calc(2.5vw+2.5rem+env(safe-area-inset-right,0px))] bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] z-30 grid h-14 w-14 place-items-center rounded-full bg-[#5b58d6] text-white shadow-lg transition-[filter,box-shadow] hover:shadow-xl hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] active:brightness-95"
         >
           <svg
             viewBox="0 0 24 24"
