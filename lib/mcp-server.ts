@@ -15,6 +15,7 @@ import {
   appendItemNote,
   createItem,
   getItem,
+  getItemAttachment,
   getItemImages,
   listItems,
   setItemArea,
@@ -64,6 +65,13 @@ function forMcp(data: unknown): unknown {
   if (data && typeof data === "object" && "body_text" in data && "body_after_title" in data) {
     const rest: Record<string, unknown> = { ...(data as Record<string, unknown>) };
     delete rest.body_text;
+    // Attachments go out as {id, name, content_type, size}: the storage path is
+    // internal, and get_attachment takes the id or name (KANBAN-54).
+    if (Array.isArray(rest.attachments)) {
+      rest.attachments = (rest.attachments as Record<string, unknown>[]).map(
+        ({ id, name, content_type, size }) => ({ id, name, content_type, size }),
+      );
+    }
     return rest;
   }
   return data;
@@ -107,7 +115,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see. `attachments` lists the files attached to the card ({id, name, content_type, size}); these are separate from inline images, and include_images does not return them — read one with get_attachment.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
@@ -142,6 +150,27 @@ function registerTools(server: McpServer) {
                 }.`,
         });
       }
+      return { content };
+    },
+  );
+
+  server.tool(
+    "get_attachment",
+    "Read one file attached to a card (the `attachments` list get_item returns; separate from images pasted into the body, which get_item's include_images returns). `item` is an id or KEY-N reference; `attachment` is the attachment's id or its file name (ignoring case; a name shared by several files is refused with their ids). PNG, JPEG, GIF and WebP images come back as a viewable image block (up to 3 MB); text files (plain text, Markdown, CSV, JSON, logs, code, SVG) come back as text (up to 1 MB, cut to 100,000 characters). Anything else, or anything over its limit, returns the file's metadata and a note saying why; open those on the card page (`url`). Read-only.",
+    {
+      item: z.string().describe("item id or KEY-N reference, e.g. KANBAN-54"),
+      attachment: z.string().describe("attachment id, or its file name"),
+    },
+    async (a) => {
+      const r = await getItemAttachment(getSupabase(), actor(), a.item, a.attachment);
+      if (!r.ok) return out(r);
+      const { attachment, image, text, note } = r.data;
+      const content: (
+        | { type: "text"; text: string }
+        | { type: "image"; data: string; mimeType: string }
+      )[] = [{ type: "text", text: JSON.stringify(note ? { ...attachment, note } : attachment, null, 2) }];
+      if (image) content.push({ type: "image", data: image.data, mimeType: image.mimeType });
+      if (text !== undefined) content.push({ type: "text", text });
       return { content };
     },
   );

@@ -59,7 +59,14 @@ The key is a comma-separated list in the Vercel project env (production) and
 `create_item`, `set_item_body`, `append_item_note`, `set_item_tags`,
 `set_item_area`, `set_item_assignees`, `set_item_parent`,
 `set_project_github_account`, `list_areas`, `set_area_github_repo`,
-`refresh_item_from_github`, `set_item_type`.
+`refresh_item_from_github`, `set_item_type`, `get_attachment`.
+
+`get_attachment` (KANBAN-54) reads one file from a card's `attachments` list, by id
+or file name: PNG/JPEG/GIF/WebP as a viewable image block (≤ 3 MB, so the base64
+reply stays under Vercel's 4.5 MB response limit), text files as
+text (≤ 1 MB, cut to 100,000 characters), anything else as metadata with a note.
+Same visibility gate as `get_item`. Inline body screenshots stay on
+`get_item`'s `include_images`.
 
 Item entries (KANBAN-37): `record_decision`, `ask_question`,
 `answer_question`, `update_item_entry`, `list_item_entries`,

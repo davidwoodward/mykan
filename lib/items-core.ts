@@ -23,7 +23,15 @@ import {
 } from "@/lib/types";
 import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import { whitelist } from "@/lib/auth";
-import { ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
+import { ITEM_ATTACHMENTS_BUCKET, ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
+import {
+  MAX_ATTACHMENT_TEXT_CHARS,
+  attachmentKind,
+  findAttachment,
+  imageMimeType,
+  overCap,
+  type AttachmentKind,
+} from "@/lib/attachment-read";
 import {
   categoryInProject,
   findOrCreateByPath,
@@ -366,6 +374,88 @@ export async function getItemImages(
     });
   }
   return coreOk({ images, skipped, total: srcs.length });
+}
+
+export interface ItemAttachmentResult {
+  /** The attachment's metadata (storage path left out). */
+  attachment: { id: string; name: string; content_type: string; size: number };
+  kind: AttachmentKind;
+  /** Base64 bytes, for a viewable image. */
+  image?: { data: string; mimeType: string };
+  /** The file's text (possibly cut short), for a text attachment. */
+  text?: string;
+  /** Why nothing, or only part, came back. */
+  note?: string;
+}
+
+/**
+ * Read one of an item's attachments for an agent (KANBAN-54). The item must be
+ * visible to the actor (loadVisibleItem), which is the same gate the web's raw
+ * attachment route applies. Images come back as base64 for an image block,
+ * text files as text; anything else, or anything over the per-kind cap, as
+ * metadata with a note. Sizes are checked before downloading. Read-only.
+ */
+export async function getItemAttachment(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+  attachmentRef: string,
+): Promise<CoreResult<ItemAttachmentResult>> {
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const list = Array.isArray(r.data.item.attachments) ? r.data.item.attachments : [];
+  const found = findAttachment(list, attachmentRef);
+  if (!found.ok) return coreErr(found.error, 404);
+  const att = found.attachment;
+  const meta = { id: att.id, name: att.name, content_type: att.content_type, size: att.size };
+  const kind = attachmentKind(att.content_type, att.name);
+
+  if (kind === "binary") {
+    return coreOk({
+      attachment: meta,
+      kind,
+      note: `${att.content_type || "This file type"} can't be shown over MCP; open it on the card page.`,
+    });
+  }
+  const cap = overCap(kind, att.size);
+  if (cap !== null) {
+    return coreOk({
+      attachment: meta,
+      kind,
+      note: `Too large to return (${att.size.toLocaleString("en-US")} bytes; the ${kind} limit is ${cap.toLocaleString("en-US")}). Open it on the card page.`,
+    });
+  }
+
+  const { data, error } = await sb.storage.from(ITEM_ATTACHMENTS_BUCKET).download(att.path);
+  if (error || !data) return coreErr(`Could not read attachment ${att.name}`, 502);
+  const bytes = Buffer.from(await data.arrayBuffer());
+  // The stored size is the uploader's claim; re-check the real bytes.
+  const realCap = overCap(kind, bytes.byteLength);
+  if (realCap !== null) {
+    return coreOk({
+      attachment: meta,
+      kind,
+      note: `Too large to return (${bytes.byteLength.toLocaleString("en-US")} bytes; the ${kind} limit is ${realCap.toLocaleString("en-US")}). Open it on the card page.`,
+    });
+  }
+
+  if (kind === "image") {
+    return coreOk({
+      attachment: meta,
+      kind,
+      image: { data: bytes.toString("base64"), mimeType: imageMimeType(att.content_type, att.name) },
+    });
+  }
+  const text = bytes.toString("utf8");
+  if (text.length > MAX_ATTACHMENT_TEXT_CHARS) {
+    return coreOk({
+      attachment: meta,
+      kind,
+      text: text.slice(0, MAX_ATTACHMENT_TEXT_CHARS),
+      note: `Cut short: the first ${MAX_ATTACHMENT_TEXT_CHARS.toLocaleString("en-US")} of ${text.length.toLocaleString("en-US")} characters.`,
+    });
+  }
+  return coreOk({ attachment: meta, kind, text });
 }
 
 /** Move an item's kanban column. On a column change, append to the column end. */
