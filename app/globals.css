@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Touch layouts (KANBAN-52): phones and tablets by width, plus any touch-first
+   device (an iPad Pro is 1024px+ wide but still a finger). `compact:` styles
+   apply there; the desktop board toolbar is hidden there and shown elsewhere. */
+@custom-variant compact {
+  @media (max-width: 63.999rem) {
+    @slot;
+  }
+  @media (pointer: coarse) {
+    @slot;
+  }
+}
+
 @theme {
   --color-canvas: oklch(98.5% 0.005 80);
   --color-surface: oklch(100% 0 0);
