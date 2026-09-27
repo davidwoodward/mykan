@@ -154,12 +154,20 @@ export function useItemEntries(itemId: string): EntriesApi {
 const entryUrl = (e: Pick<ItemEntry, "item_id" | "id">, rest = "") =>
   `/api/items/${e.item_id}/entries/${e.id}${rest}`;
 
-/** Counts for the card page's tab labels. */
-export function entryTabCounts(entries: ItemEntry[] | null): { progress: number; open: number } {
-  if (!entries) return { progress: 0, open: 0 };
+/**
+ * Counts for the card page's tab badges (KANBAN-55). `decisions` is what the
+ * Decisions & Questions tab lists up front: open questions, active decisions
+ * and answered questions (superseded and deleted entries left out).
+ */
+export function entryTabCounts(
+  entries: ItemEntry[] | null,
+): { progress: number; decisions: number; open: number } {
+  if (!entries) return { progress: 0, decisions: 0, open: 0 };
+  const d = groupDecisions(entries);
   return {
     progress: groupProgress(entries).current.length,
-    open: groupDecisions(entries).openQuestions.length,
+    decisions: d.openQuestions.length + d.activeDecisions.length + d.answeredQuestions.length,
+    open: d.openQuestions.length,
   };
 }
 

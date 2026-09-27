@@ -277,7 +277,12 @@ Every card has its own page, and no user-facing URL carries a GUID.
   *Built (KANBAN-38, 2026-09-17):* the tabs are now Child items (epics) · Progress ·
   Decisions & Questions · Attachments · History. A non-epic card still opens on
   **Attachments** (David, 2026-09-17) and an epic on Child items. Progress shows its live-note
-  count and Decisions & Questions an accent pill with the open-question count. The
+  count and Decisions & Questions an accent pill with the open-question count.
+  *Changed (KANBAN-55, David 2026-09-27):* every card now opens on **Decisions & Questions**.
+  Progress, Decisions & Questions, Attachments and History each carry a count pill when they
+  have entries and none when empty (D&Q counts open + answered questions and active decisions,
+  accent while questions are open; History counts versions via `history?count=1`; a count
+  over a partly-loaded entry list reads `N+`). The
   header is a grid row across the page and the tab column is a sibling of the
   description editor, **outside** its remount (abandon, a change underneath), so an open
   entry editor is never torn down by the description's abandon. On a phone the grid is

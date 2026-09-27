@@ -27,6 +27,7 @@ import {
   useItemEntries,
   type EntriesApi,
 } from "@/components/EntryPanels";
+import { openQuestionsLabel } from "@/lib/entry-panels";
 import { CardFinishContext, useRegisterFinisher, type Finisher } from "@/components/cardFinish";
 import {
   EpicChildren,
@@ -99,10 +100,9 @@ export function CardPage({
   // card changing under an editor with nothing unsaved: history restore,
   // GitHub refresh).
   const [epoch, setEpoch] = useState(0);
-  const [panel, setPanel] = useState<PanelId>(
-    // Attachments stays the default for a non-epic card (David, 2026-09-17).
-    initialItem.type === "epic" ? "children" : "attachments",
-  );
+  // Every card opens on Decisions & Questions (David, 2026-09-27, KANBAN-55;
+  // was Attachments, and Child items for an epic).
+  const [panel, setPanel] = useState<PanelId>("decisions");
   // The card's progress notes, questions and decisions (KANBAN-38), loaded
   // once here so both panels and the tab counts share them, and so they (and
   // any open entry editor) survive the description editor remounting.
@@ -703,6 +703,58 @@ function CardEditor({
 }
 
 /**
+ * A section tab's entry count as a small pill; nothing when there are none.
+ * Accent-coloured on Decisions & Questions while questions are open.
+ */
+function TabBadge({
+  n,
+  suffix = "",
+  accent = false,
+  title,
+}: {
+  n: number | null;
+  suffix?: string;
+  accent?: boolean;
+  title?: string;
+}) {
+  if (!n) return null;
+  return (
+    <span
+      title={title}
+      className={`ml-1.5 inline-block min-w-[1.25rem] rounded-full px-1.5 text-center text-[11px] leading-[1.125rem] tabular-nums ${
+        accent
+          ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+          : "bg-[var(--color-line)] text-[var(--color-muted)]"
+      }`}
+    >
+      {n}
+      {suffix}
+    </span>
+  );
+}
+
+/**
+ * How many history versions a card has, for its History tab badge. Refetched
+ * when the card's `updated_at` moves, so a save (a new version) shows up.
+ */
+function useHistoryCount(itemId: string, updatedAt: string): number | null {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/items/${itemId}/history?count=1`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ count: number }>) : null))
+      .then((d) => {
+        if (!cancelled && d) setCount(d.count);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [itemId, updatedAt]);
+  return count;
+}
+
+/**
  * Beside the description: one tabbed column of sections (PANELS), each
  * scrolling on its own on desktop; stacked under the description on a phone.
  */
@@ -722,21 +774,23 @@ function CardSections({
   const panels = PANELS.filter((p) => p.show(item));
   const activePanel = panels.some((p) => p.id === panel) ? panel : panels[0].id;
   const counts = entryTabCounts(entries.entries);
+  const historyCount = useHistoryCount(item.id, item.updated_at);
+  // Entries load a page at a time; until they're all in, a count is a floor.
+  const more = entries.hasMore ? "+" : "";
+  // A count badge on Progress, Decisions & Questions, Attachments and History
+  // when the section has entries, none when it's empty (KANBAN-55).
   const countOf = (id: PanelId): ReactNode => {
-    if (id === "attachments" && item.attachments.length > 0) {
-      return <span className="ml-1 tabular-nums text-[var(--color-faint)]">{item.attachments.length}</span>;
-    }
-    if (id === "progress" && counts.progress > 0) {
-      return <span className="ml-1 tabular-nums text-[var(--color-faint)]">{counts.progress}</span>;
-    }
-    if (id === "decisions" && counts.open > 0) {
+    if (id === "progress") return <TabBadge n={counts.progress} suffix={more} />;
+    if (id === "attachments") return <TabBadge n={item.attachments.length} />;
+    if (id === "history") return <TabBadge n={historyCount} />;
+    if (id === "decisions") {
       return (
-        <span
-          title={`${counts.open} open question${counts.open === 1 ? "" : "s"}`}
-          className="ml-1 rounded-full bg-[var(--color-accent-soft)] px-1.5 tabular-nums text-[var(--color-accent-ink)]"
-        >
-          {counts.open}
-        </span>
+        <TabBadge
+          n={counts.decisions}
+          suffix={more}
+          accent={counts.open > 0}
+          title={counts.open > 0 ? openQuestionsLabel(counts.open) : undefined}
+        />
       );
     }
     return null;
