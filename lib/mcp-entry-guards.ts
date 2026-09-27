@@ -60,7 +60,7 @@ export const MCP_SERVER_INSTRUCTIONS = [
   "- record_decision on its own is for a decision no question was filed for (David often decides unprompted).",
   "- The description is a living spec and IS updated when a decision changes the plan — but tightly: state the current behaviour only. No attributions, dates, \"David decided\" notes, restated decisions or open-question sections; the decision entry is the record of who decided and when.",
   "",
-  "Reading: list_items returns titles only. get_item returns the description plus active decisions, open questions and a progress summary; call list_item_entries when you need the progress log or older entries.",
+  "Reading: list_items returns titles only. get_item returns the description plus active decisions, open questions and a progress summary; call list_item_entries when you need the progress log or older entries. Screenshots pasted into the body come back with get_item include_images; files in a card's attachments list are read with get_attachment.",
   "",
   "Epics: an epic groups child cards in the same project (set_item_parent, one level only). Status changes, type changes and card rewrites are real writes to David's live board: re-read a card with get_item immediately before rewriting it.",
 ].join("\n");
