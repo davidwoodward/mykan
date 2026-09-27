@@ -88,12 +88,23 @@ async function loadCurrent(id: string): Promise<Item | null> {
 }
 
 /** The item's history, newest first, with display-ready change summaries. */
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
   const deny = await denyItemAccess(id, gate.email);
   if (deny) return deny;
+
+  // `?count=1`: just how many versions there are, for the card page's History
+  // tab badge (KANBAN-55), without building every entry's change summary.
+  if (new URL(req.url).searchParams.get("count") === "1") {
+    const { count, error } = await getSupabase()
+      .from("item_versions")
+      .select("id", { count: "exact", head: true })
+      .eq("item_id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ count: count ?? 0 });
+  }
 
   const current = await loadCurrent(id);
   if (!current) return NextResponse.json({ error: "not found" }, { status: 404 });
