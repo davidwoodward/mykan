@@ -123,7 +123,11 @@ export function ProjectDetailView({
     setPendingAreaPath(null);
   }, []);
   const searchRef = useRef<HTMLInputElement>(null);
+  // The compact (touch) toolbar's own search box; "/" focuses whichever shows.
+  const compactSearchRef = useRef<HTMLInputElement>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  // The touch layout's "View & filters" sheet (KANBAN-52).
+  const [showFilters, setShowFilters] = useState(false);
   // The row "selected" in the status-grouped list — drives the highlight, the
   // j/k/g/G/u/d keyboard model, and where a new item is inserted.
   // Raw last-selected id; the effective `selectedId` is derived below, clamped
@@ -788,7 +792,7 @@ export function ProjectDetailView({
   useEffect(() => {
     if (!keyboardNavActive) return;
     function onKey(e: globalThis.KeyboardEvent) {
-      if (adding || showCategoryManager) return;
+      if (adding || showCategoryManager || showFilters) return;
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -890,6 +894,7 @@ export function ProjectDetailView({
     keyboardNavActive,
     adding,
     showCategoryManager,
+    showFilters,
     grouped,
     visibleItems,
     view,
@@ -904,7 +909,7 @@ export function ProjectDetailView({
   useEffect(() => {
     function onSlash(e: globalThis.KeyboardEvent) {
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (adding || showCategoryManager) return;
+      if (adding || showCategoryManager || showFilters) return;
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -913,11 +918,14 @@ export function ProjectDetailView({
         return;
       }
       e.preventDefault();
-      searchRef.current?.focus();
+      // Only one of the two search boxes is laid out (offsetParent is null
+      // for the hidden one).
+      const compact = compactSearchRef.current;
+      (compact?.offsetParent ? compact : searchRef.current)?.focus();
     }
     window.addEventListener("keydown", onSlash);
     return () => window.removeEventListener("keydown", onSlash);
-  }, [adding, showCategoryManager]);
+  }, [adding, showCategoryManager, showFilters]);
 
   // Keep the selected row visible as j/k/g/G move the selection and u/d reorder
   // it. `block: "nearest"` only scrolls when the row is actually out of view.
@@ -940,7 +948,7 @@ export function ProjectDetailView({
   // the current selection.
   useEffect(() => {
     if (!selectionActive || !selectedId) return;
-    if (adding || showCategoryManager) return;
+    if (adding || showCategoryManager || showFilters) return;
     function onDown(e: MouseEvent) {
       const t = e.target as HTMLElement | null;
       if (!t) return;
@@ -956,8 +964,24 @@ export function ProjectDetailView({
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [selectionActive, selectedId, adding, showCategoryManager]);
+  }, [selectionActive, selectedId, adding, showCategoryManager, showFilters]);
 
+
+  // Filters applied to the board, for the touch toolbar's badge and pills.
+  // Archived counts: it changes which cards are shown.
+  const activeFilterCount =
+    statusFilter.length +
+    tagFilter.length +
+    (areaFilter ? 1 : 0) +
+    (creatorFilter ? 1 : 0) +
+    (showArchived ? 1 : 0);
+  const clearAllFilters = () => {
+    setStatusFilter([]);
+    setTagFilter([]);
+    setAreaFilter(null);
+    setCreatorFilter(null);
+    setShowArchived(false);
+  };
 
   return (
     <ProjectKeyProvider value={projectKey}>
@@ -971,7 +995,126 @@ export function ProjectDetailView({
         <p className="mt-3 text-sm text-[var(--color-bug)]">{error}</p>
       ) : null}
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 lg:shrink-0">
+      {/* Touch layouts (phones, tablets, touch iPads): one line of full-size
+          targets — search, List/Board, and a Filters button carrying the
+          active-filter count — with the applied filters as removable pills
+          under it. Everything else lives in the View & filters sheet. */}
+      <div className="mb-3 hidden flex-col gap-2 compact:flex lg:shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="relative flex min-w-0 flex-1 items-center">
+            <svg
+              className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--color-faint)]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              ref={compactSearchRef}
+              type="search"
+              enterKeyHint="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setQuery("");
+                  e.currentTarget.blur();
+                } else if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder="Search cards…"
+              aria-label="Search cards"
+              className="h-10 w-full min-w-0 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] pl-9 pr-9 text-base text-[var(--color-ink)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)] [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                title="Clear search"
+                className="absolute right-1 grid h-8 w-8 place-items-center rounded-md text-[var(--color-faint)] hover:text-[var(--color-ink)]"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
+          <div className="inline-flex h-10 shrink-0 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
+            <ViewTab active={view === "list"} onClick={() => setView("list")}>
+              List
+            </ViewTab>
+            <ViewTab active={view === "board"} onClick={() => setView("board")}>
+              Board
+            </ViewTab>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters(true)}
+            aria-label={`View and filters${activeFilterCount ? `, ${activeFilterCount} active` : ""}`}
+            title="View & filters"
+            className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-lg border transition-colors ${
+              activeFilterCount
+                ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)]"
+            }`}
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 6h16M7 12h10M10 18h4" />
+            </svg>
+            {activeFilterCount ? (
+              <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#5b58d6] px-1 text-[11px] font-medium tabular-nums text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
+        {activeFilterCount ? (
+          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+            {showArchived ? (
+              <ActivePill label="Archived" onRemove={() => setShowArchived(false)} />
+            ) : null}
+            {statusFilter.map((st) => (
+              <ActivePill
+                key={st}
+                label={STATUS_LABEL[st]}
+                onRemove={() => setStatusFilter((cur) => cur.filter((x) => x !== st))}
+              />
+            ))}
+            {areaFilter ? (
+              <ActivePill
+                label={categoryPaths.find((c) => c.id === areaFilter)?.path ?? "Area"}
+                onRemove={() => setAreaFilter(null)}
+              />
+            ) : null}
+            {tagFilter.map((t) => (
+              <ActivePill key={t} label={`#${t}`} onRemove={() => toggleTag(t)} />
+            ))}
+            {creatorFilter ? (
+              <ActivePill
+                label={`by ${displayName(creatorFilter)}`}
+                onRemove={() => setCreatorFilter(null)}
+              />
+            ) : null}
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="shrink-0 px-2 text-sm text-[var(--color-faint)] underline-offset-2 hover:text-[var(--color-ink)] hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 compact:hidden lg:shrink-0">
         {/* LEFT — how you look at items: view, then filters. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* View cluster */}
@@ -1304,6 +1447,118 @@ export function ProjectDetailView({
           onCreated={addCreated}
         />
       ) : null}
+      {showFilters ? (
+        <FilterSheet onClose={() => setShowFilters(false)}>
+          <SheetSection label="View">
+            <div className="flex flex-wrap gap-2">
+              <Segmented
+                options={[
+                  ["list", "List"],
+                  ["board", "Board"],
+                ]}
+                value={view}
+                onChange={(v) => setView(v as View)}
+              />
+              {!showArchived && view === "list" ? (
+                <Segmented
+                  label="Group by"
+                  options={[
+                    ["status", "Status"],
+                    ["area", "Area"],
+                    ["flat", "Flat"],
+                  ]}
+                  value={groupBy}
+                  onChange={(v) => setGroupBy(v as "status" | "area" | "flat")}
+                />
+              ) : null}
+            </div>
+          </SheetSection>
+          <SheetSection label="Status">
+            <div className="flex flex-wrap gap-2">
+              {ITEM_STATUSES.map((st) => {
+                const on = statusFilter.includes(st);
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setStatusFilter((cur) => (on ? cur.filter((x) => x !== st) : [...cur, st]))
+                    }
+                    className={`h-10 rounded-full border px-4 text-sm transition-colors ${
+                      on
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                        : "border-[var(--color-line)] text-[var(--color-muted)]"
+                    }`}
+                  >
+                    {STATUS_LABEL[st]}
+                  </button>
+                );
+              })}
+            </div>
+          </SheetSection>
+          {!showArchived && categoryPaths.length > 0 ? (
+            <SheetSection label="Area">
+              <select
+                value={areaFilter ?? ""}
+                onChange={(e) => setAreaFilter(e.target.value || null)}
+                aria-label="Filter by area"
+                className="h-11 w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-base text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+              >
+                <option value="">All areas</option>
+                {categoryPaths.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.path}
+                  </option>
+                ))}
+              </select>
+            </SheetSection>
+          ) : null}
+          {allTags.length > 0 ? (
+            <SheetSection label="Tags">
+              <TagFilterBar
+                tags={allTags}
+                active={tagFilter}
+                onToggle={toggleTag}
+                onClear={() => setTagFilter([])}
+                large
+              />
+            </SheetSection>
+          ) : null}
+          {creators.length > 0 ? (
+            <SheetSection label="Created by">
+              <Segmented
+                options={[["", "Anyone"], ...creators.map((c) => [c, displayName(c)] as [string, string])]}
+                value={creatorFilter ?? ""}
+                onChange={(v) => setCreatorFilter(v || null)}
+              />
+            </SheetSection>
+          ) : null}
+          <div className="flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-4">
+            <SheetButton onClick={() => void refetch()} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </SheetButton>
+            {!showArchived ? (
+              <SheetButton
+                onClick={() => {
+                  setShowFilters(false);
+                  setShowCategoryManager(true);
+                }}
+              >
+                Manage areas
+              </SheetButton>
+            ) : null}
+            {showArchived || archivedCount > 0 ? (
+              <SheetButton onClick={() => setShowArchived((v) => !v)} active={showArchived}>
+                {showArchived ? "Showing archived" : `Archived (${archivedCount})`}
+              </SheetButton>
+            ) : null}
+            {activeFilterCount ? (
+              <SheetButton onClick={clearAllFilters}>Clear filters</SheetButton>
+            ) : null}
+          </div>
+        </FilterSheet>
+      ) : null}
       {showCategoryManager ? (
         <CategoryManager
           projectId={projectId}
@@ -1324,11 +1579,14 @@ function TagFilterBar({
   active,
   onToggle,
   onClear,
+  large = false,
 }: {
   tags: string[];
   active: string[];
   onToggle: (tag: string) => void;
   onClear: () => void;
+  /** Touch sizing, for the View & filters sheet (KANBAN-52). */
+  large?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
@@ -1365,13 +1623,13 @@ function TagFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xs text-[var(--color-faint)]">filter</span>
+      {large ? null : <span className="text-xs text-[var(--color-faint)]">filter</span>}
 
       {active.map((t) => (
         <Tag key={t} label={t} active onClick={() => onToggle(t)} />
       ))}
 
-      <div className="relative">
+      <div className={large ? "relative w-full" : "relative"}>
         <input
           value={q}
           onChange={(e) => {
@@ -1383,10 +1641,18 @@ function TagFilterBar({
           onBlur={() => setTimeout(() => setFocused(false), 150)}
           placeholder={active.length ? "+ tag" : "filter by tag…"}
           aria-label="Filter by tag"
-          className="h-6 w-28 rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-2 text-xs outline-none focus:border-[var(--color-accent)]"
+          className={
+            large
+              ? "h-11 w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-base outline-none focus:border-[var(--color-accent)]"
+              : "h-6 w-28 rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-2 text-xs outline-none focus:border-[var(--color-accent)]"
+          }
         />
         {focused && shown.length > 0 ? (
-          <div className="absolute left-0 top-7 z-20 flex max-h-56 w-48 flex-col gap-1 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-md">
+          <div
+            className={`absolute left-0 z-20 flex max-h-56 flex-col gap-1 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-md ${
+              large ? "top-12 w-full" : "top-7 w-48"
+            }`}
+          >
             {shown.map((t, i) => (
               <button
                 key={t}
@@ -1398,7 +1664,7 @@ function TagFilterBar({
                   setHi(0);
                 }}
                 onMouseEnter={() => setHi(i)}
-                className={`flex rounded text-left ${
+                className={`flex rounded text-left ${large ? "py-2" : ""} ${
                   i === hi ? "bg-[var(--color-accent-soft)]" : ""
                 }`}
               >
@@ -1518,6 +1784,151 @@ function FilterPill({
         active
           ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
           : "text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A removable pill for an applied filter, in the touch toolbar (KANBAN-52). */
+function ActivePill({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      aria-label={`Remove filter: ${label}`}
+      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-[var(--color-accent)] bg-[var(--color-accent-soft)] pl-3 pr-2 text-sm text-[var(--color-accent-ink)]"
+    >
+      <span className="max-w-[12rem] truncate">{label}</span>
+      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * The touch layout's View & filters sheet (KANBAN-52): slides up from the
+ * bottom, full-size targets. Filters apply as they're tapped; Done, Esc, Enter
+ * outside a field, or a tap on the backdrop closes it.
+ */
+function FilterSheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      const inField = !!t && /^(input|textarea|select)$/i.test(t.tagName);
+      if (e.key === "Escape" && !inField) {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "Enter" && !inField && !(t instanceof HTMLButtonElement)) {
+        e.preventDefault();
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center" role="presentation">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="View and filters"
+        className="relative flex max-h-[85dvh] w-full max-w-xl flex-col rounded-t-2xl border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3">
+          <h2 className="text-base font-semibold text-[var(--color-ink)]">View &amp; filters</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-lg bg-[#5b58d6] px-4 text-sm font-medium text-white"
+          >
+            Done
+          </button>
+        </div>
+        <div className="flex flex-col gap-5 overflow-y-auto overscroll-contain px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SheetSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-faint)]">{label}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** A touch-sized segmented control: one choice of several. */
+function Segmented({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label?: string;
+  options: [string, string][];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex max-w-full flex-wrap items-center rounded-lg border border-[var(--color-line)] bg-[var(--color-canvas)] p-0.5"
+    >
+      {label ? <span className="px-2 text-sm text-[var(--color-faint)]">{label}</span> : null}
+      {options.map(([v, text]) => (
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={value === v}
+          onClick={() => onChange(v)}
+          className={`h-10 rounded-md px-4 text-sm transition-colors ${
+            value === v
+              ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
+              : "text-[var(--color-muted)]"
+          }`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SheetButton({
+  onClick,
+  disabled,
+  active,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`h-11 rounded-lg border px-4 text-sm transition-colors disabled:opacity-60 ${
+        active
+          ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]"
+          : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)]"
       }`}
     >
       {children}

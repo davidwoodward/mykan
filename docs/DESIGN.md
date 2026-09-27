@@ -87,6 +87,16 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   · **Filter** (area, tags, creator) · **Actions** (refresh, Areas manager, archived), with a
   thin divider between the view and filter clusters. Actions sit on the right; the **Areas**
   button is an action (folder icon, accent hover), not a filter.
+- **Touch toolbar** (KANBAN-52, 2026-09-27). On phones, tablets and any touch-first device
+  (the `compact:` variant in `globals.css`: below `lg`, or `pointer: coarse`, so a touch iPad
+  Pro gets it at 1024px+), the board toolbar collapses to **one line** of 40px targets:
+  search · List/Board · a **View & filters** button whose badge counts the active filters
+  (status, area, tags, creator, archived). Applied filters show under it as removable pills
+  plus Clear, only when there are any. The button opens a bottom **sheet** with the full
+  set, touch-sized: List/Board and Group by, Status chips, Area, Tags (typeahead), Created by,
+  then Refresh, Manage areas, Archived, Clear filters. Filters apply as tapped; Done, Esc,
+  Enter or a backdrop tap closes it. A laptop or desktop with a mouse keeps the full toolbar
+  unchanged. "/" focuses whichever search box is showing.
 - **Add item is a floating action button** (KANBAN-53, David 2026-09-26), not a header
   button: a 56px `#5b58d6` circle with a white "+", fixed bottom-right, inset 1.5rem inside the
   app-shell content column (so it never covers the list's scrollbar; plus the safe-area insets), identical on every form factor and in both themes. `aria-label` + `title` (the
