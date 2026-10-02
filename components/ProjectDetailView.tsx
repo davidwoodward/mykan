@@ -1449,30 +1449,21 @@ export function ProjectDetailView({
       ) : null}
       {showFilters ? (
         <FilterSheet onClose={() => setShowFilters(false)}>
-          <SheetSection label="View">
-            <div className="flex flex-wrap gap-2">
+          {/* List/Board lives on the toolbar line itself, so the sheet holds
+              only what that line can't (KANBAN-52 follow-up). */}
+          {!showArchived && view === "list" ? (
+            <SheetSection label="Group by">
               <Segmented
                 options={[
-                  ["list", "List"],
-                  ["board", "Board"],
+                  ["status", "Status"],
+                  ["area", "Area"],
+                  ["flat", "Flat"],
                 ]}
-                value={view}
-                onChange={(v) => setView(v as View)}
+                value={groupBy}
+                onChange={(v) => setGroupBy(v as "status" | "area" | "flat")}
               />
-              {!showArchived && view === "list" ? (
-                <Segmented
-                  label="Group by"
-                  options={[
-                    ["status", "Status"],
-                    ["area", "Area"],
-                    ["flat", "Flat"],
-                  ]}
-                  value={groupBy}
-                  onChange={(v) => setGroupBy(v as "status" | "area" | "flat")}
-                />
-              ) : null}
-            </div>
-          </SheetSection>
+            </SheetSection>
+          ) : null}
           <SheetSection label="Status">
             <div className="flex flex-wrap gap-2">
               {ITEM_STATUSES.map((st) => {
@@ -1534,7 +1525,7 @@ export function ProjectDetailView({
               />
             </SheetSection>
           ) : null}
-          <div className="flex flex-wrap gap-2 border-t border-[var(--color-line)] pt-4">
+          <div className="flex flex-wrap gap-2 py-4">
             <SheetButton onClick={() => void refetch()} disabled={refreshing}>
               {refreshing ? "Refreshing…" : "Refresh"}
             </SheetButton>
@@ -1853,7 +1844,9 @@ function FilterSheet({ onClose, children }: { onClose: () => void; children: Rea
             Done
           </button>
         </div>
-        <div className="flex flex-col gap-5 overflow-y-auto overscroll-contain px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+        {/* Sections are split by a clearly visible rule (line-strong), not
+            just spacing, so each group reads as its own block. */}
+        <div className="flex flex-col divide-y divide-[var(--color-line-strong)] overflow-y-auto overscroll-contain px-4 pb-[env(safe-area-inset-bottom,0px)]">
           {children}
         </div>
       </div>
@@ -1863,7 +1856,7 @@ function FilterSheet({ onClose, children }: { onClose: () => void; children: Rea
 
 function SheetSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-2 py-4">
       <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-faint)]">{label}</h3>
       {children}
     </section>
@@ -1872,12 +1865,10 @@ function SheetSection({ label, children }: { label: string; children: React.Reac
 
 /** A touch-sized segmented control: one choice of several. */
 function Segmented({
-  label,
   options,
   value,
   onChange,
 }: {
-  label?: string;
   options: [string, string][];
   value: string;
   onChange: (v: string) => void;
@@ -1885,10 +1876,8 @@ function Segmented({
   return (
     <div
       role="radiogroup"
-      aria-label={label}
       className="inline-flex max-w-full flex-wrap items-center rounded-lg border border-[var(--color-line)] bg-[var(--color-canvas)] p-0.5"
     >
-      {label ? <span className="px-2 text-sm text-[var(--color-faint)]">{label}</span> : null}
       {options.map(([v, text]) => (
         <button
           key={v}

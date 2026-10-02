@@ -93,8 +93,9 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   search · List/Board · a **View & filters** button whose badge counts the active filters
   (status, area, tags, creator, archived). Applied filters show under it as removable pills
   plus Clear, only when there are any. The button opens a bottom **sheet** with the full
-  set, touch-sized: List/Board and Group by, Status chips, Area, Tags (typeahead), Created by,
-  then Refresh, Manage areas, Archived, Clear filters. Filters apply as tapped; Done, Esc,
+  set, touch-sized: Group by (List view only; List/Board stays on the line, not in the sheet),
+  Status chips, Area, Tags (typeahead), Created by, then Refresh, Manage areas, Archived, Clear
+  filters, each section split from the next by a visible `line-strong` rule. Filters apply as tapped; Done, Esc,
   Enter or a backdrop tap closes it. A laptop or desktop with a mouse keeps the full toolbar
   unchanged. "/" focuses whichever search box is showing.
 - **Add item is a floating action button** (KANBAN-53, David 2026-09-26), not a header
