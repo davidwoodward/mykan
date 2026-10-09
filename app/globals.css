@@ -108,6 +108,19 @@ html.dark {
   --color-epic-line: oklch(40% 0.08 320);
 }
 
+/* Dark on touch layouts (KANBAN-58): a phone in dark mode washed out the
+   secondary chrome (the row's grip, status pill and ref; the card page's Add tag,
+   Add parent and the rest). Lift faint and muted toward ink, still in order
+   (faint < muted < ink), so they read clearly but never compete with the text.
+   Same media as the `compact:` variant. */
+@media (max-width: 63.999rem), (pointer: coarse) {
+  html.dark {
+    --color-muted: oklch(82% 0.014 270);
+    --color-faint: oklch(74% 0.014 270);
+    --color-line-strong: oklch(46% 0.014 270);
+  }
+}
+
 html, body {
   background: var(--color-canvas);
   color: var(--color-ink);
