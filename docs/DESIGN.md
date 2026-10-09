@@ -620,6 +620,11 @@ The cross-project picker rules (`~/.claude/CLAUDE.md`) apply, with these app spe
   `--color-faint`, `--color-line`, `--color-line-strong`, `--color-accent`,
   `--color-accent-soft`, `--color-accent-ink`; per-type `--color-{feature|bug|idea}[-bg|-line]`;
   tag lightness `--tag-l-{bg|fg|bd}`. Add a token in both themes rather than branching in JSX.
+- **Brighter secondary chrome in dark on touch** (KANBAN-58, 2026-10-09). On touch layouts
+  (the `compact:` media) dark mode lifts `--color-faint` (52% → 74%), `--color-muted` (68% →
+  82%) and `--color-line-strong` (37% → 46%), still below ink (93%). On a phone the row's grip, status pill and
+  ref, and the card page's Add tag / Add parent and the like, were barely visible. Desktop dark
+  is unchanged.
 - **Smooth theme transition** (`background-color`/`color` ~0.3s) is set on `<html>` — keep it.
 - **Icons are inline SVGs**, `viewBox="0 0 24 24"`, sized `h-[18px] w-[18px]` (or `h-4 w-4`),
   stroke `1.6–1.8` with `currentColor` (or filled `currentColor`). No icon fonts or image
