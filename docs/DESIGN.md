@@ -54,6 +54,11 @@ tooltip layer). The archived view's Restore / Delete forever
 words are unchanged. Board cards use the same trash icon (hover-only), from the shared
 `components/DeleteIconButton.tsx` (David, 2026-09-17).
 
+**Delete asks first on touch (KANBAN-59, 2026-10-09).** On touch layouts (the `compact:`
+media: below `lg`, or `pointer: coarse`) a tap on the trash icon doesn't delete: it turns
+into an inline **Delete** (red) / Cancel pair, and only Delete archives. Cancel, Esc or a
+press anywhere else backs out. With a mouse on a wide screen it stays one click.
+
 ## Paragraph spacing on list rows and board cards (KANBAN-15, 2026-09-17)
 
 Card text on list rows and board cards honors paragraph breaks with a **small gap
