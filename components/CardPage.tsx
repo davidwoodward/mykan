@@ -133,18 +133,24 @@ export function CardPage({
     setOwn((cur) => (cur.id === updated.id ? updated : cur));
   }, []);
 
+  // Set by the description editor while mounted: take a change made to this
+  // card by a section beside it (attachments, history restore) or by a refresh.
+  const itemChangeRef = useRef<((item: Item) => void) | null>(null);
+
   const refresh = useCallback(async () => {
     try {
       const r = await fetch(`/api/projects/${projectId}/items`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const list = (await r.json()) as Item[];
       setItems(list);
+      // Through the editor, so a body or tags changed elsewhere (another
+      // session, Claude over MCP) reload it when nothing is unsaved.
       const mine = list.find((it) => it.id === own.id);
-      if (mine) setOwn(mine);
+      if (mine) (itemChangeRef.current ?? applyItem)(mine);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Refresh failed");
     }
-  }, [projectId, own.id]);
+  }, [projectId, own.id, applyItem]);
 
   // The header's refresh: re-read this card and its entries from the server,
   // for when another session (or Claude over MCP) has changed them.
@@ -210,9 +216,6 @@ export function CardPage({
     },
     [finishAll],
   );
-  // Set by the description editor while mounted: take a change made to this
-  // card by a section beside it (attachments, history restore).
-  const itemChangeRef = useRef<((item: Item) => void) | null>(null);
   const onPanelItemChange = useCallback(
     (updated: Item) => (itemChangeRef.current ?? applyItem)(updated),
     [applyItem],
