@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test \"lib/**/*.test.ts\"",
+    "smoke:auth-gate": "node scripts/smoke-auth-gate.ts",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
   },
   "dependencies": {

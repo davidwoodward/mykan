@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipLayer } from "@/components/TooltipLayer";
@@ -19,9 +20,12 @@ export const metadata: Metadata = {
   description: "Projects, items, and a kanban board.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // The per-request CSP nonce proxy.ts set (KANBAN-61). Reading headers() also
+  // makes every page dynamic, which a nonce requires.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
@@ -33,7 +37,7 @@ export default function RootLayout({
             is no flash of the wrong one, and keeps it applied if React ever
             client-renders the root and rewrites <html>'s className — see
             lib/theme.ts (KANBAN-49). */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         {children}
         <TooltipLayer />
       </body>
