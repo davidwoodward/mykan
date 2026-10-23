@@ -177,6 +177,79 @@ export async function listOpenIssues(
   return { ok: true, issues };
 }
 
+/**
+ * A database timestamp (`…T15:08:11.938411+00:00`) as GitHub's documented
+ * `YYYY-MM-DDTHH:MM:SSZ`, an hour early to absorb clock skew between us and
+ * GitHub. Listing a few extra closed issues costs nothing; missing one would.
+ */
+function githubSince(iso: string): string | null {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null; // unreadable → list every closed issue
+  return new Date(t - 60 * 60 * 1000).toISOString().replace(/\.\d+Z$/, "Z");
+}
+
+export type ClosedIssuesResult =
+  | { ok: true; numbers: number[] }
+  | { ok: false; status: number; authFailed: boolean; error: string };
+
+/**
+ * List the numbers of a repo's CLOSED issues (pull requests excluded), for Sync
+ * with GitHub (KANBAN-65). One paginated listing per repo, never one request per
+ * card. `since` (ISO) limits it to issues updated at or after that time: closing
+ * an issue updates it, so a card imported at T only needs issues updated since T.
+ * Read-only; a 401/403 sets `authFailed` like {@link listOpenIssues}.
+ */
+export async function listClosedIssueNumbers(
+  pat: string,
+  owner: string,
+  repo: string,
+  since: string | null,
+): Promise<ClosedIssuesResult> {
+  const numbers: number[] = [];
+  const PER_PAGE = 100;
+  const MAX_PAGES = 20; // hard cap: the 2000 most recently updated closed issues
+  const sinceAt = since ? githubSince(since) : null;
+  const sinceParam = sinceAt ? `&since=${encodeURIComponent(sinceAt)}` : "";
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url =
+      `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+      `/issues?state=closed&sort=updated&direction=desc&per_page=${PER_PAGE}&page=${page}${sinceParam}`;
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: githubHeaders(pat) });
+    } catch {
+      return { ok: false, status: 0, authFailed: false, error: "Couldn’t reach GitHub — try again." };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ok: false,
+        status: res.status,
+        authFailed: true,
+        error: "GitHub rejected your token — reconnect your account.",
+      };
+    }
+    if (res.status === 404) {
+      return {
+        ok: false,
+        status: 404,
+        authFailed: false,
+        error: `No repo “${owner}/${repo}” (or your token can’t see it).`,
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, status: res.status, authFailed: false, error: `GitHub error (${res.status}).` };
+    }
+    const batch = (await res.json().catch(() => [])) as RawIssue[];
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    for (const raw of batch) {
+      if (raw.pull_request) continue;
+      numbers.push(raw.number);
+    }
+    if (batch.length < PER_PAGE) break;
+  }
+  return { ok: true, numbers };
+}
+
 export type GetIssueResult =
   | { ok: true; issue: GithubIssue }
   | { ok: false; status: number; authFailed: boolean; error: string };

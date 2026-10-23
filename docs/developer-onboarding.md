@@ -55,16 +55,17 @@ After that, these are the controls, and exactly what each one does:
 
 | Control | Where | What it does | What it does **not** do |
 | --- | --- | --- | --- |
+| **Sync** | Right of the board toolbar (on a phone: the filter sheet → **Sync with GitHub**), or *"sync KANBAN with GitHub"* | Imports new open issues from **every** repo-linked area, then moves each card whose issue was **closed on GitHub** to Done. A line under the toolbar lists what moved and what came in | Never reopens a card, never changes content, and doesn't touch the issues |
 | **Import** | Areas panel, on a repo-linked area | Creates a Not Started card for each **open** issue in that repo that doesn't already have a card in the project (archived cards count, so they don't come back) | Never changes an existing card, and ignores closed issues |
 | **Refresh** | A linked card's GitHub details on its card page (or *"refresh KANBAN-N from GitHub"*) | Pulls that one issue's title, body and labels onto the card, overwriting them (the old version stays in history) | Never changes status, area or assignees |
 | **Done → closes the issue** | Automatic, whenever a linked card moves | Moving a card to Done closes its issue; moving it out of Done reopens it, using **your** GitHub token | — |
 | **"not synced" badge** | On a card whose close/reopen failed | Click to retry. If you have no GitHub token connected, connect one (above) first | — |
 
-Status only flows **from mykan to GitHub**. If an issue is closed on GitHub
-itself, its card stays where it is until someone moves it. A one-click **Sync
-with GitHub** that does that for the whole board is planned
-([KANBAN-65](https://kanban.dbwoodward.com/KANBAN-65)). The board toolbar's
-**Refresh** only reloads the board from mykan; it doesn't contact GitHub.
+Status flows **from mykan to GitHub** on every move. The one way it flows back is
+**Sync**: an issue closed on GitHub itself leaves its card where it is until
+someone runs Sync (or moves the card). Sync only shows once the project is linked
+to a GitHub account. The board toolbar's **Refresh** only reloads the board from
+mykan; it doesn't contact GitHub.
 
 ## 3. Connect Claude Code over MCP
 
@@ -125,6 +126,7 @@ Ask Claude Code naturally — it maps to the tools:
 - *"Move KANBAN-N to In Progress / Done"* → `update_item_status`
 - *"Create a task in Permit Saige: …"* → `create_item`
 - *"Refresh KANBAN-N from GitHub"* → `refresh_item_from_github`
+- *"Sync KANBAN with GitHub"* → `sync_project_with_github`
 - *"Show me KANBAN-N"* → `get_item` (description, decisions, open questions,
   progress summary; attached files via `get_attachment`)
 - *"Tag / assign / re-parent KANBAN-N"* → `set_item_tags`, `set_item_assignees`,
@@ -166,7 +168,7 @@ Progress, do the build from its description, and move it to Done.
 | `claude mcp get mykan` shows not connected | Bad/typo'd token, or token revoked | Re-mint a token (§3a) and re-run the `claude mcp add` command |
 | Tools missing in a session after connecting, or calls fail after a mykan deploy | Tool list and MCP session are cached for the Claude Code session | Restart the Claude Code session (or reconnect with `/mcp`) |
 | GitHub refresh/write-back fails | No GitHub PAT connected, or wrong scopes | Connect your PAT (§2); see `github-integration.md` for scopes |
-| An issue was closed on GitHub but its card is still open | Status doesn't flow from GitHub to mykan yet | Move the card to Done yourself (bulk sync is [KANBAN-65](https://kanban.dbwoodward.com/KANBAN-65)) |
+| An issue was closed on GitHub but its card is still open | Status only comes back from GitHub when someone syncs | Click **Sync** on the board toolbar (§2) |
 
 ## See also
 

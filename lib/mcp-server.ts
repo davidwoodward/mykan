@@ -10,7 +10,7 @@ import { looksLikeMcpToken, verifyMcpToken } from "@/lib/mcp-tokens";
 import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import { projectUrl } from "@/lib/card-url";
-import { refreshItemFromGithub } from "@/lib/github-core";
+import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
   appendItemNote,
   createItem,
@@ -498,13 +498,20 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "refresh_item_from_github",
-    "Re-pull a GitHub-linked item from its source issue, OVERWRITING the item's title/body and tags with the issue's CURRENT title, body, and labels. This is the ONLY way a linked item re-syncs from GitHub — import never updates an existing item and nothing polls. Status, area, and assignees are mykan's and are left untouched. Uses your PAT for the item's account; the previous content is recoverable from item history. `item` is an id or KEY-N reference.",
+    "Re-pull a GitHub-linked item from its source issue, OVERWRITING the item's title/body and tags with the issue's CURRENT title, body, and labels. This is the ONLY way a linked item's content re-syncs from GitHub — import never updates an existing item, sync_project_with_github only moves cards whose issue closed to Done, and nothing polls. Status, area, and assignees are mykan's and are left untouched. Uses your PAT for the item's account; the previous content is recoverable from item history. `item` is an id or KEY-N reference.",
     { item: z.string().describe("item id or KEY-N reference") },
     async (a) => {
       const r = await refreshItemFromGithub(getSupabase(), actor(), a.item);
       if (!r.ok) return json({ error: r.error });
       return out(await getItem(getSupabase(), actor(), a.item));
     },
+  );
+
+  server.tool(
+    "sync_project_with_github",
+    "Bring a project's board level with GitHub in one action, using your PAT for the project's GitHub account. First imports new OPEN issues from every repo-linked Area as Not started cards (like Areas → Import, for all areas at once). Then, for every non-archived card that isn't Done and is linked to a GitHub issue, checks the issue's state: a card whose issue was CLOSED on GitHub moves to Done (no write-back — the issue is already closed), except a card flagged not synced, which stays put and is listed in `not_synced`. Never reopens cards and never changes card content (use refresh_item_from_github for that). Running it again straight away changes nothing. Returns `imported` (refs of new cards), `moved` ({ref, issue}), and per-repo `errors`; `needs_connect` means you have no usable PAT for the account and nothing was done. `project` is a key (current or old), name, or id.",
+    { project: z.string().describe("project key (current or old), name, or id") },
+    async (a) => out(await syncProjectWithGithub(getSupabase(), actor(), a.project, "mcp")),
   );
 
   server.tool(
