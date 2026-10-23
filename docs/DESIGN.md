@@ -47,17 +47,17 @@ made tap-visible below `sm`, since touch has no hover.)
 the first line of text, in this order: open pencil · GitHub not-synced flag (when present) ·
 attachments clip · history clock (hover) · **type pill** · **delete trash icon** (hover). Delete
 is an icon, not the word, and stays last (after the pill, never beside the pencil) so it isn't
-easy to hit by accident; it is the same one-click soft delete (archive, restorable from the
+easy to hit by accident; it is the same soft delete (archive, restorable from the
 archived view) and stays tap-visible below `sm`. Every icon in the cluster has a prompt
 styled tooltip (below; since KANBAN-47 that is simply its `title`, shown by the app-wide
 tooltip layer). The archived view's Restore / Delete forever
 words are unchanged. Board cards use the same trash icon (hover-only), from the shared
 `components/DeleteIconButton.tsx` (David, 2026-09-17).
 
-**Delete asks first on touch (KANBAN-59, 2026-10-09).** On touch layouts (the `compact:`
-media: below `lg`, or `pointer: coarse`) a tap on the trash icon doesn't delete: it turns
-into an inline **Delete** (red) / Cancel pair, and only Delete archives. Cancel, Esc or a
-press anywhere else backs out. With a mouse on a wide screen it stays one click.
+**Delete asks first (KANBAN-59 on touch, 2026-10-09; KANBAN-64 everywhere, 2026-10-23).** On
+every device a press on the trash icon doesn't delete: it turns into an inline **Delete** (red)
+/ Cancel pair with Delete focused, and only Delete (click, tap or Enter) archives. Cancel, Esc
+or a press anywhere else backs out.
 
 ## Paragraph spacing on list rows and board cards (KANBAN-15, 2026-09-17)
 

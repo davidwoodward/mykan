@@ -2,17 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-/** Touch layouts — the same media as the `compact:` variant in `globals.css`. */
-const TOUCH_QUERY = "(max-width: 63.999rem), (pointer: coarse)";
-
 /**
  * The soft-delete (archive, restorable from the archived view) trash icon on a
  * list row or board card (KANBAN-12). Always last in its row, never beside the
  * pencil. `className` sets visibility (e.g. hover-only) on the wrapper.
  *
- * On touch layouts a tap asks first (KANBAN-59): the icon turns into an inline
- * **Delete** / Cancel pair, and only Delete archives. Cancel, Esc or a press
- * anywhere else backs out. With a mouse it stays one click.
+ * A press asks first, on every device (KANBAN-59 on touch, KANBAN-64 everywhere):
+ * the icon turns into an inline **Delete** / Cancel pair, and only Delete
+ * archives. Cancel, Esc or a press anywhere else backs out.
  */
 export function DeleteIconButton({
   onDelete,
@@ -85,10 +82,7 @@ export function DeleteIconButton({
     <span ref={wrapRef} className={`inline-flex shrink-0 ${className}`}>
       <button
         type="button"
-        onClick={() => {
-          if (window.matchMedia(TOUCH_QUERY).matches) setConfirming(true);
-          else onDelete();
-        }}
+        onClick={() => setConfirming(true)}
         aria-label={label}
         title="Delete"
         className="grid h-6 w-6 place-items-center rounded text-[var(--color-faint)] outline-none transition-colors hover:text-[var(--color-bug)] focus-visible:text-[var(--color-bug)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
