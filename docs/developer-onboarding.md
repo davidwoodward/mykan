@@ -12,7 +12,9 @@ that's on the owner, not you (see [Troubleshooting](#troubleshooting)). Everythi
 below is yours to do.
 
 Use the **exact Google account** whose email the owner whitelisted. A different
-Google account — even yours — will be rejected.
+Google account — even yours — will be rejected. (For Gmail addresses, dots and
+`+tags` don't matter: `jane.doe@gmail.com` and `janedoe+work@gmail.com` are the
+same account, just as Google treats them.)
 
 ---
 
@@ -20,8 +22,9 @@ Google account — even yours — will be rejected.
 
 1. Go to **https://kanban.dbwoodward.com**.
 2. Click **Sign in with Google** and pick the whitelisted account.
-3. You land on the board. The project the owner shared with you is listed — open
-   it with the project picker (back-chevron in the top bar).
+3. You land on your **projects list**. The project the owner shared with you is
+   there — click it to open its board. Once you're inside a project, the
+   back-chevron in the top bar (**Switch project**) jumps between projects.
 
 If you see **"That account is not authorized to use Mykan,"** you signed in with
 the wrong Google account. Sign out and retry with the whitelisted one.
@@ -97,6 +100,29 @@ Ask Claude Code naturally — it maps to the tools:
 - *"Move KANBAN-N to In Progress / Done"* → `update_item_status`
 - *"Create a task in Permit Saige: …"* → `create_item`
 - *"Refresh KANBAN-N from GitHub"* → `refresh_item_from_github`
+- *"Show me KANBAN-N"* → `get_item` (description, decisions, open questions,
+  progress summary; attached files via `get_attachment`)
+- *"Tag / assign / re-parent KANBAN-N"* → `set_item_tags`, `set_item_assignees`,
+  `set_item_parent`, `set_item_area`
+
+### How a card is organised
+
+Every card has more than a description, and Claude Code is told to keep each
+thing in its place:
+
+- **Description** — a clean, living spec (objective, scope, plan, acceptance),
+  edited in place with `set_item_body` when the plan changes. Old versions are
+  kept in the item's history.
+- **Progress notes** — one short checkpoint per meaningful step
+  (`append_item_note`). Progress never goes in the description.
+- **Questions** — anything the card leaves undecided (`ask_question`), closed
+  with `answer_question` once the owner decides.
+- **Decisions** — what the project owner decided (`record_decision`). Your agent
+  records decisions; it doesn't make them.
+
+Entries are editable and versioned (`update_item_entry`,
+`list_item_entry_versions`, `restore_item_entry_version`), and each is capped at
+2,000 characters. Put longer detail in the repo or the PR and link it.
 
 Full tool list and semantics: [`mcp-setup.md`](./mcp-setup.md).
 
@@ -110,10 +136,10 @@ Progress, do the build from its description, and move it to Done.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| "That account is not authorized" on sign-in | Wrong Google account, or not whitelisted yet | Use the whitelisted account; if it still fails, the owner needs to whitelist your email |
+| "That account is not authorized" on sign-in | Wrong Google account, or not whitelisted yet | Use the whitelisted account; if it still fails, the owner needs to whitelist your email (for Gmail, dots and `+tags` are ignored, so a different spelling of the same address is fine) |
 | Signed in, but the project isn't listed | Project not shared with you | Ask the owner to share it (adds you to the project's members) |
 | `claude mcp get mykan` shows not connected | Bad/typo'd token, or token revoked | Re-mint a token (§3a) and re-run the `claude mcp add` command |
-| Tools missing in a session after connecting | Tool list cached for the session | Restart the Claude Code session |
+| Tools missing in a session after connecting, or calls fail after a mykan deploy | Tool list and MCP session are cached for the Claude Code session | Restart the Claude Code session (or reconnect with `/mcp`) |
 | GitHub refresh/write-back fails | No GitHub PAT connected, or wrong scopes | Connect your PAT (§2); see `github-integration.md` for scopes |
 
 ## See also
