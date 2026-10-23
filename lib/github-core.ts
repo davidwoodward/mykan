@@ -387,6 +387,9 @@ export type { SyncMovedCard, SyncSummary };
  *    is already closed. A card flagged not synced is left alone and reported:
  *    its issue may be closed only because a reopen failed.
  *
+ * `categoryId` given → sync only that area: import its repo, and check only
+ * cards linked to that repo (wherever they're filed). Omitted → every area.
+ *
  * Never reopens a card or pulls content. Running it again straight away changes
  * nothing. See docs/github-integration.md §Sync.
  */
@@ -395,6 +398,7 @@ export async function syncProjectWithGithub(
   actor: string,
   projectRef: string,
   source: HistorySource = "mcp",
+  opts: { categoryId?: string } = {},
 ): Promise<CoreResult<SyncSummary>> {
   if (!isGithubCryptoConfigured()) {
     return coreErr("GitHub isn’t configured on the server (missing encryption key).", 503);
@@ -428,10 +432,17 @@ export async function syncProjectWithGithub(
     errors: [],
   };
 
-  // 1. Import new open issues from every repo-linked area.
+  // 1. Import new open issues from the area, or from every repo-linked area.
   const cats = await listCategories(sb, project.id);
-  if (cats.some((c) => c.github_repo)) {
-    const imp = await importFromGithub(sb, actor, project.id);
+  let onlyRepo: string | null = null;
+  if (opts.categoryId) {
+    const cat = cats.find((c) => c.id === opts.categoryId);
+    if (!cat) return coreErr("Area not found in this project.", 404);
+    if (!cat.github_repo) return coreErr("This area isn’t linked to a GitHub repo.", 400);
+    onlyRepo = `${owner}/${cat.github_repo}`.toLowerCase();
+  }
+  if (opts.categoryId || cats.some((c) => c.github_repo)) {
+    const imp = await importFromGithub(sb, actor, project.id, { categoryId: opts.categoryId });
     if (!imp.ok) return imp;
     if (imp.data.needs_connect) return coreOk({ ...summary, needs_connect: imp.data.needs_connect });
     for (const r of imp.data.repos) {
@@ -452,6 +463,7 @@ export async function syncProjectWithGithub(
 
   for (const check of planRepoChecks((rows ?? []) as SyncCandidate[])) {
     const repoName = `${check.owner}/${check.repo}`;
+    if (onlyRepo && repoName.toLowerCase() !== onlyRepo) continue;
     // The PAT belongs to the project's account; a backlink under another owner
     // (the project was re-bound since import) can't be checked with it.
     if (check.owner.toLowerCase() !== owner.toLowerCase()) {

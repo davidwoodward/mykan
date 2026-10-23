@@ -55,8 +55,8 @@ After that, these are the controls, and exactly what each one does:
 
 | Control | Where | What it does | What it does **not** do |
 | --- | --- | --- | --- |
-| **Sync** | Right of the board toolbar (on a phone: the filter sheet → **Sync with GitHub**), or *"sync KANBAN with GitHub"* | Imports new open issues from **every** repo-linked area, then moves each card whose issue was **closed on GitHub** to Done. A line under the toolbar lists what moved and what came in | Never reopens a card, never changes content, and doesn't touch the issues |
-| **Import** | Areas panel, on a repo-linked area | Creates a Not Started card for each **open** issue in that repo that doesn't already have a card in the project (archived cards count, so they don't come back) | Never changes an existing card, and ignores closed issues |
+| **Sync** (one area) | Areas panel, on a repo-linked area | Creates a Not Started card for each **open** issue in that repo that doesn't already have a card (archived cards count, so they don't come back), then moves each card whose issue was **closed on GitHub** to Done. The result shows on the area's row | Never reopens a card, never changes content, and doesn't touch the issues |
+| **Sync** (all areas) | Right of the board toolbar (on a phone: the filter sheet → **Sync with GitHub**), or *"sync KANBAN with GitHub"* | Opens the Areas panel and syncs every repo-linked area there, one after another | Same as above |
 | **Refresh** | A linked card's GitHub details on its card page (or *"refresh KANBAN-N from GitHub"*) | Pulls that one issue's title, body and labels onto the card, overwriting them (the old version stays in history) | Never changes status, area or assignees |
 | **Done → closes the issue** | Automatic, whenever a linked card moves | Moving a card to Done closes its issue; moving it out of Done reopens it, using **your** GitHub token | — |
 | **"not synced" badge** | On a card whose close/reopen failed | Click to retry. If you have no GitHub token connected, connect one (above) first | — |
