@@ -58,7 +58,6 @@ async function responseError(res: Response): Promise<string> {
 import { useColumnCollapse } from "@/components/useColumnCollapse";
 import { useKeyboardNav } from "@/components/useKeyboardNav";
 import { computePosition } from "@/lib/position";
-import { syncMessage, type SyncSummary } from "@/lib/github-sync-plan";
 
 type View = "list" | "board";
 
@@ -132,11 +131,9 @@ export function ProjectDetailView({
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   // The touch layout's "View & filters" sheet (KANBAN-52).
   const [showFilters, setShowFilters] = useState(false);
-  // Sync with GitHub (KANBAN-65): in flight, and the result line it leaves.
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{ text: string; tone: "ok" | "warn" | "err" } | null>(
-    null,
-  );
+  // Sync with GitHub (KANBAN-65) runs in the Areas panel: each bump opens it
+  // and syncs every repo-linked area there.
+  const [syncRequest, setSyncRequest] = useState(0);
   // The row "selected" in the status-grouped list — drives the highlight, the
   // j/k/g/G/u/d keyboard model, and where a new item is inserted.
   // Raw last-selected id; the effective `selectedId` is derived below, clamped
@@ -193,26 +190,10 @@ export function ProjectDetailView({
     }
   }, [projectId]);
 
-  // Sync with GitHub (KANBAN-65): import new open issues from every linked area
-  // and move cards whose issue was closed to Done, then reload the board.
-  const runSync = useCallback(async () => {
-    setSyncing(true);
-    setSyncMsg(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/github/sync`, { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as SyncSummary & { error?: string };
-      if (!res.ok) {
-        setSyncMsg({ text: data.error ?? `Sync failed (HTTP ${res.status}).`, tone: "err" });
-        return;
-      }
-      setSyncMsg(syncMessage(data));
-      if (data.moved.length || data.imported.length) await refetch();
-    } catch {
-      setSyncMsg({ text: "Network error — try again.", tone: "err" });
-    } finally {
-      setSyncing(false);
-    }
-  }, [projectId, refetch]);
+  const runSync = useCallback(() => {
+    setShowCategoryManager(true);
+    setSyncRequest((n) => n + 1);
+  }, []);
 
   // A new item was created in the AddItemModal — append it to the local list.
   const addCreated = useCallback((created: Item) => {
@@ -1334,14 +1315,13 @@ export function ProjectDetailView({
           {githubLinked && !showArchived ? (
             <button
               type="button"
-              onClick={() => void runSync()}
-              disabled={syncing}
+              onClick={runSync}
               aria-label="Sync with GitHub"
-              title="Sync with GitHub: import new issues and move cards whose issue closed to Done"
-              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1 text-sm text-[var(--color-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent-ink)] disabled:opacity-60"
+              title="Sync with GitHub: opens Areas and syncs every linked area"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1 text-sm text-[var(--color-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent-ink)]"
             >
-              <SyncIcon spinning={syncing} />
-              {syncing ? "Syncing…" : "Sync"}
+              <SyncIcon />
+              Sync
             </button>
           ) : null}
           {!showArchived ? (
@@ -1386,34 +1366,6 @@ export function ProjectDetailView({
           ) : null}
         </div>
       </div>
-
-      {/* Sync with GitHub result (KANBAN-65), right under the toolbar. */}
-      {syncMsg ? (
-        <div
-          role="status"
-          className={`mb-3 flex items-start gap-2 rounded-md border px-3 py-2 text-sm lg:shrink-0 ${
-            syncMsg.tone === "err"
-              ? "border-[var(--color-bug)] text-[var(--color-bug)]"
-              : syncMsg.tone === "warn"
-                ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)]"
-          }`}
-        >
-          <SyncIcon />
-          <span className="min-w-0 flex-1 break-words">{syncMsg.text}</span>
-          <button
-            type="button"
-            onClick={() => setSyncMsg(null)}
-            aria-label="Dismiss sync result"
-            title="Dismiss"
-            className="-my-0.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[var(--color-faint)] hover:text-[var(--color-ink)]"
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      ) : null}
 
       {/* The board/list gets its own scroll region (capped to the viewport) so
           its contents scroll under a static toolbar, while the page itself
@@ -1604,11 +1556,10 @@ export function ProjectDetailView({
               <SheetButton
                 onClick={() => {
                   setShowFilters(false);
-                  void runSync();
+                  runSync();
                 }}
-                disabled={syncing}
               >
-                {syncing ? "Syncing…" : "Sync with GitHub"}
+                Sync with GitHub
               </SheetButton>
             ) : null}
             {!showArchived ? (
@@ -1635,7 +1586,8 @@ export function ProjectDetailView({
       {showCategoryManager ? (
         <CategoryManager
           projectId={projectId}
-          onImported={refetch}
+          syncRequest={syncRequest}
+          onSynced={refetch}
           onClose={() => setShowCategoryManager(false)}
         />
       ) : null}
@@ -1981,10 +1933,10 @@ function Segmented({
 }
 
 /** Two arrows chasing each other: the Sync with GitHub icon (KANBAN-65). */
-function SyncIcon({ spinning = false }: { spinning?: boolean }) {
+function SyncIcon() {
   return (
     <svg
-      className={`mt-px h-4 w-4 shrink-0 ${spinning ? "animate-spin" : ""}`}
+      className="h-4 w-4 shrink-0"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

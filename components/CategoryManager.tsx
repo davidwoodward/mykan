@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useCategories, PathInput } from "@/components/CategoryPicker";
 import { AbandonButton } from "@/components/AbandonButton";
 import { GithubHelpButton } from "@/components/GithubHelp";
+import { syncMessage, type SyncSummary } from "@/lib/github-sync-plan";
 import type { Category } from "@/lib/types";
 
 /** Depth of a node (root = 0) for indenting the tree. */
@@ -19,27 +20,62 @@ function depthOf(byId: Map<string, Category>, c: Category): number {
   return d;
 }
 
-/** The shape POST /api/projects/[id]/github/import returns (subset we render). */
-type ImportSummary = {
-  account: string | null;
-  needs_connect?: { account: string; reason: "missing" | "invalid" };
-  repos: { repo: string; area: string; imported: number; skipped: number; error?: string }[];
-  imported: number;
-  skipped: number;
-};
+/** One area's Sync with GitHub state: running, then its result line. */
+type AreaSync = { running: boolean; msg: { text: string; tone: "ok" | "warn" | "err" } | null };
 
-/** Manage a project's Areas: rename (ripples), add, delete, import from GitHub. */
+/** Manage a project's Areas: rename (ripples), add, delete, sync with GitHub. */
 export function CategoryManager({
   projectId,
-  onImported,
+  syncRequest = 0,
+  onSynced,
   onClose,
 }: {
   projectId: string;
-  /** Called after a successful import so the board pulls the new items in. */
-  onImported: () => void;
+  /**
+   * Bumped by the board toolbar's Sync (KANBAN-65): each new value syncs every
+   * repo-linked area in turn, each row showing its own progress and result.
+   */
+  syncRequest?: number;
+  /** Called after a sync changed cards, so the board pulls them in. */
+  onSynced: () => void;
   onClose: () => void;
 }) {
   const ctx = useCategories();
+  // Per-area sync state, keyed by area id. Lives here, not in the rows, so the
+  // toolbar's sync-all can drive every row.
+  const [syncs, setSyncs] = useState<Record<string, AreaSync>>({});
+  const syncingRef = useRef(new Set<string>());
+
+  const syncArea = useCallback(
+    async (catId: string): Promise<void> => {
+      if (syncingRef.current.has(catId)) return;
+      syncingRef.current.add(catId);
+      setSyncs((cur) => ({ ...cur, [catId]: { running: true, msg: null } }));
+      let msg: AreaSync["msg"];
+      let changed = false;
+      try {
+        const res = await fetch(`/api/projects/${projectId}/github/sync`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ category_id: catId }),
+        });
+        const data = (await res.json().catch(() => ({}))) as SyncSummary & { error?: string };
+        if (!res.ok) {
+          msg = { text: data.error ?? `Sync failed (HTTP ${res.status}).`, tone: "err" };
+        } else {
+          msg = syncMessage(data);
+          changed = data.moved.length > 0 || data.imported.length > 0;
+        }
+      } catch {
+        msg = { text: "Network error — try again.", tone: "err" };
+      }
+      syncingRef.current.delete(catId);
+      setSyncs((cur) => ({ ...cur, [catId]: { running: false, msg } }));
+      if (changed) onSynced();
+    },
+    [projectId, onSynced],
+  );
+
   // Repo names under the project's bound GitHub account (for the binding
   // picker). Empty until loaded, or when no account/PAT is connected — the
   // picker still lets you type a repo name by hand.
@@ -89,6 +125,23 @@ export function CategoryManager({
     return out;
   }, [ctx]);
 
+  // The toolbar's Sync: every repo-linked area, one after another (in panel
+  // order), so each row's spinner and result show as its turn comes.
+  const linkedIds = useMemo(
+    () => ordered.filter(({ cat }) => cat.github_repo).map(({ cat }) => cat.id),
+    [ordered],
+  );
+  // Each request runs once, even though the effect re-runs as areas change.
+  const handledRequest = useRef(0);
+  useEffect(() => {
+    if (!syncRequest || syncRequest === handledRequest.current) return;
+    if (!ctx) return; // areas not loaded yet; runs once they are
+    handledRequest.current = syncRequest;
+    void (async () => {
+      for (const id of linkedIds) await syncArea(id);
+    })();
+  }, [syncRequest, ctx, linkedIds, syncArea]);
+
   if (!ctx) return null;
 
   return (
@@ -127,9 +180,9 @@ export function CategoryManager({
                   key={cat.id}
                   cat={cat}
                   depth={depth}
-                  projectId={projectId}
                   repoOptions={repoOptions}
-                  onImported={onImported}
+                  sync={syncs[cat.id]}
+                  onSync={() => void syncArea(cat.id)}
                   onRename={(name) => ctx.rename(cat.id, name)}
                   onSetRepo={(repo) => ctx.setRepo(cat.id, repo)}
                   onDelete={() => ctx.remove(cat.id)}
@@ -165,18 +218,18 @@ export function CategoryManager({
 function CategoryRow({
   cat,
   depth,
-  projectId,
   repoOptions,
-  onImported,
+  sync,
+  onSync,
   onRename,
   onSetRepo,
   onDelete,
 }: {
   cat: Category;
   depth: number;
-  projectId: string;
   repoOptions: string[];
-  onImported: () => void;
+  sync: AreaSync | undefined;
+  onSync: () => void;
   onRename: (name: string) => void;
   onSetRepo: (repo: string | null) => void;
   onDelete: () => void;
@@ -185,59 +238,8 @@ function CategoryRow({
   const [draft, setDraft] = useState(cat.name);
   const renameAbandoned = useRef(false);
   const [repoEditing, setRepoEditing] = useState(false);
-  const [importing, setImporting] = useState(false);
-  // A short result line under the row after an import ("Imported 5 · skipped 2",
-  // "Up to date", a Connect prompt, or an error). Cleared when re-importing.
-  const [importMsg, setImportMsg] = useState<{ text: string; tone: "ok" | "warn" | "err" } | null>(
-    null,
-  );
-
-  async function runImport() {
-    if (importing) return;
-    setImporting(true);
-    setImportMsg(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/github/import`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ category_id: cat.id }),
-      });
-      const data = (await res.json().catch(() => ({}))) as ImportSummary & { error?: string };
-      if (!res.ok) {
-        setImportMsg({ text: data.error ?? `Import failed (HTTP ${res.status}).`, tone: "err" });
-        return;
-      }
-      if (data.needs_connect) {
-        const verb = data.needs_connect.reason === "invalid" ? "Reconnect" : "Connect";
-        setImportMsg({
-          text: `${verb} GitHub for ${data.needs_connect.account} (top bar) to import.`,
-          tone: "warn",
-        });
-        return;
-      }
-      const repoErr = data.repos.find((r) => r.error);
-      if (repoErr) {
-        setImportMsg({ text: repoErr.error ?? "Import error.", tone: "err" });
-        return;
-      }
-      if (data.imported > 0) {
-        setImportMsg({
-          text: `Imported ${data.imported}${data.skipped ? ` · skipped ${data.skipped}` : ""}.`,
-          tone: "ok",
-        });
-        onImported();
-      } else {
-        setImportMsg({
-          text: data.skipped ? `Up to date · ${data.skipped} already imported.` : "No open issues.",
-          tone: "ok",
-        });
-      }
-    } catch {
-      setImportMsg({ text: "Network error — try again.", tone: "err" });
-    } finally {
-      setImporting(false);
-    }
-  }
+  const syncing = sync?.running ?? false;
+  const syncMsg = sync?.msg ?? null;
 
   function commit() {
     // Abandoned: a blur fired while the field unmounts must not rename.
@@ -331,13 +333,13 @@ function CategoryRow({
       {cat.github_repo ? (
         <button
           type="button"
-          onClick={() => void runImport()}
-          disabled={importing}
-          aria-label={`Import open issues from ${cat.github_repo}`}
-          title={`Import open issues from ${cat.github_repo}`}
+          onClick={onSync}
+          disabled={syncing}
+          aria-label={`Sync with ${cat.github_repo}`}
+          title={`Sync with ${cat.github_repo}: import new issues and move cards whose issue closed to Done`}
           className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)] disabled:opacity-60"
         >
-          {importing ? (
+          {syncing ? (
             <svg
               className="h-3.5 w-3.5 animate-spin"
               viewBox="0 0 24 24"
@@ -358,11 +360,13 @@ function CategoryRow({
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
-              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+              <path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" />
+              <path d="M4 4v4h4" />
+              <path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" />
+              <path d="M20 20v-4h-4" />
             </svg>
           )}
-          {importing ? "Importing…" : "Import"}
+          {syncing ? "Syncing…" : "Sync"}
         </button>
       ) : null}
       <button
@@ -379,17 +383,18 @@ function CategoryRow({
         Delete
       </button>
       </div>
-      {importMsg ? (
+      {syncMsg ? (
         <p
+          role="status"
           className={`mt-1 pl-2 text-[11px] ${
-            importMsg.tone === "err"
+            syncMsg.tone === "err"
               ? "text-[var(--color-bug)]"
-              : importMsg.tone === "warn"
+              : syncMsg.tone === "warn"
                 ? "text-[var(--color-accent-ink)]"
                 : "text-[var(--color-faint)]"
           }`}
         >
-          {importMsg.text}
+          {syncMsg.text}
         </p>
       ) : null}
     </li>

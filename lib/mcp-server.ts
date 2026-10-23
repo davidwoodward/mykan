@@ -10,6 +10,7 @@ import { looksLikeMcpToken, verifyMcpToken } from "@/lib/mcp-tokens";
 import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import { projectUrl } from "@/lib/card-url";
+import { normAreaPath } from "@/lib/board-state";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
   appendItemNote,
@@ -509,9 +510,28 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "sync_project_with_github",
-    "Bring a project's board level with GitHub in one action, using your PAT for the project's GitHub account. First imports new OPEN issues from every repo-linked Area as Not started cards (like Areas → Import, for all areas at once). Then, for every non-archived card that isn't Done and is linked to a GitHub issue, checks the issue's state: a card whose issue was CLOSED on GitHub moves to Done (no write-back — the issue is already closed), except a card flagged not synced, which stays put and is listed in `not_synced`. Never reopens cards and never changes card content (use refresh_item_from_github for that). Running it again straight away changes nothing. Returns `imported` (refs of new cards), `moved` ({ref, issue}), and per-repo `errors`; `needs_connect` means you have no usable PAT for the account and nothing was done. `project` is a key (current or old), name, or id.",
-    { project: z.string().describe("project key (current or old), name, or id") },
-    async (a) => out(await syncProjectWithGithub(getSupabase(), actor(), a.project, "mcp")),
+    "Bring a project's board level with GitHub in one action, using your PAT for the project's GitHub account. First imports new OPEN issues from every repo-linked Area as Not started cards. Then, for every non-archived card that isn't Done and is linked to a GitHub issue, checks the issue's state: a card whose issue was CLOSED on GitHub moves to Done (no write-back — the issue is already closed), except a card flagged not synced, which stays put and is listed in `not_synced`. Never reopens cards and never changes card content (use refresh_item_from_github for that). Running it again straight away changes nothing. Pass `area` (a '/'-separated path with a linked repo) to sync just that area, as its Sync button in the Areas panel does: only its repo is imported and only cards linked to that repo are checked. Returns `imported` (refs of new cards), `moved` ({ref, issue}), and per-repo `errors`; `needs_connect` means you have no usable PAT for the account and nothing was done. `project` is a key (current or old), name, or id.",
+    {
+      project: z.string().describe("project key (current or old), name, or id"),
+      area: z
+        .string()
+        .optional()
+        .describe("optional Area path with a linked repo; omit to sync every linked area"),
+    },
+    async (a) => {
+      let categoryId: string | undefined;
+      if (a.area?.trim()) {
+        const areas = await listAreas(getSupabase(), actor(), a.project);
+        if (!areas.ok) return out(areas);
+        const want = normAreaPath(a.area);
+        const hit = areas.data.find((x) => normAreaPath(x.path) === want);
+        if (!hit) return json({ error: `No area “${a.area}” in this project.` });
+        categoryId = hit.id;
+      }
+      return out(
+        await syncProjectWithGithub(getSupabase(), actor(), a.project, "mcp", { categoryId }),
+      );
+    },
   );
 
   server.tool(

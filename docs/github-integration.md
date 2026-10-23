@@ -176,15 +176,19 @@ Refresh control. See KANBAN-24.
 ## Sync with GitHub — the board level with GitHub in one action
 
 Import only adds new cards and Refresh only pulls content, so before Sync nothing brought
-an issue **closed on GitHub** back into mykan: its card stayed open. **Sync** (the board
-toolbar's **Sync** button, the touch sheet's **Sync with GitHub**, MCP
-`sync_project_with_github`; `syncProjectWithGithub` in `lib/github-core.ts`) does both halves
-in one run, with the acting user's own PAT (missing/invalid → the usual Connect prompt, and
-nothing changes). It shows only when the project is linked to a GitHub account. KANBAN-65.
+an issue **closed on GitHub** back into mykan: its card stayed open. **Sync** does both
+halves in one run, with the acting user's own PAT (missing/invalid → the usual Connect
+prompt, and nothing changes). KANBAN-65. `syncProjectWithGithub` in `lib/github-core.ts`.
 
-1. **Import** — the all-areas import above, so every repo-linked area brings in its new open
-   issues. Skipped when no area is linked.
-2. **Close** — every non-archived card that isn't Done and has a backlink is checked against
+**Sync lives in the Areas panel.** Each repo-linked area has a **Sync** button (it replaced
+Import), and its progress and result show on that area's row. The board toolbar's **Sync**
+button (shown only when the project is linked to a GitHub account) and the touch sheet's
+**Sync with GitHub** open the Areas panel and sync every linked area there, one after another
+in panel order. MCP `sync_project_with_github` syncs every linked area, or one with `area`.
+
+1. **Import** — the area's repo (or every linked area's), as in Import above.
+2. **Close** — every non-archived card that isn't Done and has a backlink (for one area: a
+   backlink to that area's repo, wherever the card is filed) is checked against
    its repo's **closed** issues: one paginated `GET /issues?state=closed` per repo, never one
    request per card (`listClosedIssueNumbers`). `since` is the earliest `github_imported_at`
    among that repo's cards, an hour early for clock skew: import takes open issues only, so
@@ -195,8 +199,9 @@ nothing changes). It shows only when the project is linked to a GitHub account. 
    the card out of Done, and Sync must never undo that move. Backlinks under an owner other
    than the project's account can't be checked with its PAT and are reported, not moved.
 
-The result line under the toolbar lists the refs moved and imported, and any per-repo errors;
-"Up to date with GitHub." when nothing changed. Running it again straight away changes
+Each area's result line lists the refs moved and imported, any not-synced cards left alone,
+and errors; "Up to date with GitHub." when nothing changed. A card whose repo is no longer
+linked to any area is only checked by the all-areas MCP sync. Running it again straight away changes
 nothing (moved cards are Done, imported issues are deduped). Out of scope: reopening a card
 whose issue was reopened, pulling content (per-card Refresh), and any automatic or background
 sync. The planning is pure and tested (`lib/github-sync-plan.ts`).
