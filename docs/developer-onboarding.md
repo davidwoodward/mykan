@@ -41,6 +41,31 @@ shared identity:
 
 Skip this if your project doesn't touch GitHub.
 
+### How GitHub works on a project
+
+The wiring is set up once per project, usually by the owner:
+
+1. **Project → GitHub account.** Click the **Edit project** pencil next to the
+   project name and pick the account under **GitHub account**.
+2. **Area → repo.** Open **Areas** at the right of the board toolbar (on a phone:
+   the filter sheet → **Manage areas**). Hover an area and click **+ repo** to
+   link it to a repo under that account.
+
+After that, these are the controls, and exactly what each one does:
+
+| Control | Where | What it does | What it does **not** do |
+| --- | --- | --- | --- |
+| **Import** | Areas panel, on a repo-linked area | Creates a Not Started card for each **open** issue in that repo that doesn't already have a card in the project (archived cards count, so they don't come back) | Never changes an existing card, and ignores closed issues |
+| **Refresh** | A linked card's GitHub details on its card page (or *"refresh KANBAN-N from GitHub"*) | Pulls that one issue's title, body and labels onto the card, overwriting them (the old version stays in history) | Never changes status, area or assignees |
+| **Done → closes the issue** | Automatic, whenever a linked card moves | Moving a card to Done closes its issue; moving it out of Done reopens it, using **your** GitHub token | — |
+| **"not synced" badge** | On a card whose close/reopen failed | Click to retry. If you have no GitHub token connected, connect one (above) first | — |
+
+Status only flows **from mykan to GitHub**. If an issue is closed on GitHub
+itself, its card stays where it is until someone moves it. A one-click **Sync
+with GitHub** that does that for the whole board is planned
+([KANBAN-65](https://kanban.dbwoodward.com/KANBAN-65)). The board toolbar's
+**Refresh** only reloads the board from mykan; it doesn't contact GitHub.
+
 ## 3. Connect Claude Code over MCP
 
 This is what lets Claude Code (interactive **and** headless/cron) list your
@@ -141,6 +166,7 @@ Progress, do the build from its description, and move it to Done.
 | `claude mcp get mykan` shows not connected | Bad/typo'd token, or token revoked | Re-mint a token (§3a) and re-run the `claude mcp add` command |
 | Tools missing in a session after connecting, or calls fail after a mykan deploy | Tool list and MCP session are cached for the Claude Code session | Restart the Claude Code session (or reconnect with `/mcp`) |
 | GitHub refresh/write-back fails | No GitHub PAT connected, or wrong scopes | Connect your PAT (§2); see `github-integration.md` for scopes |
+| An issue was closed on GitHub but its card is still open | Status doesn't flow from GitHub to mykan yet | Move the card to Done yourself (bulk sync is [KANBAN-65](https://kanban.dbwoodward.com/KANBAN-65)) |
 
 ## See also
 
