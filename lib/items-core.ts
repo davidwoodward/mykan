@@ -465,6 +465,14 @@ export async function setItemStatus(
   itemRef: string,
   status: string,
   source: HistorySource = "mcp",
+  opts: {
+    /**
+     * False when the GitHub issue already holds the state this move implies, so
+     * there is nothing to write back (Sync with GitHub moving a card to Done
+     * because its issue closed, KANBAN-65). Any stale not-synced flag is cleared.
+     */
+    writeBack?: boolean;
+  } = {},
 ): Promise<CoreResult<ItemDetail>> {
   if (!isItemStatus(status)) return coreErr(`Invalid status: ${status}`, 400);
   const r = await loadVisibleItem(sb, actor, itemRef);
@@ -492,7 +500,12 @@ export async function setItemStatus(
   // reopens the issue with the actor's PAT. Best-effort — the status change is
   // already committed above and is NEVER rolled back; a skip/failure only records
   // a retry-able flag. See docs/github-integration.md §Write-back.
-  if (it.github_issue) {
+  if (it.github_issue && opts.writeBack === false) {
+    if (w.data.github_sync) {
+      await sb.from("items").update({ github_sync: null }).eq("id", it.id);
+      w.data.github_sync = null;
+    }
+  } else if (it.github_issue) {
     const sync = await writeBackOnStatusChange(
       sb,
       actor,

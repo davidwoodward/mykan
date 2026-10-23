@@ -154,9 +154,10 @@ write-back against the item's *current* status. `null` = in sync. See KANBAN-24.
 ## Manual refresh — issue → item (pull, on demand)
 
 A linked item does **not** auto-track its issue. Import brings an issue in **once**;
-after that the item and issue drift independently, and the **only** way an item
-re-syncs from GitHub is a human clicking **Refresh** on it. Nothing polls; there is
-no webhook (that's deferred GitHub-App territory). Refresh:
+after that the item and issue drift independently, and the **only** way an item's
+*content* re-syncs from GitHub is a human clicking **Refresh** on it (the one status
+change that flows in from GitHub is **Sync**, below). Nothing polls; there is no
+webhook (that's deferred GitHub-App territory). Refresh:
 
 - **Overwrites the item's content** — title/body (issue title + markdown body, via the
   same basic markdown→Tiptap used at import) and **tags** (from labels) — with the
@@ -172,6 +173,34 @@ line, large screens; and in the detail modal): the issue link, when the issue wa
 on refresh), when it was **imported** into mykan (`items.github_imported_at`), and the
 Refresh control. See KANBAN-24.
 
+## Sync with GitHub — the board level with GitHub in one action
+
+Import only adds new cards and Refresh only pulls content, so before Sync nothing brought
+an issue **closed on GitHub** back into mykan: its card stayed open. **Sync** (the board
+toolbar's **Sync** button, the touch sheet's **Sync with GitHub**, MCP
+`sync_project_with_github`; `syncProjectWithGithub` in `lib/github-core.ts`) does both halves
+in one run, with the acting user's own PAT (missing/invalid → the usual Connect prompt, and
+nothing changes). It shows only when the project is linked to a GitHub account. KANBAN-65.
+
+1. **Import** — the all-areas import above, so every repo-linked area brings in its new open
+   issues. Skipped when no area is linked.
+2. **Close** — every non-archived card that isn't Done and has a backlink is checked against
+   its repo's **closed** issues: one paginated `GET /issues?state=closed` per repo, never one
+   request per card (`listClosedIssueNumbers`). `since` is the earliest `github_imported_at`
+   among that repo's cards, an hour early for clock skew: import takes open issues only, so
+   an issue that matters closed (and was updated) after its card came in. A card whose issue
+   is closed **moves to Done**, with **no write-back** (the issue is already closed; any stale
+   not-synced flag is cleared). A card **flagged not synced** is left where it is and listed
+   in the result: its issue may be closed only because a reopen failed after someone moved
+   the card out of Done, and Sync must never undo that move. Backlinks under an owner other
+   than the project's account can't be checked with its PAT and are reported, not moved.
+
+The result line under the toolbar lists the refs moved and imported, and any per-repo errors;
+"Up to date with GitHub." when nothing changed. Running it again straight away changes
+nothing (moved cards are Done, imported issues are deduped). Out of scope: reopening a card
+whose issue was reopened, pulling content (per-card Refresh), and any automatic or background
+sync. The planning is pure and tested (`lib/github-sync-plan.ts`).
+
 ## MCP
 
 Per the standing rule, new surfaces ship with MCP parity — **with one deliberate carve-out:**
@@ -179,7 +208,8 @@ Per the standing rule, new surfaces ship with MCP parity — **with one delibera
 - **Credential entry stays human-UI-only.** An agent must never be able to *set* a PAT. The
   Connect flow is not an MCP tool.
 - **Associations** (project→account, area→repo), **status changes** (which drive
-  write-back), and **manual refresh** (`refresh_item_from_github`) *do* get MCP tools /
+  write-back), **manual refresh** (`refresh_item_from_github`) and **Sync**
+  (`sync_project_with_github`, which includes the all-areas import) *do* get MCP tools /
   parity. (UI import over MCP is Phase II — it needs per-user auth to pick whose PAT.)
 
 ### Per-user authentication — OAuth 2.0 for MCP

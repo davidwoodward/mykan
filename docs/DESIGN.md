@@ -89,9 +89,11 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   and the project page must match exactly, so the wordmark/nav never shifts when you navigate.
   When adding a page, reuse that same container — do not invent a per-page width.
 - **Toolbar is organised by function**, left→right: **View** (List/Board + Group Status/Area)
-  · **Filter** (area, tags, creator) · **Actions** (refresh, Areas manager, archived), with a
-  thin divider between the view and filter clusters. Actions sit on the right; the **Areas**
-  button is an action (folder icon, accent hover), not a filter.
+  · **Filter** (area, tags, creator) · **Actions** (Sync with GitHub, Areas manager, archived),
+  with a thin divider between the view and filter clusters. Actions sit on the right; the
+  **Areas** button is an action (folder icon, accent hover), not a filter. **Sync** (two-arrow
+  icon, same styling, KANBAN-65) shows only on a GitHub-linked project; its result is a
+  dismissable line under the toolbar (`role="status"`), toned like the Areas import line.
 - **Touch toolbar** (KANBAN-52, 2026-09-27). On phones, tablets and any touch-first device
   (the `compact:` variant in `globals.css`: below `lg`, or `pointer: coarse`, so a touch iPad
   Pro gets it at 1024px+), the board toolbar collapses to **one line** of 40px targets:
@@ -99,7 +101,8 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   (status, area, tags, creator, archived). Applied filters show under it as removable pills
   plus Clear, only when there are any. The button opens a bottom **sheet** with the full
   set, touch-sized: Group by (List view only; List/Board stays on the line, not in the sheet),
-  Status chips, Area, Tags (typeahead), Created by, then Refresh, Manage areas, Archived, Clear
+  Status chips, Area, Tags (typeahead), Created by, then Refresh, Sync with GitHub (linked
+  projects only; closes the sheet so the result line shows), Manage areas, Archived, Clear
   filters, each section split from the next by a visible `line-strong` rule. Filters apply as tapped; Done, Esc,
   Enter or a backdrop tap closes it. A laptop or desktop with a mouse keeps the full toolbar
   unchanged. "/" focuses whichever search box is showing.

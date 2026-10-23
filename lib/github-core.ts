@@ -1,9 +1,17 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptPat, isGithubCryptoConfigured } from "@/lib/github-crypto";
-import { getIssue, listAccessibleRepos, listOpenIssues } from "@/lib/github";
+import { getIssue, listAccessibleRepos, listClosedIssueNumbers, listOpenIssues } from "@/lib/github";
+import {
+  cardsToClose,
+  planRepoChecks,
+  type SyncCandidate,
+  type SyncMovedCard,
+  type SyncSummary,
+} from "@/lib/github-sync-plan";
 import { githubIssueBody } from "@/lib/markdown-tiptap";
-import { createItem, loadVisibleItem } from "@/lib/items-core";
+import { createItem, loadVisibleItem, refOf, setItemStatus } from "@/lib/items-core";
+import type { HistorySource } from "@/lib/item-history";
 import { listCategories, pathOf } from "@/lib/categories-core";
 import { snapshotThenWrite } from "@/lib/item-history";
 import { coreErr, coreOk, resolveProject, type CoreResult } from "@/lib/projects-core";
@@ -16,6 +24,8 @@ export interface ImportRepoResult {
   /** The area path issues from this repo landed under. */
   area: string;
   imported: number;
+  /** Refs of the cards this import created (e.g. KANBAN-12), in creation order. */
+  refs: string[];
   skipped: number;
   /** Set when this repo couldn't be imported (bad repo, GitHub error). */
   error?: string;
@@ -262,11 +272,12 @@ export async function importFromGithub(
         summary.needs_connect = { account: owner, reason: "invalid" };
         break;
       }
-      summary.repos.push({ repo, area: areaPath, imported: 0, skipped: 0, error: result.error });
+      summary.repos.push({ repo, area: areaPath, imported: 0, refs: [], skipped: 0, error: result.error });
       continue;
     }
 
     let imported = 0;
+    const refs: string[] = [];
     let skipped = 0;
     let error: string | undefined;
     for (const issue of result.issues) {
@@ -288,9 +299,10 @@ export async function importFromGithub(
         break;
       }
       seen.add(backlink);
+      refs.push(refOf(project.key, created.data.number));
       imported++;
     }
-    summary.repos.push({ repo, area: areaPath, imported, skipped, ...(error ? { error } : {}) });
+    summary.repos.push({ repo, area: areaPath, imported, refs, skipped, ...(error ? { error } : {}) });
     summary.imported += imported;
     summary.skipped += skipped;
   }
@@ -301,11 +313,12 @@ export async function importFromGithub(
 /**
  * Manual refresh (KANBAN-24): re-pull a linked item from its source issue and
  * OVERWRITE the item's content (title/body + labels→tags) with the issue's
- * current state. This is the ONLY path by which a linked item re-syncs from
- * GitHub — import never touches an existing item, and nothing polls. The acting
- * user's own PAT is used. Status/area/assignees are mykan's and left untouched
- * (Done state flows the other way, via write-back). The previous content is
- * snapshotted to history, so the overwrite is recoverable.
+ * current state. This is the ONLY path by which a linked item's CONTENT
+ * re-syncs from GitHub — import never touches an existing item, Sync
+ * (syncProjectWithGithub) only moves a closed issue's card to Done, and nothing
+ * polls. The acting user's own PAT is used. Status/area/assignees are mykan's
+ * and left untouched (Done state flows the other way, via write-back). The
+ * previous content is snapshotted to history, so the overwrite is recoverable.
  */
 export async function refreshItemFromGithub(
   sb: SupabaseClient,
@@ -358,4 +371,119 @@ export async function refreshItemFromGithub(
   const w = await snapshotThenWrite(sb, actor, item, patch, "web");
   if (!w.ok) return w;
   return coreOk(w.data);
+}
+
+export type { SyncMovedCard, SyncSummary };
+
+/**
+ * Sync with GitHub (KANBAN-65): bring a project's board level with GitHub in one
+ * action, using the acting user's own PAT.
+ *
+ * 1. Import: the all-areas {@link importFromGithub}, so every repo-linked area
+ *    brings in its new open issues. Skipped when no area is linked.
+ * 2. Close: every non-archived, not-Done card with a backlink is checked against
+ *    its repo's closed issues (one listing per repo, see github-sync-plan.ts). A
+ *    card whose issue is closed moves to Done with no write-back, since the issue
+ *    is already closed. A card flagged not synced is left alone and reported:
+ *    its issue may be closed only because a reopen failed.
+ *
+ * Never reopens a card or pulls content. Running it again straight away changes
+ * nothing. See docs/github-integration.md §Sync.
+ */
+export async function syncProjectWithGithub(
+  sb: SupabaseClient,
+  actor: string,
+  projectRef: string,
+  source: HistorySource = "mcp",
+): Promise<CoreResult<SyncSummary>> {
+  if (!isGithubCryptoConfigured()) {
+    return coreErr("GitHub isn’t configured on the server (missing encryption key).", 503);
+  }
+  const proj = await resolveProject(sb, actor, projectRef);
+  if (!proj.ok) return proj;
+  const project = proj.data;
+  if (!project.github_account_id) {
+    return coreErr("Link this project to a GitHub account first.", 400);
+  }
+  const accountId = project.github_account_id;
+
+  const auth = await loadAccountPat(sb, actor, accountId);
+  if (!auth.ok) {
+    if (auth.kind === "error") return coreErr(auth.error, auth.status);
+    return coreOk({
+      account: auth.owner,
+      needs_connect: { account: auth.owner, reason: auth.reason },
+      imported: [],
+      moved: [],
+      not_synced: [],
+      errors: [],
+    });
+  }
+  const { owner, pat } = auth;
+  const summary: SyncSummary = {
+    account: owner,
+    imported: [],
+    moved: [],
+    not_synced: [],
+    errors: [],
+  };
+
+  // 1. Import new open issues from every repo-linked area.
+  const cats = await listCategories(sb, project.id);
+  if (cats.some((c) => c.github_repo)) {
+    const imp = await importFromGithub(sb, actor, project.id);
+    if (!imp.ok) return imp;
+    if (imp.data.needs_connect) return coreOk({ ...summary, needs_connect: imp.data.needs_connect });
+    for (const r of imp.data.repos) {
+      summary.imported.push(...r.refs);
+      if (r.error) summary.errors.push({ repo: `${owner}/${r.repo}`, error: r.error });
+    }
+  }
+
+  // 2. Move cards whose issue was closed on GitHub.
+  const { data: rows, error } = await sb
+    .from("items")
+    .select("id, number, status, archived_at, github_issue, github_imported_at, github_sync")
+    .eq("project_id", project.id)
+    .is("archived_at", null)
+    .neq("status", "done")
+    .not("github_issue", "is", null);
+  if (error) return coreErr(error.message, 500);
+
+  for (const check of planRepoChecks((rows ?? []) as SyncCandidate[])) {
+    const repoName = `${check.owner}/${check.repo}`;
+    // The PAT belongs to the project's account; a backlink under another owner
+    // (the project was re-bound since import) can't be checked with it.
+    if (check.owner.toLowerCase() !== owner.toLowerCase()) {
+      summary.errors.push({
+        repo: repoName,
+        error: `Not under ${owner}, the project’s GitHub account; refresh these cards one by one.`,
+      });
+      continue;
+    }
+    const closed = await listClosedIssueNumbers(pat, check.owner, check.repo, check.since);
+    if (!closed.ok) {
+      if (closed.authFailed) {
+        await markCredentialInvalid(sb, actor, accountId);
+        return coreOk({ ...summary, needs_connect: { account: owner, reason: "invalid" } });
+      }
+      summary.errors.push({ repo: repoName, error: closed.error });
+      continue;
+    }
+    const { close, notSynced } = cardsToClose(check, closed.numbers);
+    for (const card of notSynced) {
+      summary.not_synced.push({ ref: refOf(project.key, card.number), issue: card.github_issue as string });
+    }
+    for (const card of close) {
+      const ref = refOf(project.key, card.number);
+      const moved = await setItemStatus(sb, actor, card.id, "done", source, { writeBack: false });
+      if (!moved.ok) {
+        summary.errors.push({ repo: repoName, error: `${ref}: ${moved.error}` });
+        continue;
+      }
+      summary.moved.push({ ref, issue: card.github_issue as string });
+    }
+  }
+
+  return coreOk(summary);
 }

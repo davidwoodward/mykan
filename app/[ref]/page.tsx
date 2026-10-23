@@ -148,6 +148,7 @@ export default async function RootRefPage({ params, searchParams }: Props) {
             members={members}
             isPrivate={project.is_private}
             keyboardDefault={isOwner(email)}
+            githubLinked={!!project.github_account_id}
           />
         )}
       </main>
