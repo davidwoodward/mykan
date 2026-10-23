@@ -58,6 +58,7 @@ async function responseError(res: Response): Promise<string> {
 import { useColumnCollapse } from "@/components/useColumnCollapse";
 import { useKeyboardNav } from "@/components/useKeyboardNav";
 import { computePosition } from "@/lib/position";
+import { extendCount } from "@/lib/count-prefix";
 
 type View = "list" | "board";
 
@@ -146,6 +147,29 @@ export function ProjectDetailView({
   // Off by default; on for the owner. When off, no selection cursor and no key
   // handlers — the board/list is a plain pointer-first surface.
   const { enabled: keyboardEnabled } = useKeyboardNav(keyboardDefault);
+  // The pending count prefix for `125G` (KANBAN-66): a ref so the key handler
+  // reads it synchronously, plus the hint shown while it's pending. Both clear
+  // after a short pause so a stray digit can't hijack a later G.
+  const countRef = useRef("");
+  const [countHint, setCountHint] = useState<string | null>(null);
+  const countTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setCount = useCallback((next: string, hint: string | null) => {
+    countRef.current = next;
+    setCountHint(hint);
+    if (countTimer.current) clearTimeout(countTimer.current);
+    countTimer.current = hint
+      ? setTimeout(() => {
+          countRef.current = "";
+          setCountHint(null);
+        }, 2000)
+      : null;
+  }, []);
+  useEffect(
+    () => () => {
+      if (countTimer.current) clearTimeout(countTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -832,6 +856,35 @@ export function ProjectDetailView({
       }
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Shift on its own is half of typing G; it must not drop a pending count.
+      if (e.key === "Shift") return;
+
+      // A count prefix (KANBAN-66): digits typed before G select the card with
+      // that number, so 125G jumps to KEY-125. Any other key drops the count
+      // and then does its usual thing.
+      const count = countRef.current;
+      const nextCount = extendCount(count, e.key);
+      if (nextCount !== null) {
+        e.preventDefault();
+        setCount(nextCount, `${itemRef(projectKey, Number(nextCount))} · press G`);
+        return;
+      }
+      if (count) {
+        setCount("", null);
+        if (e.key === "G") {
+          e.preventDefault();
+          const n = Number(count);
+          const target = visibleItems.find((it) => it.number === n);
+          if (!target) {
+            setCount("", `${itemRef(projectKey, n)} isn't on screen`);
+            return;
+          }
+          // Open a collapsed column/section so the selection is visible.
+          if (isCollapsed(target.status)) toggleCollapse(target.status);
+          setSelectedId(target.id);
+          return;
+        }
+      }
 
       // Enter opens the selected card's page (Enter = primary action). A
       // focused button or link keeps its own Enter.
@@ -912,6 +965,10 @@ export function ProjectDetailView({
     selectedId,
     patchItem,
     openCard,
+    projectKey,
+    setCount,
+    isCollapsed,
+    toggleCollapse,
   ]);
 
   // "/" focuses the card search from anywhere on the page. Independent of the
@@ -1459,6 +1516,15 @@ export function ProjectDetailView({
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
+      ) : null}
+
+      {countHint ? (
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-muted)] shadow-sm"
+        >
+          {countHint}
+        </div>
       ) : null}
 
       {adding ? (

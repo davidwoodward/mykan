@@ -322,6 +322,13 @@ Every card has its own page, and no user-facing URL carries a GUID.
   *Clarified 2026-09-17 (David, answering KANBAN-44's question):* a **single click selects**
   a board card or list row; it does not open it. The pencil, a double-click on the text,
   or **Enter** on the selected card opens the page. Keep it exactly that way.
+- **Jumping to a card by number** (KANBAN-66, keyboard navigation on). On the status list
+  or the board, typing a number then `G` selects that card: `125G` → KEY-125, scrolled into
+  view, opening its column/section if collapsed. Plain `G` still means bottom and a bare `0`
+  still means top (a count can't start with 0). While digits are pending a small hint at the
+  bottom shows `KEY-125 · press G`; any other key, or a 2-second pause, drops the count. A
+  number that isn't on screen (filtered out, archived, missing) selects nothing and the hint
+  says so.
 - **Getting back to the same board.** View, grouping, status/tag/area/creator filters and
   search live in the board URL (`?view=board&status=blocked&q=…`; defaults omitted; the
   area is written as its path, never an id), updated with `replaceState` so filter
