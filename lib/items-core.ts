@@ -139,7 +139,7 @@ export type ItemDetail = Omit<ItemSummary, "parent"> & {
    * Epics only: the epic's non-archived children in board order. Archived
    * children still reference the epic but are left out here and of the count.
    */
-  children?: (ItemLink & { type: ItemType; status: ItemStatus })[];
+  children?: (ItemLink & { type: ItemType; status: ItemStatus; done_at: string | null })[];
   /** Epics only: "N/M done" over `children`. */
   children_progress?: string;
   project_id: string;
@@ -189,11 +189,11 @@ async function detailOf(
   if (it.type === "epic") {
     const { data: kids } = await sb
       .from("items")
-      .select("number, body, type, status, archived_at, position")
+      .select("number, body, type, status, done_at, archived_at, position")
       .eq("parent_id", it.id)
       .is("archived_at", null)
       .order("position", { ascending: true });
-    const rows = (kids ?? []) as Pick<Item, "number" | "body" | "type" | "status" | "archived_at">[];
+    const rows = (kids ?? []) as Pick<Item, "number" | "body" | "type" | "status" | "done_at" | "archived_at">[];
     const { done, total } = epicProgress(rows);
     epic = {
       children: rows.map((c) => ({
@@ -201,6 +201,7 @@ async function detailOf(
         name: richDocTitle(c.body),
         type: c.type,
         status: c.status,
+        done_at: c.done_at,
       })),
       children_progress: `${done}/${total} done`,
     };

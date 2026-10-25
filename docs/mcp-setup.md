@@ -166,7 +166,7 @@ is stored once, on the child: `create_item` takes an optional `parent` (the
 epic's KEY-N ref or id) and `set_item_parent` sets or clears it (empty
 `parent`). `list_items` returns each item's `parent` ref (or null);
 `get_item` returns `parent` as `{ref, name}` and, for an epic, `children`
-(`{ref, name, type, status}`, non-archived only) plus `children_progress`
+(`{ref, name, type, status, done_at}`, non-archived only) plus `children_progress`
 ("N/M done"). Rules, enforced by the database too: one level only (an epic has
 no parent, a child is never an epic), same project only, the parent must be a
 non-archived epic, and an epic can't change type while it has children.
@@ -174,8 +174,9 @@ non-archived epic, and an epic can't change type while it has children.
 `epic_table` (read-only) returns an epic and its non-archived children as a
 ready-to-print table: aligned plain-text columns `#`, `Card`, `Type`, `Status`,
 `Note` in a code block. The epic is the first row with `#` blank; its children
-follow, numbered in the epic's child order (board position, as in `get_item`'s
-`children`). Note is each card's title, the first line of its description, so a
+follow, numbered: done cards first in the order they were completed (oldest
+first, from `done_at`; no dates are shown), then testing, in progress, blocked
+and new, each group in the epic's child order (board position). Note is each card's title, the first line of its description, so a
 tighter title makes a tighter table. A non-epic is refused. Agents print the
 text as returned rather than rebuilding the table.
 

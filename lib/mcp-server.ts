@@ -11,7 +11,7 @@ import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/pr
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import { projectUrl } from "@/lib/card-url";
 import { normAreaPath } from "@/lib/board-state";
-import { formatEpicTable } from "@/lib/epic-table";
+import { formatEpicTable, orderEpicChildren } from "@/lib/epic-table";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
   appendItemNote,
@@ -117,7 +117,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, type, status}) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see. `attachments` lists the files attached to the card ({id, name, content_type, size}); these are separate from inline images, and include_images does not return them — read one with get_attachment.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, type, status, done_at}; done_at is when a done card entered Done, else null) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see. `attachments` lists the files attached to the card ({id, name, content_type, size}); these are separate from inline images, and include_images does not return them — read one with get_attachment.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
@@ -158,14 +158,14 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "epic_table",
-    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered in the epic's own child order (the order get_item's `children` uses). Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. Read-only.",
+    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order. Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. Read-only.",
     { item: z.string().describe("epic id or KEY-N reference, e.g. PS-147") },
     async (a) => {
       const r = await getItem(getSupabase(), actor(), a.item);
       if (!r.ok) return out(r);
       const epic = r.data;
       if (epic.type !== "epic") return fail(`${epic.ref} is a ${epic.type}, not an epic`);
-      const text = formatEpicTable(epic, epic.children ?? []);
+      const text = formatEpicTable(epic, orderEpicChildren(epic.children ?? []));
       return { content: [{ type: "text" as const, text }] };
     },
   );
