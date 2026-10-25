@@ -130,8 +130,9 @@ Ask Claude Code naturally — it maps to the tools:
 - *"Show me KANBAN-N"* → `get_item` (description, decisions, open questions,
   progress summary; attached files via `get_attachment`)
 - *"Show me epic PS-N and its cards"* / *"status of PS-N"* → `epic_table` (a
-  ready-made table: #, Card, Type, Status, Note, with the epic on top and its
-  cards in the epic's order; the note is each card's title)
+  ready-made table: #, Card, Type, Status, Note, with the epic on top, then done
+  cards in the order they were finished, then in progress, then new; the note is
+  each card's title)
 - *"Tag / assign / re-parent KANBAN-N"* → `set_item_tags`, `set_item_assignees`,
   `set_item_parent`, `set_item_area`
 
