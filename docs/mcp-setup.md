@@ -59,7 +59,7 @@ The key is a comma-separated list in the Vercel project env (production) and
 `create_item`, `set_item_body`, `append_item_note`, `set_item_tags`,
 `set_item_area`, `set_item_assignees`, `set_item_parent`,
 `set_project_github_account`, `list_areas`, `set_area_github_repo`,
-`refresh_item_from_github`, `set_item_type`, `get_attachment`.
+`refresh_item_from_github`, `set_item_type`, `get_attachment`, `epic_table`.
 
 `get_attachment` (KANBAN-54) reads one file from a card's `attachments` list, by id
 or file name: PNG/JPEG/GIF/WebP as a viewable image block (≤ 3 MB, so the base64
@@ -166,10 +166,18 @@ is stored once, on the child: `create_item` takes an optional `parent` (the
 epic's KEY-N ref or id) and `set_item_parent` sets or clears it (empty
 `parent`). `list_items` returns each item's `parent` ref (or null);
 `get_item` returns `parent` as `{ref, name}` and, for an epic, `children`
-(`{ref, name, status}`, non-archived only) plus `children_progress`
+(`{ref, name, type, status}`, non-archived only) plus `children_progress`
 ("N/M done"). Rules, enforced by the database too: one level only (an epic has
 no parent, a child is never an epic), same project only, the parent must be a
 non-archived epic, and an epic can't change type while it has children.
+
+`epic_table` (read-only) returns an epic and its non-archived children as a
+ready-to-print table: aligned plain-text columns `#`, `Card`, `Type`, `Status`,
+`Note` in a code block. The epic is the first row with `#` blank; its children
+follow, numbered in the epic's child order (board position, as in `get_item`'s
+`children`). Note is each card's title, the first line of its description, so a
+tighter title makes a tighter table. A non-epic is refused. Agents print the
+text as returned rather than rebuilding the table.
 
 `set_item_body` REPLACES an item's whole body (safe overwrite): the previous
 state is snapshotted to the item's history first, so it is always recoverable
