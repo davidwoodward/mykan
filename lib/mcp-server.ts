@@ -11,6 +11,7 @@ import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/pr
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import { projectUrl } from "@/lib/card-url";
 import { normAreaPath } from "@/lib/board-state";
+import { formatEpicTable } from "@/lib/epic-table";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
   appendItemNote,
@@ -152,6 +153,20 @@ function registerTools(server: McpServer) {
         });
       }
       return { content };
+    },
+  );
+
+  server.tool(
+    "epic_table",
+    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered in the epic's own child order (the order get_item's `children` uses). Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. Read-only.",
+    { item: z.string().describe("epic id or KEY-N reference, e.g. PS-147") },
+    async (a) => {
+      const r = await getItem(getSupabase(), actor(), a.item);
+      if (!r.ok) return out(r);
+      const epic = r.data;
+      if (epic.type !== "epic") return fail(`${epic.ref} is a ${epic.type}, not an epic`);
+      const text = formatEpicTable(epic, epic.children ?? []);
+      return { content: [{ type: "text" as const, text }] };
     },
   );
 
