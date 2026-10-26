@@ -279,7 +279,7 @@ export function McpTokenSettings() {
           <div className="flex flex-col gap-2 border-t border-[var(--color-line)] pt-3">
             <label
               htmlFor="mcp-token-label"
-              className="block text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink)]"
+              className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-ink)]"
             >
               Label{" "}
               <span className="text-[var(--color-bug)]" aria-hidden="true">
@@ -309,10 +309,10 @@ export function McpTokenSettings() {
                   void generate();
                 }
               }}
-              className={`-mt-1 w-full rounded border bg-transparent px-2 py-1 text-sm text-[var(--color-ink)] focus:outline-none ${
+              className={`-mt-1 w-full rounded-md border-2 bg-[var(--color-surface)] px-2.5 py-2 text-sm font-medium text-[var(--color-ink)] shadow-sm placeholder:font-normal placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-2 ${
                 labelMissing
-                  ? "border-[var(--color-bug)] focus:border-[var(--color-bug)]"
-                  : "border-[var(--color-line)] focus:border-[var(--color-accent)]"
+                  ? "border-[var(--color-bug)] bg-[var(--color-bug-bg)] focus:ring-[var(--color-bug-line)]"
+                  : "border-[var(--color-muted)] focus:border-[var(--color-accent)] focus:ring-[var(--color-accent-soft)]"
               }`}
             />
             {labelMissing ? (
