@@ -178,7 +178,7 @@ export function McpTokenSettings() {
           aria-label="MCP access tokens"
           className="absolute right-0 top-full z-30 mt-2 w-[min(94vw,26rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-lg"
         >
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
             MCP access tokens
           </div>
 
@@ -187,7 +187,7 @@ export function McpTokenSettings() {
             <div className="mb-3 rounded border border-[var(--color-accent)] bg-[var(--color-accent-soft)] p-2">
               {freshLabel ? (
                 <p className="mb-1 truncate text-sm font-semibold text-[var(--color-ink)]" title={freshLabel}>
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-accent-ink)]">
                     Label
                   </span>{" "}
                   {freshLabel}
@@ -213,7 +213,7 @@ export function McpTokenSettings() {
               </div>
               <div className="mt-2">
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wide text-[var(--color-faint)]">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-accent-ink)]">
                     Connect Claude Code
                   </span>
                   <button
@@ -285,7 +285,7 @@ export function McpTokenSettings() {
               <span className="text-[var(--color-bug)]" aria-hidden="true">
                 *
               </span>{" "}
-              <span className="normal-case tracking-normal text-[var(--color-faint)]">(required)</span>
+              <span className="normal-case tracking-normal text-[var(--color-muted)]">(required)</span>
             </label>
             <input
               id="mcp-token-label"
