@@ -152,6 +152,8 @@ export type ItemDetail = Omit<ItemSummary, "parent"> & {
   /** The body WITHOUT its title line, so it never repeats `name`. */
   body_after_title: string;
   attachments: Item["attachments"];
+  /** When the item entered Done (ISO), or null when it isn't done. */
+  done_at: string | null;
   /** Backlink to the source GitHub issue (`owner/repo#number`), or null. */
   github_issue: string | null;
   /** The linked issue's creation time on GitHub (ISO), or null. */
@@ -223,6 +225,7 @@ async function detailOf(
     parent,
     ...epic,
     attachments: it.attachments,
+    done_at: it.done_at,
     github_issue: it.github_issue,
     github_issue_created_at: it.github_issue_created_at,
     github_imported_at: it.github_imported_at,
