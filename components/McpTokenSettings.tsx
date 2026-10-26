@@ -28,6 +28,8 @@ export function McpTokenSettings() {
   const labelRef = useRef<HTMLInputElement>(null);
   // The just-minted plaintext token, shown once. Cleared on close.
   const [freshToken, setFreshToken] = useState<string | null>(null);
+  // Its label, shown in the reveal so you know which token you're copying.
+  const [freshLabel, setFreshLabel] = useState<string | null>(null);
   const [copied, setCopied] = useState<"token" | "command" | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
@@ -73,6 +75,7 @@ export function McpTokenSettings() {
   function close() {
     setOpen(false);
     setFreshToken(null);
+    setFreshLabel(null);
     setError(null);
     setLabelMissing(false);
     setCopied(null);
@@ -114,6 +117,7 @@ export function McpTokenSettings() {
         return;
       }
       setFreshToken(data.token);
+      setFreshLabel(data.summary?.label ?? label.trim());
       setLabel("");
       // Prepend the new summary so the list reflects it without a refetch.
       if (data.summary) setTokens((prev) => [data.summary as McpTokenSummary, ...(prev ?? [])]);
@@ -181,6 +185,14 @@ export function McpTokenSettings() {
           {/* One-time reveal of a just-minted token. */}
           {freshToken ? (
             <div className="mb-3 rounded border border-[var(--color-accent)] bg-[var(--color-accent-soft)] p-2">
+              {freshLabel ? (
+                <p className="mb-1 truncate text-sm font-semibold text-[var(--color-ink)]" title={freshLabel}>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
+                    Label
+                  </span>{" "}
+                  {freshLabel}
+                </p>
+              ) : null}
               <p className="mb-1.5 text-[11px] font-medium text-[var(--color-accent-ink)]">
                 Copy this token now — it won’t be shown again.
               </p>
