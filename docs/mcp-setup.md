@@ -19,7 +19,7 @@ Claude Code and **headless/cron** agents — there is no browser step.
 ### 1. Mint a token (in the app)
 
 Sign in to mykan, click the **key icon** in the top bar (next to the GitHub
-icon) → **Generate token** (optionally label it, e.g. `laptop` or `cron`). The
+icon) → **Generate token** (a label is required, e.g. `laptop` or `cron`). The
 `mk_…` value is shown **once** — copy it now; it is unrecoverable afterwards
 (only its hash is stored). Revoke any token from the same panel; revocation
 takes effect immediately.
