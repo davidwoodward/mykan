@@ -27,7 +27,8 @@ export async function GET() {
 }
 
 /**
- * POST — mint a new token for the current user. Body: { label?, expiresInDays? }.
+ * POST — mint a new token for the current user. Body: { label, expiresInDays? }.
+ * The label is required (400 when blank) so tokens can be told apart later.
  * Persists only the hash; returns the plaintext ONCE (it is unrecoverable after).
  */
 export async function POST(req: Request) {
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
   };
   const label =
     typeof body.label === "string" && body.label.trim() ? body.label.trim().slice(0, 80) : null;
+  if (!label) return NextResponse.json({ error: "A label is required." }, { status: 400 });
 
   let expires_at: string | null = null;
   if (typeof body.expiresInDays === "number" && Number.isFinite(body.expiresInDays)) {

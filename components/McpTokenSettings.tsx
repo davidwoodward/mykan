@@ -23,6 +23,9 @@ export function McpTokenSettings() {
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when Generate is pressed with a blank label; cleared by typing.
+  const [labelMissing, setLabelMissing] = useState(false);
+  const labelRef = useRef<HTMLInputElement>(null);
   // The just-minted plaintext token, shown once. Cleared on close.
   const [freshToken, setFreshToken] = useState<string | null>(null);
   const [copied, setCopied] = useState<"token" | "command" | null>(null);
@@ -71,6 +74,7 @@ export function McpTokenSettings() {
     setOpen(false);
     setFreshToken(null);
     setError(null);
+    setLabelMissing(false);
     setCopied(null);
   }
 
@@ -87,12 +91,18 @@ export function McpTokenSettings() {
   async function generate() {
     if (busy) return;
     setError(null);
+    // A label is required so tokens can be told apart (and revoked) later.
+    if (!label.trim()) {
+      setLabelMissing(true);
+      labelRef.current?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/mcp-tokens", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label: label.trim() || undefined }),
+        body: JSON.stringify({ label: label.trim() }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         token?: string;
@@ -255,24 +265,53 @@ export function McpTokenSettings() {
 
           {/* Generate form. */}
           <div className="flex flex-col gap-2 border-t border-[var(--color-line)] pt-3">
-            <label className="block text-[10px] font-medium uppercase tracking-wide text-[var(--color-faint)]">
-              Label (optional)
-              <input
-                type="text"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g. laptop, cron agent"
-                autoComplete="off"
-                spellCheck={false}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void generate();
-                  }
-                }}
-                className="mt-1 w-full rounded border border-[var(--color-line)] bg-transparent px-2 py-1 text-sm normal-case tracking-normal text-[var(--color-ink)] focus:border-[var(--color-accent)] focus:outline-none"
-              />
+            <label
+              htmlFor="mcp-token-label"
+              className="block text-[10px] font-medium uppercase tracking-wide text-[var(--color-ink)]"
+            >
+              Label{" "}
+              <span className="text-[var(--color-bug)]" aria-hidden="true">
+                *
+              </span>{" "}
+              <span className="normal-case tracking-normal text-[var(--color-faint)]">(required)</span>
             </label>
+            <input
+              id="mcp-token-label"
+              ref={labelRef}
+              type="text"
+              required
+              aria-required="true"
+              aria-invalid={labelMissing ? true : undefined}
+              aria-describedby={labelMissing ? "mcp-token-label-error" : undefined}
+              value={label}
+              onChange={(e) => {
+                setLabel(e.target.value);
+                if (e.target.value.trim()) setLabelMissing(false);
+              }}
+              placeholder="e.g. laptop, cron agent"
+              autoComplete="off"
+              spellCheck={false}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void generate();
+                }
+              }}
+              className={`-mt-1 w-full rounded border bg-transparent px-2 py-1 text-sm text-[var(--color-ink)] focus:outline-none ${
+                labelMissing
+                  ? "border-[var(--color-bug)] focus:border-[var(--color-bug)]"
+                  : "border-[var(--color-line)] focus:border-[var(--color-accent)]"
+              }`}
+            />
+            {labelMissing ? (
+              <p
+                id="mcp-token-label-error"
+                role="alert"
+                className="-mt-1 text-xs font-medium text-[var(--color-bug)]"
+              >
+                A label is required. Name where this token will be used (e.g. laptop, cron agent).
+              </p>
+            ) : null}
             <p className="text-[11px] leading-snug text-[var(--color-faint)]">
               One token works for both interactive and headless/cron agents — no browser step. It
               carries your identity and your GitHub PAT reach, so treat it like a password and revoke

@@ -77,8 +77,8 @@ projects, move cards, edit items, and drive the GitHub tools **as you**. You nee
 
 1. In mykan's top bar, click the **key icon** (🔑, next to the GitHub icon) →
    the **MCP access tokens** panel opens.
-2. Optionally type a **label** (e.g. `laptop`, `cron agent`) so you can tell
-   tokens apart later.
+2. Type a **label** (required, e.g. `laptop`, `cron agent`) so you can tell
+   tokens apart later. Generate refuses a blank label and says so.
 3. Click **Generate token**.
 4. A `mk_…` value appears with **"Copy this token now — it won't be shown
    again."** Copy it immediately — only its hash is stored, so it is
