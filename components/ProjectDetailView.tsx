@@ -1214,19 +1214,7 @@ export function ProjectDetailView({
               title="Refresh"
               className="grid h-8 w-8 place-items-center rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-60"
             >
-              <svg
-                className={`h-[15px] w-[15px] ${refreshing ? "animate-spin" : ""}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                <path d="M21 3v6h-6" />
-              </svg>
+              <RefreshIcon spinning={refreshing} />
             </button>
             <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5 text-sm">
               <ViewTab active={view === "list"} onClick={() => setView("list")}>
@@ -1383,18 +1371,7 @@ export function ProjectDetailView({
                   : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-ink)]"
               }`}
             >
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              </svg>
+              <AreasIcon />
               Areas
             </button>
           ) : null}
@@ -1630,27 +1607,37 @@ export function ProjectDetailView({
             </SheetSection>
           ) : null}
           <div className="flex flex-wrap gap-2 py-4">
-            <SheetButton onClick={() => void refetch()} disabled={refreshing}>
+            {/* Same icons and words as the desktop toolbar, so they're
+                recognisable: Refresh, Areas, Sync. */}
+            <SheetButton
+              onClick={() => void refetch()}
+              disabled={refreshing}
+              icon={<RefreshIcon spinning={refreshing} />}
+            >
               {refreshing ? "Refreshing…" : "Refresh"}
             </SheetButton>
-            {githubLinked && !showArchived ? (
-              <SheetButton
-                onClick={() => {
-                  setShowFilters(false);
-                  runSync();
-                }}
-              >
-                Sync with GitHub
-              </SheetButton>
-            ) : null}
             {!showArchived ? (
               <SheetButton
                 onClick={() => {
                   setShowFilters(false);
                   setShowCategoryManager(true);
                 }}
+                icon={<AreasIcon />}
+                ariaLabel="Manage areas"
               >
-                Manage areas
+                Areas
+              </SheetButton>
+            ) : null}
+            {githubLinked && !showArchived ? (
+              <SheetButton
+                onClick={() => {
+                  setShowFilters(false);
+                  runSync();
+                }}
+                icon={<SyncIcon />}
+                ariaLabel="Sync with GitHub"
+              >
+                Sync
               </SheetButton>
             ) : null}
             {showArchived || archivedCount > 0 ? (
@@ -2022,6 +2009,43 @@ function Segmented({
   );
 }
 
+/** Circular arrow: the board's Refresh icon; spins while a refresh runs. */
+function RefreshIcon({ spinning }: { spinning?: boolean }) {
+  return (
+    <svg
+      className={`h-[15px] w-[15px] shrink-0 ${spinning ? "animate-spin" : ""}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+/** Folder: the Areas manager icon. */
+function AreasIcon() {
+  return (
+    <svg
+      className="h-4 w-4 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
 /** Two arrows chasing each other: the Sync with GitHub icon (KANBAN-65). */
 function SyncIcon() {
   return (
@@ -2047,11 +2071,15 @@ function SheetButton({
   onClick,
   disabled,
   active,
+  icon,
+  ariaLabel,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
+  icon?: React.ReactNode;
+  ariaLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -2059,12 +2087,14 @@ function SheetButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-11 rounded-lg border px-4 text-sm transition-colors disabled:opacity-60 ${
+      aria-label={ariaLabel}
+      className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm transition-colors disabled:opacity-60 ${
         active
           ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]"
           : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)]"
       }`}
     >
+      {icon}
       {children}
     </button>
   );
