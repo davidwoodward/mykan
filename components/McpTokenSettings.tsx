@@ -30,6 +30,9 @@ export function McpTokenSettings() {
   const [freshToken, setFreshToken] = useState<string | null>(null);
   // Its label, shown in the reveal so you know which token you're copying.
   const [freshLabel, setFreshLabel] = useState<string | null>(null);
+  // Its id: the list below hides it while the reveal shows it, so the new
+  // token is never on screen twice. It joins the list once the panel closes.
+  const [freshId, setFreshId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"token" | "command" | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
@@ -76,6 +79,7 @@ export function McpTokenSettings() {
     setOpen(false);
     setFreshToken(null);
     setFreshLabel(null);
+    setFreshId(null);
     setError(null);
     setLabelMissing(false);
     setCopied(null);
@@ -118,6 +122,7 @@ export function McpTokenSettings() {
       }
       setFreshToken(data.token);
       setFreshLabel(data.summary?.label ?? label.trim());
+      setFreshId(data.summary?.id ?? null);
       setLabel("");
       // Prepend the new summary so the list reflects it without a refetch.
       if (data.summary) setTokens((prev) => [data.summary as McpTokenSummary, ...(prev ?? [])]);
@@ -140,6 +145,8 @@ export function McpTokenSettings() {
       setListError("Couldn’t revoke — try again.");
     }
   }
+
+  const listed = tokens?.filter((t) => t.id !== freshId) ?? null;
 
   const command = freshToken
     ? `claude mcp add --transport http --scope user mykan ${MCP_URL} --header "Authorization: Bearer ${freshToken}"`
@@ -235,17 +242,19 @@ export function McpTokenSettings() {
           {listError ? (
             <div className="mb-2 px-1 py-1 text-xs text-[var(--color-bug)]">{listError}</div>
           ) : null}
-          {tokens === null ? (
+          {listed === null ? (
             <div className="px-1 py-1 text-xs text-[var(--color-faint)]">
               {listError ? "" : "Loading…"}
             </div>
-          ) : tokens.length === 0 ? (
-            <div className="px-1 py-1 text-xs text-[var(--color-faint)]">
-              No tokens yet. Generate one below to connect over MCP.
-            </div>
+          ) : listed.length === 0 ? (
+            freshToken ? null : (
+              <div className="px-1 py-1 text-xs text-[var(--color-faint)]">
+                No tokens yet. Generate one below to connect over MCP.
+              </div>
+            )
           ) : (
             <ul className="mb-3 flex flex-col gap-1">
-              {tokens.map((t) => (
+              {listed.map((t) => (
                 <li
                   key={t.id}
                   className="flex items-center justify-between gap-2 rounded px-1 py-1"
