@@ -1569,7 +1569,7 @@ export function ProjectDetailView({
                 value={areaFilter ?? ""}
                 onChange={(e) => setAreaFilter(e.target.value || null)}
                 aria-label="Filter by area"
-                className="h-11 w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-base text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+                className="h-11 w-full rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 text-base text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
               >
                 <option value="">All areas</option>
                 {categoryPaths.map((c) => (
@@ -1739,7 +1739,7 @@ function TagFilterBar({
           aria-label="Filter by tag"
           className={
             large
-              ? "h-11 w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 text-base outline-none focus:border-[var(--color-accent)]"
+              ? "h-11 w-full rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 text-base text-[var(--color-ink)] outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
               : "h-6 w-28 rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-2 text-xs outline-none focus:border-[var(--color-accent)]"
           }
         />
@@ -2005,11 +2005,14 @@ function Segmented({
  */
 function sheetPill(on: boolean): string {
   return `inline-flex h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors ${
-    on
-      ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]"
-      : "border-[var(--color-line-strong)] bg-[color-mix(in_srgb,var(--color-ink)_9%,var(--color-surface))] text-[var(--color-ink)] active:bg-[color-mix(in_srgb,var(--color-ink)_16%,var(--color-surface))]"
+    on ? SHEET_ON : SHEET_OFF
   }`;
 }
+
+/** The sheet's two looks, shared by its choice pills and its action buttons. */
+const SHEET_ON = "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]";
+const SHEET_OFF =
+  "border-[var(--color-line-strong)] bg-[color-mix(in_srgb,var(--color-ink)_9%,var(--color-surface))] text-[var(--color-ink)] active:bg-[color-mix(in_srgb,var(--color-ink)_16%,var(--color-surface))]";
 
 /** The check on a selected multi-select pill (Status, Type). */
 function PillCheck() {
@@ -2099,10 +2102,8 @@ function SheetButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm transition-colors disabled:opacity-60 ${
-        active
-          ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]"
-          : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)]"
+      className={`inline-flex h-11 items-center gap-2 rounded-lg border px-4 text-sm font-medium transition-colors disabled:opacity-60 ${
+        active ? SHEET_ON : SHEET_OFF
       }`}
     >
       {icon}
