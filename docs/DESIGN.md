@@ -88,9 +88,15 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   (wide so the multi-column Board has room; narrow margins on mobile). The home/projects page
   and the project page must match exactly, so the wordmark/nav never shifts when you navigate.
   When adding a page, reuse that same container — do not invent a per-page width.
-- **Toolbar is organised by function**, left→right: **View** (List/Board + Group Status/Area)
-  · **Filter** (area, tags, creator) · **Actions** (Sync with GitHub, Areas manager, archived),
-  with a thin divider between the view and filter clusters. Actions sit on the right; the
+- **Toolbar is organised by function**, left→right: **View** (List/Board + a Group dropdown)
+  · **Filter** (search, Type and Status dropdowns, area, tags, creator) · **Actions** (Sync
+  with GitHub, Areas manager, archived), with a thin divider between the view and filter
+  clusters. *Since KANBAN-67:* Group, Type and Status are each **one dropdown whose label is
+  the current value** ("Group: Area", "Type: Epic", "Status: Blocked +1", "Status: All"), so
+  the line stays one line. Type and Status are checkbox lists that stay open while you
+  toggle (plus "Show all"); a filtering dropdown takes the accent look. Group is a single
+  pick that closes. Each opens on click or ↓; ↑/↓ move, Enter/Space toggle or pick, Esc and a
+  press outside close, Tab moves on, and keys inside an open menu never reach the board. Actions sit on the right; the
   **Areas** button is an action (folder icon, accent hover), not a filter. **Sync** (two-arrow
   icon, same styling, KANBAN-65) shows only on a GitHub-linked project. It opens the **Areas**
   panel and syncs every repo-linked area there in turn: each area row has its own **Sync**
@@ -99,10 +105,10 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   (the `compact:` variant in `globals.css`: below `lg`, or `pointer: coarse`, so a touch iPad
   Pro gets it at 1024px+), the board toolbar collapses to **one line** of 40px targets:
   search · List/Board · a **View & filters** button whose badge counts the active filters
-  (status, area, tags, creator, archived). Applied filters show under it as removable pills
+  (status, type, area, tags, creator, archived). Applied filters show under it as removable pills
   plus Clear, only when there are any. The button opens a bottom **sheet** with the full
   set, touch-sized: Group by (List view only; List/Board stays on the line, not in the sheet),
-  Status chips, Area, Tags (typeahead), Created by, then Refresh, Sync with GitHub (linked
+  Status chips, Type chips, Area, Tags (typeahead), Created by, then Refresh, Sync with GitHub (linked
   projects only; closes the sheet and opens the Areas panel, where the sync runs), Manage areas, Archived, Clear
   filters, each section split from the next by a visible `line-strong` rule. Filters apply as tapped; Done, Esc,
   Enter or a backdrop tap closes it. A laptop or desktop with a mouse keeps the full toolbar
@@ -119,7 +125,8 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   the board are drag-reorderable** (a grip on each row; drag within a group reorders within
   it) — the archived view is the only non-draggable list. Dragging anywhere edits the one
   `position` via `computePosition` (`lib/position.ts`), so all lenses stay in sync. Status is
-  also a **filter** (multi-select), independent of grouping. New items append to the global end.
+  also a **filter** (multi-select), independent of grouping, and so is **Type** (KANBAN-67:
+  Type: Epic shows a project's epics). New items append to the global end.
 - **Project identity lives in the nav.** Wordmark on the left, then a back-to-projects `←`
   arrow *beside the project name* (not left of the wordmark), the project title, and the
   byline (creator · age); the description is the title's hover tooltip. Account controls
@@ -329,8 +336,8 @@ Every card has its own page, and no user-facing URL carries a GUID.
   bottom shows `KEY-125 · press G`; any other key, or a 2-second pause, drops the count. A
   number that isn't on screen (filtered out, archived, missing) selects nothing and the hint
   says so.
-- **Getting back to the same board.** View, grouping, status/tag/area/creator filters and
-  search live in the board URL (`?view=board&status=blocked&q=…`; defaults omitted; the
+- **Getting back to the same board.** View, grouping, status/type/tag/area/creator filters and
+  search live in the board URL (`?view=board&status=blocked&type=epic&q=…`; defaults omitted; the
   area is written as its path, never an id), updated with `replaceState` so filter
   changes don't add history entries (`lib/board-state.ts`). Before opening a card the
   board remembers its scroll (the desktop list is its own scroll box, which the browser

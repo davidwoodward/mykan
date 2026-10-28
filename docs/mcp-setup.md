@@ -59,7 +59,8 @@ The key is a comma-separated list in the Vercel project env (production) and
 `create_item`, `set_item_body`, `append_item_note`, `set_item_tags`,
 `set_item_area`, `set_item_assignees`, `set_item_parent`,
 `set_project_github_account`, `list_areas`, `set_area_github_repo`,
-`refresh_item_from_github`, `set_item_type`, `get_attachment`, `epic_table`.
+`refresh_item_from_github`, `set_item_type`, `get_attachment`, `epic_table`,
+`list_epics`.
 
 `get_attachment` (KANBAN-54) reads one file from a card's `attachments` list, by id
 or file name: PNG/JPEG/GIF/WebP as a viewable image block (≤ 3 MB, so the base64
@@ -179,6 +180,15 @@ first, from `done_at`; no dates are shown), then testing, in progress, blocked
 and new, each group in the epic's child order (board position). Note is each card's title, the first line of its description, so a
 tighter title makes a tighter table. A non-epic is refused. Agents print the
 text as returned rather than rebuilding the table.
+
+`list_epics` (read-only, KANBAN-67) is its project-level sibling: it takes a
+`project` and returns that project's non-archived epics as the same kind of
+table, columns `#`, `Epic`, `Status`, `Done`, `Note`, numbered in board column
+order (new, in progress, blocked, testing, done) then by card number. `Done` is
+`N/M`, the epic's done children over all its non-archived children. The two
+never overlap: `list_epics` answers "what epics are in PS?" (takes a project),
+`epic_table` answers "show me PS-147" (takes one epic). Each tool's description,
+`list_items`'s, and the server instructions all say which is which.
 
 `set_item_body` REPLACES an item's whole body (safe overwrite): the previous
 state is snapshotted to the item's history first, so it is always recoverable
