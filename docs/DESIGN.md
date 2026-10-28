@@ -116,7 +116,10 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   kind of pill (`sheetPill`): every option is a filled chip with a `line-strong` border and
   full-ink text, so it reads as tappable rather than disabled (an outline alone vanished on a
   phone, David 2026-10-28); the selected one is a solid ink fill, and a selected Status or Type
-  (multi-select) also carries a check. Filters apply as tapped; Done, Esc,
+  (multi-select) also carries a check. The action buttons (Refresh, Areas, Sync, Archived, Clear
+  filters) share those two looks in a rounded-rectangle shape (Archived takes the solid fill while
+  archived cards are showing), and the Area select and tag box take a `line-strong` border.
+  Filters apply as tapped; Done, Esc,
   Enter or a backdrop tap closes it. A laptop or desktop with a mouse keeps the full toolbar
   unchanged. "/" focuses whichever search box is showing.
 - **Add item is a floating action button** (KANBAN-53, David 2026-09-26), not a header
