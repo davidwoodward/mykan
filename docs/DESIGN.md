@@ -317,8 +317,8 @@ Every card has its own page, and no user-facing URL carries a GUID.
   **Attachments** (David, 2026-09-17) and an epic on Child items. Progress shows its live-note
   count and Decisions & Questions an accent pill with the open-question count.
   *Changed (KANBAN-55, David 2026-09-27):* every card now opens on **Decisions & Questions**.
-  Progress, Decisions & Questions, Attachments and History each carry a count pill when they
-  have entries and none when empty (D&Q counts open + answered questions and active decisions,
+  Child items (an epic's non-archived children), Progress, Decisions & Questions, Attachments
+  and History each carry a count pill when they have entries and none when empty (D&Q counts open + answered questions and active decisions,
   accent while questions are open; History counts versions via `history?count=1`; a count
   over a partly-loaded entry list reads `N+`). The
   header is a grid row across the page and the tab column is a sibling of the
