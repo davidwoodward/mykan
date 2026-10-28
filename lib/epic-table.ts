@@ -21,10 +21,12 @@ const groupRank = (status: string) => {
 /**
  * The table's child order: done cards first, oldest completion first (a done
  * card with no recorded time goes after the dated ones), then testing, in
- * progress, blocked and new. Ties keep the order given — the epic's own child
- * order. Returns a sorted copy.
+ * progress, blocked and new. Ties keep the order given, so callers pass the
+ * epic's own child order (sortByEpicPosition, KANBAN-68). Returns a sorted copy.
  */
-export function orderEpicChildren<T extends EpicTableChild>(children: readonly T[]): T[] {
+export function orderEpicChildren<T extends { status: string; done_at?: string | null }>(
+  children: readonly T[],
+): T[] {
   return children
     .map((c, i) => ({ c, i }))
     .sort((a, b) => {

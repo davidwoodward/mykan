@@ -136,6 +136,9 @@ Ask Claude Code naturally — it maps to the tools:
 - *"What epics are in Permit Saige?"* / *"list the PS epics"* → `list_epics` (a
   ready-made table: #, Epic, Status, Done, Note, one row per epic, with N/M of
   its cards done)
+- *"Order PS-N's cards in the order they should be built"* / *"put PS-12 before
+  PS-9 in its epic"* → `set_epic_order`, `move_epic_card` (the epic's own order;
+  done cards stay in completion order, and the board is untouched)
 - *"Tag / assign / re-parent KANBAN-N"* → `set_item_tags`, `set_item_assignees`,
   `set_item_parent`, `set_item_area`
 

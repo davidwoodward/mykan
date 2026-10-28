@@ -127,6 +127,15 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   `position` via `computePosition` (`lib/position.ts`), so all lenses stay in sync. Status is
   also a **filter** (multi-select), independent of grouping, and so is **Type** (KANBAN-67:
   Type: Epic shows a project's epics). New items append to the global end.
+- **An epic keeps its own order of its cards (KANBAN-68)**, separate from `position`:
+  `items.epic_position`, so reordering an epic never moves a card on the board, and the reverse.
+  The epic's card page lists its children grouped by status the way MCP's `epic_table` does:
+  Done first in completion order (`done_at`, no grip, can't be reordered), then Testing, In
+  progress, Blocked and Not started, each in the epic's order. A grip on each non-done row drags
+  it within its own status group (a drop on another group snaps back); the grip also works from
+  the keyboard (Space lifts, arrows move, Space drops, Esc cancels). A card that joins an epic
+  goes to its end, and keeps its place in that order when its status changes. MCP's
+  `set_epic_order` / `move_epic_card` edit the same order.
 - **Project identity lives in the nav.** Wordmark on the left, then a back-to-projects `←`
   arrow *beside the project name* (not left of the wordmark), the project title, and the
   byline (creator · age); the description is the title's hover tooltip. Account controls

@@ -60,7 +60,7 @@ The key is a comma-separated list in the Vercel project env (production) and
 `set_item_area`, `set_item_assignees`, `set_item_parent`,
 `set_project_github_account`, `list_areas`, `set_area_github_repo`,
 `refresh_item_from_github`, `set_item_type`, `get_attachment`, `epic_table`,
-`list_epics`.
+`list_epics`, `set_epic_order`, `move_epic_card`.
 
 `get_attachment` (KANBAN-54) reads one file from a card's `attachments` list, by id
 or file name: PNG/JPEG/GIF/WebP as a viewable image block (≤ 3 MB, so the base64
@@ -177,7 +177,7 @@ ready-to-print table: aligned plain-text columns `#`, `Card`, `Type`, `Status`,
 `Note` in a code block. The epic is the first row with `#` blank; its children
 follow, numbered: done cards first in the order they were completed (oldest
 first, from `done_at`; no dates are shown), then testing, in progress, blocked
-and new, each group in the epic's child order (board position). Note is each card's title, the first line of its description, so a
+and new, each group in the epic's own order (`epic_position`, KANBAN-68). Note is each card's title, the first line of its description, so a
 tighter title makes a tighter table. A non-epic is refused. Agents print the
 text as returned rather than rebuilding the table.
 
@@ -189,6 +189,19 @@ order (new, in progress, blocked, testing, done) then by card number. `Done` is
 never overlap: `list_epics` answers "what epics are in PS?" (takes a project),
 `epic_table` answers "show me PS-147" (takes one epic). Each tool's description,
 `list_items`'s, and the server instructions all say which is which.
+
+`set_epic_order` and `move_epic_card` (KANBAN-68) edit an epic's own order of
+its cards, which is separate from board position (reordering an epic never
+moves a card on the board). `set_epic_order` takes the epic and its cards in the
+order wanted ("order these in the order they should be built"): the listed cards
+take over the places they already hold, in list order, and unlisted cards stay
+put, so a list can cover just the not-started cards or all of them. Done cards
+are skipped and reported, since done always reads in completion order.
+`move_epic_card` moves one card before or after a sibling in the same status
+group, or to the top or bottom of its group; moving a done card or across
+groups is refused. Both return the epic's table. A card that joins an epic goes
+to its end, and keeps its place when its status changes. The epic's card page
+reorders the same order by dragging.
 
 `set_item_body` REPLACES an item's whole body (safe overwrite): the previous
 state is snapshotted to the item's history first, so it is always recoverable

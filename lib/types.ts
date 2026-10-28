@@ -404,6 +404,12 @@ export interface Item {
    * the epic). See parentLinkError for the rules.
    */
   parent_id: string | null;
+  /**
+   * The item's place in its epic's own order (KANBAN-68), separate from the
+   * board's `position`; null when it has no parent. Set to the epic's end by a
+   * database trigger when the item joins an epic.
+   */
+  epic_position: number | null;
   attachments: Attachment[];
   archived_at: string | null;
   /**

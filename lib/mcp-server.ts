@@ -13,6 +13,7 @@ import { projectUrl } from "@/lib/card-url";
 import { normAreaPath } from "@/lib/board-state";
 import { formatEpicTable, orderEpicChildren } from "@/lib/epic-table";
 import { formatEpicList } from "@/lib/epic-list";
+import { moveEpicChild, setEpicOrder, type EpicReorderResult } from "@/lib/epic-reorder-core";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
   appendItemNote,
@@ -118,7 +119,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "get_item",
-    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `done_at` is when the item entered Done (null unless it is done). `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items ({ref, name, type, status, done_at}; done_at is when a done card entered Done, else null) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see. `attachments` lists the files attached to the card ({id, name, content_type, size}); these are separate from inline images, and include_images does not return them — read one with get_attachment.",
+    "Get full detail for an item, including its body flattened to plain text, area, assignees, ref, and `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12). `item` is the item id or a KEY-N reference (e.g. AMOS-12); a ref written with a project's old key (before a key rename) still works, and `ref` and `url` always use the current key. The card's description (a living spec) comes back as two fields that never repeat each other: `name` is the title — the first non-empty line of the body (there is no separate stored title), capped at 200 chars — and `body_after_title` is the rest of it as plain text, with that title line removed. So `name` appearing nowhere in `body_after_title` is correct, not a truncated or missing body. To rewrite the description, pass them back to set_item_body as `title` and `body`. (Edge case: if the first line runs past 200 chars the title is cut short, and `body_after_title` then carries the whole body, title line included, so no text is ever lost.) `done_at` is when the item entered Done (null unless it is done). `parent` is the epic this item belongs to ({ref, name}) or null. For an epic, `children` lists its non-archived child items in the order epic_table shows them ({ref, name, type, status, done_at}; done_at is when a done card entered Done, else null) and `children_progress` reads 'N/M done'. Entries logged against the item: `decisions` lists the ACTIVE decisions ({id, body, created_at, created_by, supersedes_id}), `open_questions` the unanswered questions ({id, body, created_at}), and `progress` is only a summary ({count, last_at}: non-deleted progress entries, superseded included, and when the newest was created) — the progress log itself is NOT returned; call list_item_entries when you need that background. Entry ids are what update_item_entry, answer_question and record_decision's `supersedes` take. Set `include_images` to also return the inline screenshots pasted into the body as viewable image blocks (base64) — use it when the text references a screenshot/diagram you need to see. `attachments` lists the files attached to the card ({id, name, content_type, size}); these are separate from inline images, and include_images does not return them — read one with get_attachment.",
     {
       item: z.string().describe("item id or KEY-N reference, e.g. AMOS-12"),
       include_images: z
@@ -159,7 +160,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "epic_table",
-    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order. Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for ONE epic's cards; to list a project's epics, call list_epics. Read-only.",
+    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order (set it with set_epic_order or move_epic_card). Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for ONE epic's cards; to list a project's epics, call list_epics. Read-only.",
     { item: z.string().describe("epic id or KEY-N reference, e.g. PS-147") },
     async (a) => {
       const r = await getItem(getSupabase(), actor(), a.item);
@@ -168,6 +169,48 @@ function registerTools(server: McpServer) {
       if (epic.type !== "epic") return fail(`${epic.ref} is a ${epic.type}, not an epic`);
       const text = formatEpicTable(epic, orderEpicChildren(epic.children ?? []));
       return { content: [{ type: "text" as const, text }] };
+    },
+  );
+
+  // After a reorder, show the epic as epic_table would, led by what was skipped.
+  async function reorderedTable(r: CoreResult<EpicReorderResult>) {
+    if (!r.ok) return out(r);
+    const epic = await getItem(getSupabase(), actor(), r.data.epicId);
+    if (!epic.ok) return out(epic);
+    const table = formatEpicTable(epic.data, orderEpicChildren(epic.data.children ?? []));
+    const skipped = r.data.skipped.length
+      ? `Skipped ${r.data.skipped.join(", ")}: done cards keep the order they were completed in.\n\n`
+      : "";
+    return { content: [{ type: "text" as const, text: `${skipped}${table}` }] };
+  }
+
+  server.tool(
+    "set_epic_order",
+    "Set the order of an epic's cards, e.g. the order they should be built in. `epic` is the epic's id or KEY-N reference; `items` lists its cards (KEY-N refs or ids) in the order you want. An epic's cards are shown grouped by status: done first (always in the order they were completed, so done cards in the list are skipped and reported), then testing, in progress, blocked and new, each group in the epic's own order, which is what this sets. The listed cards take over the places they already hold, in list order; cards you leave out stay where they are. So list just the not-started cards to order those, or every card to order them all. Each card keeps its place in that order when its status changes. This order is the epic's own: it never moves cards on the board. A card that isn't one of the epic's non-archived children is refused. Returns the epic's table (as epic_table would), to print exactly as it is. To move a single card, move_epic_card is simpler.",
+    {
+      epic: z.string().describe("epic id or KEY-N reference, e.g. KANBAN-41"),
+      items: z
+        .array(z.string())
+        .min(1)
+        .describe("the epic's cards (KEY-N refs or ids) in the order you want"),
+    },
+    async (a) => reorderedTable(await setEpicOrder(getSupabase(), actor(), a.epic, a.items)),
+  );
+
+  server.tool(
+    "move_epic_card",
+    "Move one card within its epic's status group: before or after another card in the same group (`before` / `after`, a KEY-N ref or id), or to the `top` or `bottom` of its group (`to`). Give exactly one of before, after or to. An epic's cards are shown grouped by status: done first in the order they were completed (a done card can't be moved), then testing, in progress, blocked and new, each in the epic's own order, which this edits. Moving next to a card with a different status is refused. Never moves cards on the board. `item` is the card's id or KEY-N reference. Returns the epic's table (as epic_table would), to print exactly as it is. To order many cards at once, use set_epic_order.",
+    {
+      item: z.string().describe("the card to move: id or KEY-N reference"),
+      before: z.string().optional().describe("put it just before this card (same status)"),
+      after: z.string().optional().describe("put it just after this card (same status)"),
+      to: z.enum(["top", "bottom"]).optional().describe("move it to the top or bottom of its status group"),
+    },
+    async (a) => {
+      const given = [a.before, a.after, a.to].filter((v) => v !== undefined);
+      if (given.length !== 1) return fail("Give exactly one of before, after or to");
+      const target = a.before ? { before: a.before } : a.after ? { after: a.after } : { to: a.to! };
+      return reorderedTable(await moveEpicChild(getSupabase(), actor(), a.item, target));
     },
   );
 

@@ -361,6 +361,36 @@ create trigger items_guard_delete_with_children
   before delete on items
   for each row execute function items_guard_delete_with_children();
 
+-- An epic's own order for its children (KANBAN-68), separate from the board's
+-- position. Null exactly when parent_id is null; a card that joins an epic goes
+-- to its end (the items_set_epic_position trigger). Children are shown grouped
+-- by status: done by done_at, the other groups by epic_position.
+-- Migration: supabase/migrations/2026-10-28-1-item-epic-position.sql
+alter table items add column if not exists epic_position double precision;
+
+create or replace function items_set_epic_position() returns trigger
+language plpgsql
+set search_path = mykan, pg_temp
+as $$
+begin
+  if new.parent_id is null then
+    new.epic_position := null;
+  elsif tg_op = 'INSERT' or new.parent_id is distinct from old.parent_id then
+    select coalesce(max(c.epic_position), 0) + 1024
+      into new.epic_position
+      from mykan.items c
+     where c.parent_id = new.parent_id
+       and c.id <> new.id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists items_set_epic_position on items;
+create trigger items_set_epic_position
+  before insert or update of parent_id on items
+  for each row execute function items_set_epic_position();
+
 -- Item history (KANBAN-10): whole-item version snapshots. Every field mutation
 -- routes through snapshotThenWrite (lib/item-history.ts), which records the
 -- item's PREVIOUS state before applying the patch. `fields_changed` names the

@@ -10,6 +10,23 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { itemRef } from "@/lib/format";
 import { cardPath } from "@/lib/card-url";
 import {
@@ -20,7 +37,14 @@ import {
   type ItemStatus,
 } from "@/lib/types";
 import { useProjectKey } from "@/components/RefBadge";
-import { linkSequentially, sortByStatusThenNumber, type LinkFailure } from "@/lib/epic-order";
+import {
+  linkSequentially,
+  sortByEpicPosition,
+  sortByStatusThenNumber,
+  type EpicMoveTarget,
+  type LinkFailure,
+} from "@/lib/epic-order";
+import { orderEpicChildren } from "@/lib/epic-table";
 
 /**
  * Epic parent/child links (KANBAN-41). The link lives on the child
@@ -40,7 +64,11 @@ type EpicValue = {
   all: Item[];
   /** Non-archived epics, the only valid NEW parents, by status then number. */
   epics: Item[];
-  /** An epic's children, archived included, by status then number. */
+  /**
+   * An epic's children, archived included, as epic_table orders them: done by
+   * completion, then testing, in progress, blocked and new, each in the epic's
+   * own order (KANBAN-68).
+   */
   childrenOf: (epicId: string) => Item[];
   /** Go to an item's card page (/KEY-N). */
   open: (id: string) => void;
@@ -73,8 +101,9 @@ export function useEpicValue(
       l.push(it);
       kids.set(it.parent_id, l);
     }
-    // Epic lists read status (board column order) then number, never position.
-    for (const [id, l] of kids) kids.set(id, sortByStatusThenNumber(l));
+    // Children read the epic's own order, grouped by status (never the board's
+    // position); the epic list reads status then number.
+    for (const [id, l] of kids) kids.set(id, orderEpicChildren(sortByEpicPosition(l)));
     const epics = sortByStatusThenNumber(
       all.filter((it) => it.type === "epic" && !it.archived_at),
     );
@@ -710,6 +739,91 @@ export function ParentRow({ item }: { item: Item }) {
 }
 
 /**
+ * One child of an epic: a drag grip when it can be reordered (a non-done card
+ * with siblings in its status group), the clickable ref/title/status, and the
+ * remove-from-epic action. The grip also takes the keyboard (Space to lift,
+ * arrows to move, Space to drop, Esc to cancel).
+ */
+function ChildRow({
+  child: c,
+  sortable,
+  epicRef,
+  onUnlink,
+}: {
+  child: Item;
+  sortable: boolean;
+  epicRef: string;
+  onUnlink: () => void;
+}) {
+  const key = useProjectKey();
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: c.id,
+    disabled: !sortable,
+  });
+  const ref = itemRef(key, c.number);
+  const title = titleOf(c);
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center gap-1 ${isDragging ? "relative z-10 opacity-50" : ""}`}
+    >
+      {sortable ? (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Drag to reorder ${ref} within ${STATUS_LABEL[c.status]}`}
+          className="grid h-6 w-4 shrink-0 cursor-grab touch-none place-items-center text-[var(--color-faint)] transition-colors hover:text-[var(--color-muted)] active:cursor-grabbing"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="9" cy="6" r="1.4" />
+            <circle cx="15" cy="6" r="1.4" />
+            <circle cx="9" cy="12" r="1.4" />
+            <circle cx="15" cy="12" r="1.4" />
+            <circle cx="9" cy="18" r="1.4" />
+            <circle cx="15" cy="18" r="1.4" />
+          </svg>
+        </button>
+      ) : (
+        <span className="w-4 shrink-0" aria-hidden="true" />
+      )}
+      <CardLink
+        item={c}
+        title={`Open ${ref}: ${title}`}
+        ariaLabel={`Open child item ${ref}: ${title}`}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
+      >
+        <span className="w-20 shrink-0 font-mono text-[11px] text-[var(--color-faint)]">
+          {ref}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate ${
+            c.status === "done"
+              ? "text-[var(--color-faint)] line-through"
+              : "text-[var(--color-ink)]"
+          }`}
+        >
+          {title}
+        </span>
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
+          {STATUS_LABEL[c.status]}
+        </span>
+      </CardLink>
+      <button
+        type="button"
+        onClick={onUnlink}
+        title="Remove from epic"
+        aria-label={`Remove ${ref} from ${epicRef}`}
+        className={`${iconBtn} hover:text-[var(--color-bug)]`}
+      >
+        <UnlinkIcon />
+      </button>
+    </li>
+  );
+}
+
+/**
  * Parent picker for the Add Item form, on a draft parent id. Hidden by the form
  * when the chosen type is epic.
  */
@@ -787,8 +901,10 @@ export function DraftParent({
  * The epic's children on its card page: "N/M done", an "Add child" action
  * (a multi-select typeahead over cards in the project that can become its
  * child), and a clickable list (ref, title, status) where each child has a
- * remove-from-epic icon action. Both lists read status (board column order) then
- * number. Archived children still reference the epic but are left out of the
+ * remove-from-epic icon action. The picker reads status (board column order)
+ * then number; the children read as epic_table does, and a drag grip reorders a
+ * card within its status group (KANBAN-68; done cards keep completion order).
+ * Archived children still reference the epic but are left out of the
  * list and the count. Every link change is a normal PATCH, so it lands in the
  * child's history — a multi-add sends one PATCH per card, one at a time.
  */
@@ -799,6 +915,13 @@ export function EpicChildren({ item }: { item: Item }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [failures, setFailures] = useState<{ ref: string; error: string }[]>([]);
+  // A dropped reorder shows at once (ids in order) until the refresh lands.
+  const [pending, setPending] = useState<string[] | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   // Cards that can become this epic's child: same project (the context holds
   // only this project), not an epic, not archived, not already its child. A card
@@ -836,8 +959,18 @@ export function EpicChildren({ item }: { item: Item }) {
 
   if (!ctx || item.type !== "epic") return null;
   const epics = ctx;
-  const live = ctx.childrenOf(item.id).filter((c) => !c.archived_at);
+  const ordered = ctx.childrenOf(item.id).filter((c) => !c.archived_at);
+  const live = pending
+    ? [...ordered].sort((a, b) => pending.indexOf(a.id) - pending.indexOf(b.id))
+    : ordered;
   const { done, total } = epicProgress(live);
+  // Consecutive runs of one status: each is its own sortable group.
+  const groups: Item[][] = [];
+  for (const c of live) {
+    const last = groups[groups.length - 1];
+    if (last && last[0].status === c.status) last.push(c);
+    else groups.push([c]);
+  }
   const epicRef = itemRef(key, item.number) ?? "this epic";
 
   function closePicker() {
@@ -853,6 +986,39 @@ export function EpicChildren({ item }: { item: Item }) {
       else next.add(id);
       return next;
     });
+  }
+
+  // A drop within a status group: show it at once, save it as "after the card
+  // above" (or "before the card below" at the top), then refresh.
+  async function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const moving = live.find((c) => c.id === active.id);
+    const onto = live.find((c) => c.id === over.id);
+    if (!moving || !onto || moving.status !== onto.status || moving.status === "done") return;
+    const group = live.filter((c) => c.status === moving.status);
+    const moved = arrayMove(group, group.indexOf(moving), group.indexOf(onto));
+    const at = moved.indexOf(moving);
+    const target: EpicMoveTarget =
+      at > 0 ? { after: moved[at - 1].id } : { before: moved[1].id };
+    let k = 0;
+    setPending(live.map((c) => (c.status === moving.status ? moved[k++].id : c.id)));
+    setMoveError(null);
+    try {
+      const res = await fetch(`/api/items/${moving.id}/epic-move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(target),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setMoveError(j.error || "Couldn't save the new order");
+      }
+    } catch {
+      setMoveError("Couldn't save the new order");
+    }
+    await epics.refresh();
+    setPending(null);
   }
 
   async function addAll(ids: string[]) {
@@ -926,48 +1092,37 @@ export function EpicChildren({ item }: { item: Item }) {
           No child items yet. Use Add child to pick an existing card.
         </p>
       ) : (
-        <ul className="flex flex-col gap-0.5">
-          {live.map((c) => {
-            const ref = itemRef(key, c.number);
-            const title = titleOf(c);
-            return (
-              <li key={c.id} className="flex items-center gap-1">
-                <CardLink
-                  item={c}
-                  title={`Open ${ref}: ${title}`}
-                  ariaLabel={`Open child item ${ref}: ${title}`}
-                  className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
-                >
-                  <span className="w-20 shrink-0 font-mono text-[11px] text-[var(--color-faint)]">
-                    {ref}
-                  </span>
-                  <span
-                    className={`min-w-0 flex-1 truncate ${
-                      c.status === "done"
-                        ? "text-[var(--color-faint)] line-through"
-                        : "text-[var(--color-ink)]"
-                    }`}
-                  >
-                    {title}
-                  </span>
-                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
-                    {STATUS_LABEL[c.status]}
-                  </span>
-                </CardLink>
-                <button
-                  type="button"
-                  onClick={() => ctx.setParent(c.id, null)}
-                  title="Remove from epic"
-                  aria-label={`Remove ${ref} from ${epicRef}`}
-                  className={`${iconBtn} hover:text-[var(--color-bug)]`}
-                >
-                  <UnlinkIcon />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(e) => void onDragEnd(e)}
+        >
+          <ul className="flex flex-col gap-0.5">
+            {groups.map((g) => (
+              <SortableContext
+                key={g[0].status}
+                items={g.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {g.map((c) => (
+                  <ChildRow
+                    key={c.id}
+                    child={c}
+                    sortable={c.status !== "done" && g.length > 1}
+                    epicRef={epicRef}
+                    onUnlink={() => ctx.setParent(c.id, null)}
+                  />
+                ))}
+              </SortableContext>
+            ))}
+          </ul>
+        </DndContext>
       )}
+      {moveError ? (
+        <p role="alert" className="mt-1 text-xs text-[var(--color-bug)]">
+          {moveError}
+        </p>
+      ) : null}
     </div>
   );
 }
