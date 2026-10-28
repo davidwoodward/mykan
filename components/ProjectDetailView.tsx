@@ -1533,12 +1533,9 @@ export function ProjectDetailView({
                     onClick={() =>
                       setStatusFilter((cur) => (on ? cur.filter((x) => x !== st) : [...cur, st]))
                     }
-                    className={`h-10 rounded-full border px-4 text-sm transition-colors ${
-                      on
-                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                        : "border-[var(--color-line)] text-[var(--color-muted)]"
-                    }`}
+                    className={sheetPill(on)}
                   >
+                    {on ? <PillCheck /> : null}
                     {STATUS_LABEL[st]}
                   </button>
                 );
@@ -1557,12 +1554,9 @@ export function ProjectDetailView({
                     onClick={() =>
                       setTypeFilter((cur) => (on ? cur.filter((x) => x !== ty) : [...cur, ty]))
                     }
-                    className={`h-10 rounded-full border px-4 text-sm transition-colors ${
-                      on
-                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                        : "border-[var(--color-line)] text-[var(--color-muted)]"
-                    }`}
+                    className={sheetPill(on)}
                   >
+                    {on ? <PillCheck /> : null}
                     {TYPE_LABEL[ty]}
                   </button>
                 );
@@ -1985,10 +1979,7 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div
-      role="radiogroup"
-      className="inline-flex max-w-full flex-wrap items-center rounded-lg border border-[var(--color-line)] bg-[var(--color-canvas)] p-0.5"
-    >
+    <div role="radiogroup" className="flex flex-wrap gap-2">
       {options.map(([v, text]) => (
         <button
           key={v}
@@ -1996,16 +1987,36 @@ function Segmented({
           role="radio"
           aria-checked={value === v}
           onClick={() => onChange(v)}
-          className={`h-10 rounded-md px-4 text-sm transition-colors ${
-            value === v
-              ? "bg-[var(--color-ink)] text-[var(--color-canvas)]"
-              : "text-[var(--color-muted)]"
-          }`}
+          className={sheetPill(value === v)}
         >
           {text}
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * A choice pill in the View & filters sheet. Every option looks tappable: an
+ * unselected one is a filled chip with a visible border and full-strength text
+ * (an outline alone vanished on a phone, reading as disabled); a selected one
+ * is a solid high-contrast fill (ink on canvas), so on and off never look alike
+ * in either theme.
+ */
+function sheetPill(on: boolean): string {
+  return `inline-flex h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors ${
+    on
+      ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-canvas)]"
+      : "border-[var(--color-line-strong)] bg-[color-mix(in_srgb,var(--color-ink)_9%,var(--color-surface))] text-[var(--color-ink)] active:bg-[color-mix(in_srgb,var(--color-ink)_16%,var(--color-surface))]"
+  }`;
+}
+
+/** The check on a selected multi-select pill (Status, Type). */
+function PillCheck() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
   );
 }
 
