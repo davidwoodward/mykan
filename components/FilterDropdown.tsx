@@ -92,6 +92,9 @@ export function FilterDropdown<T extends string>({
         e.preventDefault();
         e.stopPropagation();
         openMenu();
+      } else if (e.key === "Enter" || e.key === " ") {
+        // The native click opens it; the board must not also open its card.
+        e.stopPropagation();
       }
       return;
     }
