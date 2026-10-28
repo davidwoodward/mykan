@@ -12,6 +12,7 @@ import { ItemList } from "@/components/ItemList";
 import { Board } from "@/components/Board";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AddItemModal } from "@/components/AddItemModal";
+import { FilterDropdown } from "@/components/FilterDropdown";
 import {
   boardSearch,
   boardStateFromParams,
@@ -32,11 +33,14 @@ import { Tag } from "@/components/Tag";
 import { displayName, itemRef } from "@/lib/format";
 import {
   ITEM_STATUSES,
+  ITEM_TYPES,
   STATUS_LABEL,
+  TYPE_LABEL,
   richDocText,
   type Category,
   type Item,
   type ItemStatus,
+  type ItemType,
 } from "@/lib/types";
 import {
   CategoryProvider,
@@ -109,6 +113,7 @@ export function ProjectDetailView({
   const [pendingAreaPath, setPendingAreaPath] = useState<string | null>(initialState.area);
   const [groupBy, setGroupBy] = useState<"status" | "area" | "flat">(initialState.group);
   const [statusFilter, setStatusFilter] = useState<ItemStatus[]>(initialState.status);
+  const [typeFilter, setTypeFilter] = useState<ItemType[]>(initialState.type);
   // Free-text search over card content (body text + ref number), AND-composed
   // with the other filters. Shared by List/Board; kept in the URL.
   const [query, setQuery] = useState(initialState.q);
@@ -647,6 +652,7 @@ export function ProjectDetailView({
     view,
     group: groupBy,
     status: statusFilter,
+    type: typeFilter,
     tags: tagFilter,
     area: areaFilter ? normAreaPath(pathOf(areaFilter)) : pendingAreaPath,
     by: creatorFilter,
@@ -727,13 +733,17 @@ export function ProjectDetailView({
     if (statusFilter.length) {
       list = list.filter((it) => statusFilter.includes(it.status));
     }
+    // Type filter (multi-select): empty = all.
+    if (typeFilter.length) {
+      list = list.filter((it) => typeFilter.includes(it.type));
+    }
     // Content search: substring over body text + ref (see searchIndex).
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter((it) => (searchIndex.get(it.id) ?? "").includes(q));
     }
     return list;
-  }, [pool, creatorFilter, tagFilter, areaFilter, statusFilter, categories, query, searchIndex]);
+  }, [pool, creatorFilter, tagFilter, areaFilter, statusFilter, typeFilter, categories, query, searchIndex]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
@@ -1039,12 +1049,14 @@ export function ProjectDetailView({
   // Archived counts: it changes which cards are shown.
   const activeFilterCount =
     statusFilter.length +
+    typeFilter.length +
     tagFilter.length +
     (areaFilter ? 1 : 0) +
     (creatorFilter ? 1 : 0) +
     (showArchived ? 1 : 0);
   const clearAllFilters = () => {
     setStatusFilter([]);
+    setTypeFilter([]);
     setTagFilter([]);
     setAreaFilter(null);
     setCreatorFilter(null);
@@ -1156,6 +1168,13 @@ export function ProjectDetailView({
                 onRemove={() => setStatusFilter((cur) => cur.filter((x) => x !== st))}
               />
             ))}
+            {typeFilter.map((ty) => (
+              <ActivePill
+                key={ty}
+                label={TYPE_LABEL[ty]}
+                onRemove={() => setTypeFilter((cur) => cur.filter((x) => x !== ty))}
+              />
+            ))}
             {areaFilter ? (
               <ActivePill
                 label={categoryPaths.find((c) => c.id === areaFilter)?.path ?? "Area"}
@@ -1218,29 +1237,12 @@ export function ProjectDetailView({
               </ViewTab>
             </div>
             {!showArchived && view === "list" ? (
-              <div className="inline-flex items-center gap-1.5 text-xs text-[var(--color-faint)]">
-                <span>Group</span>
-                <div className="inline-flex rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-0.5">
-                  <ViewTab
-                    active={groupBy === "status"}
-                    onClick={() => setGroupBy("status")}
-                  >
-                    Status
-                  </ViewTab>
-                  <ViewTab
-                    active={groupBy === "area"}
-                    onClick={() => setGroupBy("area")}
-                  >
-                    Area
-                  </ViewTab>
-                  <ViewTab
-                    active={groupBy === "flat"}
-                    onClick={() => setGroupBy("flat")}
-                  >
-                    Flat
-                  </ViewTab>
-                </div>
-              </div>
+              <FilterDropdown
+                label="Group"
+                options={GROUP_OPTIONS}
+                value={[groupBy]}
+                onChange={(v) => setGroupBy(v[0] ?? "status")}
+              />
             ) : null}
           </div>
 
@@ -1307,31 +1309,20 @@ export function ProjectDetailView({
                     </button>
                   ) : null}
                 </div>
-                <div className="inline-flex items-center gap-1">
-                  {ITEM_STATUSES.map((s) => {
-                    const on = statusFilter.includes(s);
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() =>
-                          setStatusFilter((cur) =>
-                            on ? cur.filter((x) => x !== s) : [...cur, s],
-                          )
-                        }
-                        aria-pressed={on}
-                        title={`Filter: ${STATUS_LABEL[s]}`}
-                        className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                          on
-                            ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
-                            : "border-[var(--color-line)] text-[var(--color-faint)] hover:text-[var(--color-muted)]"
-                        }`}
-                      >
-                        {STATUS_LABEL[s]}
-                      </button>
-                    );
-                  })}
-                </div>
+                <FilterDropdown
+                  label="Type"
+                  options={TYPE_OPTIONS}
+                  value={typeFilter}
+                  onChange={setTypeFilter}
+                  multiple
+                />
+                <FilterDropdown
+                  label="Status"
+                  options={STATUS_OPTIONS}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  multiple
+                />
                 {!showArchived && categoryPaths.length > 0 ? (
                   <select
                     value={areaFilter ?? ""}
@@ -1577,6 +1568,30 @@ export function ProjectDetailView({
               })}
             </div>
           </SheetSection>
+          <SheetSection label="Type">
+            <div className="flex flex-wrap gap-2">
+              {ITEM_TYPES.map((ty) => {
+                const on = typeFilter.includes(ty);
+                return (
+                  <button
+                    key={ty}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setTypeFilter((cur) => (on ? cur.filter((x) => x !== ty) : [...cur, ty]))
+                    }
+                    className={`h-10 rounded-full border px-4 text-sm transition-colors ${
+                      on
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+                        : "border-[var(--color-line)] text-[var(--color-muted)]"
+                    }`}
+                  >
+                    {TYPE_LABEL[ty]}
+                  </button>
+                );
+              })}
+            </div>
+          </SheetSection>
           {!showArchived && categoryPaths.length > 0 ? (
             <SheetSection label="Area">
               <select
@@ -1664,6 +1679,15 @@ export function ProjectDetailView({
     </ProjectKeyProvider>
   );
 }
+
+// Options for the desktop toolbar dropdowns (KANBAN-67).
+const GROUP_OPTIONS = [
+  ["status", "Status"],
+  ["area", "Area"],
+  ["flat", "Flat"],
+] as const;
+const STATUS_OPTIONS = ITEM_STATUSES.map((st) => [st, STATUS_LABEL[st]] as const);
+const TYPE_OPTIONS = ITEM_TYPES.map((ty) => [ty, TYPE_LABEL[ty]] as const);
 
 function TagFilterBar({
   tags,

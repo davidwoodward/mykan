@@ -21,6 +21,7 @@ test("round trip of a fully set state", () => {
     view: "board",
     group: "area",
     status: ["blocked", "new"],
+    type: ["epic", "bug"],
     tags: ["ui", "mcp"],
     area: "coach/home",
     by: "dawoodward@gmail.com",
@@ -29,18 +30,20 @@ test("round trip of a fully set state", () => {
   };
   const qs = boardStateToParams(s).toString();
   const back = boardStateFromParams(new URLSearchParams(qs));
-  // Status is written in board column order.
-  assert.deepEqual(back, { ...s, status: ["new", "blocked"] });
+  // Status is written in board column order, type in picker order.
+  assert.deepEqual(back, { ...s, status: ["new", "blocked"], type: ["bug", "epic"] });
   assert.match(qs, /status=new%2Cblocked/);
+  assert.match(qs, /type=bug%2Cepic/);
 });
 
 test("unknown and junk values fall back to defaults", () => {
   const s = boardStateFromParams(
-    new URLSearchParams("view=grid&group=owner&status=done,bogus,done&archived=yes&area=%20%20"),
+    new URLSearchParams("view=grid&group=owner&status=done,bogus,done&type=epic,story,epic&archived=yes&area=%20%20"),
   );
   assert.equal(s.view, "list");
   assert.equal(s.group, "status");
   assert.deepEqual(s.status, ["done"]);
+  assert.deepEqual(s.type, ["epic"]);
   assert.equal(s.archived, false);
   assert.equal(s.area, null);
 });
@@ -62,4 +65,8 @@ test("area paths are compared slash- and case-insensitively, never as ids", () =
 test("search text survives as typed (not trimmed)", () => {
   const s = boardStateFromParams(boardStateToParams({ ...DEFAULT_BOARD_STATE, q: "  two words " }));
   assert.equal(s.q, "  two words ");
+});
+
+test("a type filter alone is a short URL", () => {
+  assert.equal(boardSearch({ ...DEFAULT_BOARD_STATE, type: ["epic"] }), "?type=epic");
 });

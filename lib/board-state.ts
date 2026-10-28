@@ -4,7 +4,7 @@
 // board. Scroll position is kept separately (sessionStorage), see
 // components/boardReturn.ts. Pure, so it runs under `node --test`.
 //
-//   /FPOON?view=board&status=in_progress,blocked&tags=ui,mcp&area=coach/home&by=dawoodward@gmail.com&q=scroll
+//   /FPOON?view=board&status=in_progress,blocked&type=epic&tags=ui,mcp&area=coach/home&by=dawoodward@gmail.com&q=scroll
 //
 // Defaults are omitted, so an untouched board is plain /FPOON. No ids: the area
 // filter is written as its path, which the board resolves back to a node once
@@ -12,11 +12,14 @@
 
 export const BOARD_STATUSES = ["new", "in_progress", "blocked", "testing", "done"] as const;
 export type BoardStatus = (typeof BOARD_STATUSES)[number];
+export const BOARD_TYPES = ["feature", "bug", "task", "idea", "epic"] as const;
+export type BoardType = (typeof BOARD_TYPES)[number];
 
 export type BoardState = {
   view: "list" | "board";
   group: "status" | "area" | "flat";
   status: BoardStatus[];
+  type: BoardType[];
   tags: string[];
   /** Area path in normalised form ("coach/home"), or null. */
   area: string | null;
@@ -30,6 +33,7 @@ export const DEFAULT_BOARD_STATE: BoardState = {
   view: "list",
   group: "status",
   status: [],
+  type: [],
   tags: [],
   area: null,
   by: null,
@@ -72,6 +76,13 @@ export function boardStateFromParams(src: ParamSource): BoardState {
       ),
     ),
   ];
+  const type = [
+    ...new Set(
+      list(getParam(src, "type")).filter((t): t is BoardType =>
+        (BOARD_TYPES as readonly string[]).includes(t),
+      ),
+    ),
+  ];
   const tags = [...new Set(list(getParam(src, "tags")).map((t) => t.toLowerCase()))];
   const area = getParam(src, "area");
   const by = getParam(src, "by");
@@ -79,6 +90,7 @@ export function boardStateFromParams(src: ParamSource): BoardState {
     view: view === "board" ? "board" : "list",
     group: group === "area" || group === "flat" ? group : "status",
     status,
+    type,
     tags,
     area: area && area.trim() ? normAreaPath(area) : null,
     by: by && by.trim() ? by.trim().toLowerCase() : null,
@@ -95,6 +107,9 @@ export function boardStateToParams(state: BoardState): URLSearchParams {
   if (state.status.length) {
     // Board column order, so the same filter always reads the same.
     p.set("status", BOARD_STATUSES.filter((s) => state.status.includes(s)).join(","));
+  }
+  if (state.type.length) {
+    p.set("type", BOARD_TYPES.filter((t) => state.type.includes(t)).join(","));
   }
   if (state.tags.length) p.set("tags", state.tags.join(","));
   if (state.area) p.set("area", normAreaPath(state.area));

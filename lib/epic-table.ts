@@ -50,8 +50,22 @@ const HEADERS = ["#", "Card", "Type", "Status", "Note"] as const;
  */
 export function formatEpicTable(epic: EpicTableRow, children: readonly EpicTableChild[]): string {
   const cells = (r: EpicTableRow, n: string) => [n, r.ref, r.type, r.status, oneLine(r.name)];
-  const rows = [cells(epic, ""), ...children.map((c, i) => cells(c, String(i + 1)))];
-  const widths = HEADERS.map((h, col) =>
+  return formatTextTable(HEADERS, [
+    cells(epic, ""),
+    ...children.map((c, i) => cells(c, String(i + 1))),
+  ]);
+}
+
+/**
+ * Aligned plain-text columns in a code block, shared by epic_table and
+ * list_epics. Each column is at least 2 wide; the last column is not padded,
+ * so lines carry no trailing spaces.
+ */
+export function formatTextTable(
+  headers: readonly string[],
+  rows: readonly (readonly string[])[],
+): string {
+  const widths = headers.map((h, col) =>
     Math.max(h.length, 2, ...rows.map((r) => r[col].length)),
   );
   const line = (r: readonly string[]) =>
@@ -60,10 +74,10 @@ export function formatEpicTable(epic: EpicTableRow, children: readonly EpicTable
       .join("  ")
       .trimEnd();
   const rule = widths.map((w) => "-".repeat(w));
-  return ["```", line(HEADERS), line(rule), ...rows.map(line), "```"].join("\n");
+  return ["```", line(headers), line(rule), ...rows.map(line), "```"].join("\n");
 }
 
 /** A title is one line already; collapse any stray whitespace so it stays one. */
-function oneLine(s: string): string {
+export function oneLine(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }

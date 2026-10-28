@@ -133,6 +133,9 @@ Ask Claude Code naturally — it maps to the tools:
   ready-made table: #, Card, Type, Status, Note, with the epic on top, then done
   cards in the order they were finished, then in progress, then new; the note is
   each card's title)
+- *"What epics are in Permit Saige?"* / *"list the PS epics"* → `list_epics` (a
+  ready-made table: #, Epic, Status, Done, Note, one row per epic, with N/M of
+  its cards done)
 - *"Tag / assign / re-parent KANBAN-N"* → `set_item_tags`, `set_item_assignees`,
   `set_item_parent`, `set_item_area`
 

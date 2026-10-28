@@ -12,6 +12,7 @@ import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import { projectUrl } from "@/lib/card-url";
 import { normAreaPath } from "@/lib/board-state";
 import { formatEpicTable, orderEpicChildren } from "@/lib/epic-table";
+import { formatEpicList } from "@/lib/epic-list";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
   appendItemNote,
@@ -107,7 +108,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_items",
-    "List non-archived items in a project. `project` is a key (current or old), name, or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it.",
+    "List non-archived items in a project. `project` is a key (current or old), name, or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, and `parent` — the ref of the epic it belongs to, or null. `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it. To show a project's epics, call list_epics instead; to show one epic and its cards, epic_table.",
     {
       project: z.string().describe("project key (current or old), name, or id"),
       status: status.optional().describe("new | in_progress | blocked | testing | done"),
@@ -158,7 +159,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "epic_table",
-    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order. Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. Read-only.",
+    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order. Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for ONE epic's cards; to list a project's epics, call list_epics. Read-only.",
     { item: z.string().describe("epic id or KEY-N reference, e.g. PS-147") },
     async (a) => {
       const r = await getItem(getSupabase(), actor(), a.item);
@@ -167,6 +168,17 @@ function registerTools(server: McpServer) {
       if (epic.type !== "epic") return fail(`${epic.ref} is a ${epic.type}, not an epic`);
       const text = formatEpicTable(epic, orderEpicChildren(epic.children ?? []));
       return { content: [{ type: "text" as const, text }] };
+    },
+  );
+
+  server.tool(
+    "list_epics",
+    "List a project's epics as a ready-to-print table: columns #, Epic, Status, Done, Note, as aligned plain text in a code block. One row per non-archived epic, numbered in board column order (new, in_progress, blocked, testing, done), then by card number. Done reads 'N/M': the epic's done children over all its non-archived children. Note is the epic's title, the first line of its description. `project` is a key (current or old), name, or id. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for a whole PROJECT's epics; to show one epic and its cards, call epic_table with that epic's ref. Read-only.",
+    { project: z.string().describe("project key (current or old), name, or id, e.g. PS") },
+    async (a) => {
+      const r = await listItems(getSupabase(), actor(), a.project);
+      if (!r.ok) return out(r);
+      return { content: [{ type: "text" as const, text: formatEpicList(r.data) }] };
     },
   );
 
