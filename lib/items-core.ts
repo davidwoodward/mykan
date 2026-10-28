@@ -49,6 +49,7 @@ import {
 import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
 import { deleteWithChildHistory, describeDeleteFailure } from "@/lib/epic-delete";
 import { cardUrl } from "@/lib/card-url";
+import { orderEpicChildren } from "@/lib/epic-table";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -136,8 +137,11 @@ export type ItemDetail = Omit<ItemSummary, "parent"> & {
   /** The epic this item belongs to (ref + title), or null. */
   parent: ItemLink | null;
   /**
-   * Epics only: the epic's non-archived children in board order. Archived
-   * children still reference the epic but are left out here and of the count.
+   * Epics only: the epic's non-archived children as epic_table orders them:
+   * grouped by status, done by done_at, the rest in the epic's own order
+   * (epic_position, KANBAN-68).
+   * Archived children still reference the epic but are left out here and of
+   * the count.
    */
   children?: (ItemLink & { type: ItemType; status: ItemStatus; done_at: string | null })[];
   /** Epics only: "N/M done" over `children`. */
@@ -191,14 +195,15 @@ async function detailOf(
   if (it.type === "epic") {
     const { data: kids } = await sb
       .from("items")
-      .select("number, body, type, status, done_at, archived_at, position")
+      .select("number, body, type, status, done_at, archived_at, epic_position")
       .eq("parent_id", it.id)
       .is("archived_at", null)
-      .order("position", { ascending: true });
+      .order("epic_position", { ascending: true, nullsFirst: false })
+      .order("number", { ascending: true });
     const rows = (kids ?? []) as Pick<Item, "number" | "body" | "type" | "status" | "done_at" | "archived_at">[];
     const { done, total } = epicProgress(rows);
     epic = {
-      children: rows.map((c) => ({
+      children: orderEpicChildren(rows).map((c) => ({
         ref: refOf(project.key, c.number),
         name: richDocTitle(c.body),
         type: c.type,

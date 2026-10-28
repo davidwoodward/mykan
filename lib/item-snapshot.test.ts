@@ -23,6 +23,7 @@ const item = (over: Partial<Item> = {}): Item => ({
   assignees: [],
   category_id: null,
   parent_id: null,
+  epic_position: null,
   attachments: [],
   archived_at: null,
   github_issue: null,
