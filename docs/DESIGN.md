@@ -108,9 +108,11 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   (status, type, area, tags, creator, archived). Applied filters show under it as removable pills
   plus Clear, only when there are any. The button opens a bottom **sheet** with the full
   set, touch-sized: Group by (List view only; List/Board stays on the line, not in the sheet),
-  Status chips, Type chips, Area, Tags (typeahead), Created by, then Refresh, Sync with GitHub (linked
-  projects only; closes the sheet and opens the Areas panel, where the sync runs), Manage areas, Archived, Clear
-  filters, each section split from the next by a visible `line-strong` rule. Filters apply as tapped; Done, Esc,
+  Status chips, Type chips, Area, Tags (typeahead), Created by, then Refresh, Areas, Sync (linked
+  projects only; closes the sheet and opens the Areas panel, where the sync runs), Archived, Clear
+  filters, each section split from the next by a visible `line-strong` rule. Refresh, Areas and
+  Sync carry the desktop toolbar's own icons and words (shared `RefreshIcon` / `AreasIcon` /
+  `SyncIcon`) so they're recognisable on a phone. Filters apply as tapped; Done, Esc,
   Enter or a backdrop tap closes it. A laptop or desktop with a mouse keeps the full toolbar
   unchanged. "/" focuses whichever search box is showing.
 - **Add item is a floating action button** (KANBAN-53, David 2026-09-26), not a header
