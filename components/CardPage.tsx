@@ -31,6 +31,7 @@ import { openQuestionsLabel } from "@/lib/entry-panels";
 import { CardFinishContext, useRegisterFinisher, type Finisher } from "@/components/cardFinish";
 import {
   EpicChildren,
+  useEpicChildCount,
   EpicProgress,
   EpicProvider,
   ParentRow,
@@ -778,11 +779,14 @@ function CardSections({
   const activePanel = panels.some((p) => p.id === panel) ? panel : panels[0].id;
   const counts = entryTabCounts(entries.entries);
   const historyCount = useHistoryCount(item.id, item.updated_at);
+  const childCount = useEpicChildCount(item.id);
   // Entries load a page at a time; until they're all in, a count is a floor.
   const more = entries.hasMore ? "+" : "";
-  // A count badge on Progress, Decisions & Questions, Attachments and History
-  // when the section has entries, none when it's empty (KANBAN-55).
+  // A count badge on every tab (Child items, Progress, Decisions & Questions,
+  // Attachments, History) when the section has entries, none when it's empty
+  // (KANBAN-55).
   const countOf = (id: PanelId): ReactNode => {
+    if (id === "children") return <TabBadge n={childCount} />;
     if (id === "progress") return <TabBadge n={counts.progress} suffix={more} />;
     if (id === "attachments") return <TabBadge n={item.attachments.length} />;
     if (id === "history") return <TabBadge n={historyCount} />;

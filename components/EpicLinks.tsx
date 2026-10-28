@@ -124,6 +124,12 @@ function useEpics(): EpicValue | null {
   return useContext(EpicContext);
 }
 
+/** How many non-archived children an epic has (its Child items tab badge). */
+export function useEpicChildCount(epicId: string): number {
+  const ctx = useEpics();
+  return ctx ? ctx.childrenOf(epicId).filter((c) => !c.archived_at).length : 0;
+}
+
 function EpicIcon({ className = "h-3 w-3" }: { className?: string }) {
   // Stacked layers: an epic groups cards.
   return (
