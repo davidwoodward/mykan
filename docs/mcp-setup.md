@@ -60,7 +60,7 @@ The key is a comma-separated list in the Vercel project env (production) and
 `set_item_area`, `set_item_assignees`, `set_item_parent`,
 `set_project_github_account`, `list_areas`, `set_area_github_repo`,
 `refresh_item_from_github`, `set_item_type`, `get_attachment`, `epic_table`,
-`list_epics`, `set_epic_order`, `move_epic_card`.
+`list_epics`, `tag_table`, `set_epic_order`, `move_epic_card`.
 
 `get_attachment` (KANBAN-54) reads one file from a card's `attachments` list, by id
 or file name: PNG/JPEG/GIF/WebP as a viewable image block (≤ 3 MB, so the base64
@@ -189,6 +189,20 @@ order (new, in progress, blocked, testing, done) then by card number. `Done` is
 never overlap: `list_epics` answers "what epics are in PS?" (takes a project),
 `epic_table` answers "show me PS-147" (takes one epic). Each tool's description,
 `list_items`'s, and the server instructions all say which is which.
+
+`tag_table` (read-only, KANBAN-69) takes a `tag` and returns every
+non-archived card carrying it as the same `#`, `Card`, `Type`, `Status`, `Note`
+table, grouped by status the way `epic_table` groups an epic's cards, each group
+in project then board order. An optional `project` limits it to one project;
+without it every project the caller can see is searched ("show me the tag table
+for wt-2026-10-30").
+
+All three table tools take an optional `width`, the columns the caller has. Each
+title is then cut with `…` so no line is longer than `width`; the other columns
+stay whole. A server can't see the caller's terminal, so the agent passes it: in
+Claude Code the second number from
+`stty -f /dev/$(ps -o tty= -p $CLAUDE_PID | tr -d ' ') size`, minus 4 for the
+margin. The `width` parameter's description says this.
 
 `set_epic_order` and `move_epic_card` (KANBAN-68) edit an epic's own order of
 its cards, which is separate from board position (reordering an epic never

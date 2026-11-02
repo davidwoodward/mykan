@@ -13,6 +13,7 @@ import { projectUrl } from "@/lib/card-url";
 import { normAreaPath } from "@/lib/board-state";
 import { formatEpicTable, orderEpicChildren } from "@/lib/epic-table";
 import { formatEpicList } from "@/lib/epic-list";
+import { formatTagTable } from "@/lib/tag-table";
 import { moveEpicChild, setEpicOrder, type EpicReorderResult } from "@/lib/epic-reorder-core";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
 import {
@@ -22,6 +23,7 @@ import {
   getItemAttachment,
   getItemImages,
   listItems,
+  listItemsByTag,
   setItemArea,
   setItemAssignees,
   setItemBody,
@@ -92,6 +94,19 @@ function out<T>(r: CoreResult<T>) {
 const actor = () => mcpActorEmail();
 const status = z.enum(["new", "in_progress", "blocked", "testing", "done"]);
 const itemType = z.enum(["feature", "bug", "task", "idea", "epic"]);
+
+// The table tools' optional fit-to-terminal width (KANBAN-69).
+const tableWidth = z
+  .number()
+  .int()
+  .min(20)
+  .max(1000)
+  .optional()
+  .describe(
+    "columns the table may use; titles are cut with … so no line is longer. Pass it whenever you print to a terminal. In Claude Code, the terminal's columns are the second number from `stty -f /dev/$(ps -o tty= -p $CLAUDE_PID | tr -d ' ') size` (Linux: `stty -F`); pass that minus 4 for the margin",
+  );
+const WIDTH_NOTE =
+  "Pass `width` (the columns you have) and each title is cut with … so every row stays on one line.";
 const fail = (error: string) => json({ error });
 const CAP = `${MCP_ENTRY_MAX_CHARS.toLocaleString("en-US")} characters`;
 
@@ -160,14 +175,14 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "epic_table",
-    "Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order (set it with set_epic_order or move_epic_card). Note is each card's title, the first line of its description. `item` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for ONE epic's cards; to list a project's epics, call list_epics. Read-only.",
-    { item: z.string().describe("epic id or KEY-N reference, e.g. PS-147") },
+    `Show an epic and its cards as a ready-to-print table: columns #, Card, Type, Status, Note, as aligned plain text in a code block. The epic is the first row with # blank; its non-archived children follow, numbered: done cards first in the order they were completed (oldest first; dates aren't shown), then testing, in progress, blocked and new, each group in the epic's own child order (set it with set_epic_order or move_epic_card). Note is each card's title, the first line of its description. \`item\` is the epic's id or KEY-N reference; a non-epic is refused. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for ONE epic's cards; to list a project's epics, call list_epics; for the cards with a tag, tag_table. ${WIDTH_NOTE} Read-only.`,
+    { item: z.string().describe("epic id or KEY-N reference, e.g. PS-147"), width: tableWidth },
     async (a) => {
       const r = await getItem(getSupabase(), actor(), a.item);
       if (!r.ok) return out(r);
       const epic = r.data;
       if (epic.type !== "epic") return fail(`${epic.ref} is a ${epic.type}, not an epic`);
-      const text = formatEpicTable(epic, orderEpicChildren(epic.children ?? []));
+      const text = formatEpicTable(epic, orderEpicChildren(epic.children ?? []), a.width);
       return { content: [{ type: "text" as const, text }] };
     },
   );
@@ -216,12 +231,31 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_epics",
-    "List a project's epics as a ready-to-print table: columns #, Epic, Status, Done, Note, as aligned plain text in a code block. One row per non-archived epic, numbered in board column order (new, in_progress, blocked, testing, done), then by card number. Done reads 'N/M': the epic's done children over all its non-archived children. Note is the epic's title, the first line of its description. `project` is a key (current or old), name, or id. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for a whole PROJECT's epics; to show one epic and its cards, call epic_table with that epic's ref. Read-only.",
-    { project: z.string().describe("project key (current or old), name, or id, e.g. PS") },
+    `List a project's epics as a ready-to-print table: columns #, Epic, Status, Done, Note, as aligned plain text in a code block. One row per non-archived epic, numbered in board column order (new, in_progress, blocked, testing, done), then by card number. Done reads 'N/M': the epic's done children over all its non-archived children. Note is the epic's title, the first line of its description. \`project\` is a key (current or old), name, or id. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. This is for a whole PROJECT's epics; to show one epic and its cards, call epic_table with that epic's ref. ${WIDTH_NOTE} Read-only.`,
+    {
+      project: z.string().describe("project key (current or old), name, or id, e.g. PS"),
+      width: tableWidth,
+    },
     async (a) => {
       const r = await listItems(getSupabase(), actor(), a.project);
       if (!r.ok) return out(r);
-      return { content: [{ type: "text" as const, text: formatEpicList(r.data) }] };
+      return { content: [{ type: "text" as const, text: formatEpicList(r.data, a.width) }] };
+    },
+  );
+
+  server.tool(
+    "tag_table",
+    `Show every card carrying a tag as a ready-to-print table, the same columns as epic_table: #, Card, Type, Status, Note, as aligned plain text in a code block. Non-archived cards only, numbered: done first in the order they were completed (oldest first), then testing, in progress, blocked and new, each group by project then board order. Note is each card's title. \`tag\` is matched the way tags are stored (lowercase, trimmed). \`project\` (a key, name or id) limits it to one project; leave it out to search every project you can see. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. ${WIDTH_NOTE} Read-only.`,
+    {
+      tag: z.string().describe("the tag, e.g. wt-2026-10-30"),
+      project: z.string().optional().describe("project key, name or id; omit for every project"),
+      width: tableWidth,
+    },
+    async (a) => {
+      const r = await listItemsByTag(getSupabase(), actor(), a.tag, a.project);
+      if (!r.ok) return out(r);
+      const text = formatTagTable(r.data.tag, r.data.cards, a.width);
+      return { content: [{ type: "text" as const, text }] };
     },
   );
 

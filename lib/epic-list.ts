@@ -23,9 +23,10 @@ const HEADERS = ["#", "Epic", "Status", "Done", "Note"] as const;
  * Render the project's epics, numbered 1..n in board column order (new, in
  * progress, blocked, testing, done), then by card number. Done reads "N/M":
  * done children over all non-archived children, counted from the same items.
- * Note is the epic's title. An empty project says so instead of a bare header.
+ * Note is the epic's title, cut to fit `width` when given. An empty project
+ * says so instead of a bare header.
  */
-export function formatEpicList(items: readonly EpicListSource[]): string {
+export function formatEpicList(items: readonly EpicListSource[], width?: number): string {
   const epics = sortByStatusThenNumber(items.filter((it) => it.type === "epic"));
   if (epics.length === 0) return "No epics in this project.";
   const counts = new Map<string, { done: number; total: number }>();
@@ -42,5 +43,6 @@ export function formatEpicList(items: readonly EpicListSource[]): string {
       const c = counts.get(e.ref) ?? { done: 0, total: 0 };
       return [String(i + 1), e.ref, e.status, `${c.done}/${c.total}`, oneLine(e.name)];
     }),
+    width,
   );
 }
