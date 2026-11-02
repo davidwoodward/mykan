@@ -136,6 +136,9 @@ Ask Claude Code naturally — it maps to the tools:
 - *"What epics are in Permit Saige?"* / *"list the PS epics"* → `list_epics` (a
   ready-made table: #, Epic, Status, Done, Note, one row per epic, with N/M of
   its cards done)
+- *"Show me the tag table for wt-2026-10-30"* → `tag_table` (the same table for
+  every card with that tag, across all your projects unless you name one; every
+  table tool also takes a `width` and cuts titles to fit it)
 - *"Order PS-N's cards in the order they should be built"* / *"put PS-12 before
   PS-9 in its epic"* → `set_epic_order`, `move_epic_card` (the epic's own order;
   done cards stay in completion order, and the board is untouched)

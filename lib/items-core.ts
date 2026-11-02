@@ -49,7 +49,7 @@ import {
 import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
 import { deleteWithChildHistory, describeDeleteFailure } from "@/lib/epic-delete";
 import { cardUrl } from "@/lib/card-url";
-import { orderEpicChildren } from "@/lib/epic-table";
+import { orderEpicChildren, type EpicTableChild } from "@/lib/epic-table";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -293,6 +293,56 @@ export async function listItems(
       parent: parentRef(it.parent_id),
     })),
   );
+}
+
+/**
+ * The non-archived cards carrying `tag` (KANBAN-69), in one project or, with no
+ * `projectRef`, across every project `actor` can see. Ordered by project key,
+ * then board position; tag_table regroups them by status.
+ */
+export async function listItemsByTag(
+  sb: SupabaseClient,
+  actor: string,
+  tag: string,
+  projectRef?: string,
+): Promise<CoreResult<{ tag: string; cards: EpicTableChild[] }>> {
+  const [norm] = normalizeTags([tag]);
+  if (!norm) return coreErr("Give a tag (up to 32 characters)", 400);
+  let projects: Project[];
+  if (projectRef?.trim()) {
+    const p = await resolveProject(sb, actor, projectRef);
+    if (!p.ok) return p;
+    projects = [p.data];
+  } else {
+    const all = await listProjects(sb, actor);
+    if (!all.ok) return all;
+    projects = all.data;
+  }
+  if (projects.length === 0) return coreOk({ tag: norm, cards: [] });
+  const { data, error } = await sb
+    .from("items")
+    .select("project_id, number, body, type, status, done_at, position")
+    .in("project_id", projects.map((p) => p.id))
+    .contains("tags", [norm])
+    .is("archived_at", null)
+    .order("position", { ascending: true });
+  if (error) return coreErr(error.message, 500);
+  const keyOf = new Map(projects.map((p) => [p.id, p.key]));
+  const rows = (data ?? []) as Pick<
+    Item,
+    "project_id" | "number" | "body" | "type" | "status" | "done_at" | "position"
+  >[];
+  const byProject = (it: (typeof rows)[number]) => keyOf.get(it.project_id) ?? "";
+  const cards = [...rows]
+    .sort((a, b) => byProject(a).localeCompare(byProject(b)))
+    .map((it) => ({
+      ref: refOf(keyOf.get(it.project_id) ?? null, it.number),
+      name: richDocTitle(it.body),
+      type: it.type,
+      status: it.status,
+      done_at: it.done_at,
+    }));
+  return coreOk({ tag: norm, cards });
 }
 
 /** Full item detail with the rich-text body flattened to plain text. */

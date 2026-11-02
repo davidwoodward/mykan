@@ -71,3 +71,25 @@ test("done_at orders rows but never appears in the table", () => {
   ]);
   assert.doesNotMatch(out, /2026/);
 });
+
+test("with a width, titles are cut with … so no line is longer, other columns whole", () => {
+  const long = "Order an epic's cards within each status group (UI and MCP)";
+  const out = formatEpicTable(row("KANBAN-41", "epic", "done", long), [
+    row("KANBAN-68", "feature", "in_progress", long),
+    row("KANBAN-7", "task", "new", "Short"),
+  ], 60);
+  const lines = out.split("\n");
+  for (const l of lines) assert.ok(l.length <= 60, `${l.length}: ${l}`);
+  assert.match(lines[4], /^1   KANBAN-68  feature  in_progress  Order an epic's.*…$/);
+  assert.match(lines[5], /Short$/);
+});
+
+test("a width wider than the table changes nothing", () => {
+  const args = [row("K-1", "epic", "new", "Epic title"), [row("K-2", "task", "new", "Child")]] as const;
+  assert.equal(formatEpicTable(...args, 200), formatEpicTable(...args));
+});
+
+test("a width too narrow for the fixed columns still leaves the title a few characters", () => {
+  const out = formatEpicTable(row("K-1", "epic", "new", "A long title here"), [], 20);
+  assert.match(out, /K-1 {3}epic {2}new {5}A l…\n/);
+});

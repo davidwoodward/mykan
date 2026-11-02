@@ -50,33 +50,59 @@ const HEADERS = ["#", "Card", "Type", "Status", "Note"] as const;
  * is the card's title, the first line of its description. The last column is
  * not padded, so lines carry no trailing spaces.
  */
-export function formatEpicTable(epic: EpicTableRow, children: readonly EpicTableChild[]): string {
-  const cells = (r: EpicTableRow, n: string) => [n, r.ref, r.type, r.status, oneLine(r.name)];
-  return formatTextTable(HEADERS, [
-    cells(epic, ""),
-    ...children.map((c, i) => cells(c, String(i + 1))),
-  ]);
+export function formatEpicTable(
+  epic: EpicTableRow,
+  children: readonly EpicTableChild[],
+  width?: number,
+): string {
+  return formatTextTable(
+    HEADERS,
+    [cardCells(epic, ""), ...children.map((c, i) => cardCells(c, String(i + 1)))],
+    width,
+  );
 }
 
+/** One card's cells under HEADERS (shared with tag_table). */
+export function cardCells(r: EpicTableRow, n: string): string[] {
+  return [n, r.ref, r.type, r.status, oneLine(r.name)];
+}
+
+/** Columns given to the last column however narrow `width` is ("Note" fits). */
+const MIN_LAST_WIDTH = 4;
+
 /**
- * Aligned plain-text columns in a code block, shared by epic_table and
- * list_epics. Each column is at least 2 wide; the last column is not padded,
- * so lines carry no trailing spaces.
+ * Aligned plain-text columns in a code block, shared by epic_table, list_epics
+ * and tag_table. Each column is at least 2 wide; the last column is not padded,
+ * so lines carry no trailing spaces. With `width`, the last column (the title)
+ * is cut to fit and ends with "…", so no line is longer than `width`; the other
+ * columns stay whole, and the last keeps at least MIN_LAST_WIDTH.
  */
 export function formatTextTable(
   headers: readonly string[],
   rows: readonly (readonly string[])[],
+  width?: number,
 ): string {
+  const last = headers.length - 1;
   const widths = headers.map((h, col) =>
     Math.max(h.length, 2, ...rows.map((r) => r[col].length)),
   );
+  if (width !== undefined) {
+    const before = widths.slice(0, last).reduce((sum, w) => sum + w + 2, 0);
+    widths[last] = Math.min(widths[last], Math.max(MIN_LAST_WIDTH, width - before));
+  }
   const line = (r: readonly string[]) =>
     r
-      .map((c, col) => (col === r.length - 1 ? c : c.padEnd(widths[col])))
+      .map((c, col) => (col === last ? truncate(c, widths[last]) : c.padEnd(widths[col])))
       .join("  ")
       .trimEnd();
   const rule = widths.map((w) => "-".repeat(w));
   return ["```", line(headers), line(rule), ...rows.map(line), "```"].join("\n");
+}
+
+/** Cut `s` to at most `max` characters, ending with "…" when it was cut. */
+export function truncate(s: string, max: number): string {
+  const chars = Array.from(s);
+  return chars.length <= max ? s : chars.slice(0, max - 1).join("").trimEnd() + "…";
 }
 
 /** A title is one line already; collapse any stray whitespace so it stays one. */
