@@ -50,6 +50,7 @@ import { snapshotThenWrite, type HistorySource } from "@/lib/item-history";
 import { deleteWithChildHistory, describeDeleteFailure } from "@/lib/epic-delete";
 import { cardUrl } from "@/lib/card-url";
 import { orderEpicChildren, type EpicTableChild } from "@/lib/epic-table";
+import { parseSince, type SinceFilter } from "@/lib/since";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -128,6 +129,11 @@ export type ItemSummary = {
   area: string | null;
   /** Ref of the epic this item belongs to (e.g. "KANBAN-41"), or null. */
   parent: string | null;
+  /** When the card was created (ISO) and by whom (email, null for old rows). */
+  created_at: string;
+  created_by: string | null;
+  /** When the card was last changed (ISO). */
+  updated_at: string;
 };
 
 /** A linked item in a detail view: its ref and title (`name`). */
@@ -166,6 +172,8 @@ export type ItemDetail = Omit<ItemSummary, "parent"> & {
   github_imported_at: string | null;
   /** Write-back sync flag for the linked issue (null when in sync). */
   github_sync: GithubSync;
+  /** Who last changed the card (email), or null for old rows. */
+  updated_by: string | null;
 };
 
 /** Shape a single item into the detailed view (resolves the area path). */
@@ -230,6 +238,10 @@ async function detailOf(
     parent,
     ...epic,
     attachments: it.attachments,
+    created_at: it.created_at,
+    created_by: it.created_by,
+    updated_at: it.updated_at,
+    updated_by: it.updated_by,
     done_at: it.done_at,
     github_issue: it.github_issue,
     github_issue_created_at: it.github_issue_created_at,
@@ -244,7 +256,12 @@ export async function listItems(
   actor: string,
   projectRef: string,
   status?: ItemStatus,
+  since: SinceFilter = {},
 ): Promise<CoreResult<ItemSummary[]>> {
+  const created = parseSince("created_since", since.created_since);
+  if (!created.ok) return coreErr(created.error, 400);
+  const updated = parseSince("updated_since", since.updated_since);
+  if (!updated.ok) return coreErr(updated.error, 400);
   const proj = await resolveProject(sb, actor, projectRef);
   if (!proj.ok) return proj;
   const { data, error } = await sb
@@ -255,6 +272,10 @@ export async function listItems(
     .order("position", { ascending: true });
   if (error) return coreErr(error.message, 500);
   let rows = (data ?? []) as Item[];
+  // Filtered here rather than in the query: parent refs below are resolved
+  // from the whole project's rows.
+  if (created.iso) rows = rows.filter((it) => Date.parse(it.created_at) >= Date.parse(created.iso!));
+  if (updated.iso) rows = rows.filter((it) => Date.parse(it.updated_at) >= Date.parse(updated.iso!));
   if (status) rows = rows.filter((it) => it.status === status);
   // Resolve area paths once for the whole project, not per row.
   const cats = await listCategories(sb, proj.data.id);
@@ -291,6 +312,9 @@ export async function listItems(
       assignees: it.assignees,
       area: it.category_id ? pathOf(cats, it.category_id) || null : null,
       parent: parentRef(it.parent_id),
+      created_at: it.created_at,
+      created_by: it.created_by,
+      updated_at: it.updated_at,
     })),
   );
 }

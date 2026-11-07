@@ -312,7 +312,7 @@ Every card has its own page, and no user-facing URL carries a GUID.
   it current again. An old key can never be taken by another project (rename or create);
   deleting a project frees its old keys. After a rename the page moves to the new URL.
 - **One layout, no modal.** The item modal is gone. The card page puts the **description
-  in the main column** (tags, parent epic and GitHub provenance under it) and the other
+  in the main column** (tags, parent epic, GitHub provenance, and a quiet "Created <date> by <name> · Updated <time ago> by <name>" line under it, each part's exact date/time as its tooltip, rendered client-side only since it reads the clock and time zone, KANBAN-71) and the other
   sections **beside it as tabs**: Child items (epics), Attachments, History. Below `lg`
   they stack under the description and the page scrolls. At `lg+` the page is locked to
   the viewport like the board, and the description and the tab panel **each scroll on

@@ -51,6 +51,23 @@ export function displayName(email: string | null | undefined): string {
   return DISPLAY_NAMES[canonicalEmail(email)] ?? localPart(email);
 }
 
+/**
+ * Full local date and time for a tooltip, e.g. "Jul 2, 2026, 3:04 PM". Empty
+ * string for null/invalid.
+ */
+export function fullDateTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Compact absolute date, e.g. "Jul 2, 2026". Empty string for null/invalid. */
 export function shortDate(iso: string | null | undefined): string {
   if (!iso) return "";
