@@ -1,7 +1,7 @@
 // Run with `npm test`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { displayName, itemRef, localPart } from "./format.ts";
+import { displayName, fullDateTime, itemRef, localPart } from "./format.ts";
 
 test("named members show their name, not their email local-part", () => {
   assert.equal(displayName("dawoodward@gmail.com"), "David");
@@ -56,4 +56,12 @@ test("itemRef prefers the project key and falls back to #number", () => {
   assert.equal(itemRef(null, 12), "#12");
   assert.equal(itemRef("", 12), "#12");
   assert.equal(itemRef("FPOON", null), null);
+});
+
+test("fullDateTime gives date and time, and nothing for missing or bad input", () => {
+  const s = fullDateTime("2026-07-02T15:04:00Z");
+  assert.match(s, /2026/);
+  assert.match(s, /\d{1,2}:\d{2}/);
+  assert.equal(fullDateTime(null), "");
+  assert.equal(fullDateTime("not a date"), "");
 });

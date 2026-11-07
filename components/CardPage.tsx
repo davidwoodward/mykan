@@ -17,6 +17,7 @@ import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
 import { TypeBadge } from "@/components/TypeBadge";
 import { GithubItemMeta } from "@/components/GithubItemMeta";
+import { CardDates } from "@/components/CardDates";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { HistoryList } from "@/components/ItemHistory";
 import { ProjectKeyProvider } from "@/components/RefBadge";
@@ -696,6 +697,7 @@ function CardEditor({
                 <GithubItemMeta item={item} onItemChange={takeItemChange} />
               </div>
             ) : null}
+            <CardDates item={item} />
             <p className="border-t border-[var(--color-line)] px-4 py-2 text-xs text-[var(--color-faint)]">
               Paste or drop an image to embed it · Esc saves and returns to the board
             </p>
