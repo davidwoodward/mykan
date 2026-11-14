@@ -115,7 +115,6 @@ vercel env add AUTH_GOOGLE_ID production
 vercel env add AUTH_GOOGLE_SECRET production
 vercel env add SUPABASE_URL production
 vercel env add SUPABASE_SERVICE_ROLE_KEY production
-vercel env add MYKAN_SERVICE_API_KEY production   # bearer key the MCP server accepts
 # (repeat with `preview` instead of `production` for PR previews)
 ```
 

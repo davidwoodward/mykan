@@ -66,9 +66,6 @@ AUTH_GOOGLE_SECRET=<from you>
 SUPABASE_URL=<from you>
 SUPABASE_SERVICE_ROLE_KEY=<from you>
 
-# MCP server bearer key (comma-separated to rotate). Generate:
-#   printf 'mykan_sk_%s' "$(openssl rand -base64 32 | tr -d '/+=')"
-MYKAN_SERVICE_API_KEY=<generated>
 # Optional: identity the MCP acts as (defaults to the owner email)
 # MCP_ACTOR_EMAIL=dawoodward@gmail.com
 
@@ -76,7 +73,7 @@ MYKAN_SERVICE_API_KEY=<generated>
 # AUTH_ALLOWED_EMAILS=dawoodward@gmail.com,matthewL@experiencealign.com
 ```
 
-`MYKAN_SERVICE_API_KEY` is the key the MCP server at `/api/mcp` accepts; full registration walkthrough in [docs/mcp-setup.md](./docs/mcp-setup.md). The absence of `NEXT_PUBLIC_*` Supabase vars is intentional: it's how we enforce "frontend never calls Supabase directly." All DB access flows through server-only API routes that hold the service-role key.
+The MCP server needs no env var of its own: each client connects with a personal `mk_…` token minted in the app (walkthrough in [docs/mcp-setup.md](./docs/mcp-setup.md)). The absence of `NEXT_PUBLIC_*` Supabase vars is intentional: it's how we enforce "frontend never calls Supabase directly." All DB access flows through server-only API routes that hold the service-role key.
 
 ## 7. Architecture (for reference)
 
