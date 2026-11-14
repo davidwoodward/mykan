@@ -24,6 +24,7 @@ import {
   getItemImages,
   listItems,
   listItemsByTag,
+  setItemArchived,
   setItemArea,
   setItemAssignees,
   setItemBody,
@@ -299,6 +300,20 @@ function registerTools(server: McpServer) {
     "Move an item to a kanban column: new, in_progress, blocked, testing, or done. `item` is an id or KEY-N reference.",
     { item: z.string().describe("item id or KEY-N reference"), status },
     async (a) => out(await setItemStatus(getSupabase(), actor(), a.item, a.status)),
+  );
+
+  server.tool(
+    "archive_item",
+    "Archive a card: the same soft delete as the trash icon on the board. The card drops off the board, list_items, epic_table, list_epics and tag_table, but nothing is lost: its body, entries, history and attachments stay, it still opens by ref (get_item shows `archived_at`), and unarchive_item brings it back to the column it was in. Use it for a card that is a duplicate, was created by mistake, or is no longer wanted; to finish a card, move it to done with update_item_status instead. Archiving an epic leaves its children linked to it. `item` is an id or KEY-N reference. Already archived → nothing changes and `message` says so. Returns the item detail.",
+    { item: z.string().describe("item id or KEY-N reference") },
+    async (a) => out(await setItemArchived(getSupabase(), actor(), a.item, true)),
+  );
+
+  server.tool(
+    "unarchive_item",
+    "Bring back an archived card: it returns to the board, list_items and the tables, in the column it was in. `item` is an id or KEY-N reference (archived cards still resolve by ref). Not archived → nothing changes and `message` says so. Returns the item detail.",
+    { item: z.string().describe("item id or KEY-N reference") },
+    async (a) => out(await setItemArchived(getSupabase(), actor(), a.item, false)),
   );
 
   server.tool(

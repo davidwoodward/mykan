@@ -22,6 +22,7 @@ import {
   type RichDoc,
 } from "@/lib/types";
 import { writeBackOnStatusChange } from "@/lib/github-writeback";
+import { planArchive } from "@/lib/item-archive";
 import { whitelist } from "@/lib/auth";
 import { ITEM_ATTACHMENTS_BUCKET, ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
 import {
@@ -174,6 +175,8 @@ export type ItemDetail = Omit<ItemSummary, "parent"> & {
   github_sync: GithubSync;
   /** Who last changed the card (email), or null for old rows. */
   updated_by: string | null;
+  /** When the card was archived (soft-deleted) (ISO), or null when it is live. */
+  archived_at: string | null;
 };
 
 /** Shape a single item into the detailed view (resolves the area path). */
@@ -247,6 +250,7 @@ async function detailOf(
     github_issue_created_at: it.github_issue_created_at,
     github_imported_at: it.github_imported_at,
     github_sync: it.github_sync,
+    archived_at: it.archived_at ?? null,
   };
 }
 
@@ -543,6 +547,29 @@ export async function getItemAttachment(
 }
 
 /** Move an item's kanban column. On a column change, append to the column end. */
+/**
+ * Archive (soft-delete) or unarchive a card (KANBAN-72), the same write the UI
+ * trash icon makes. Archived cards still resolve by ref, so an archived card can
+ * be found and brought back. Already in the wanted state → no write, and the
+ * detail comes back with a `message` saying so.
+ */
+export async function setItemArchived(
+  sb: SupabaseClient,
+  actor: string,
+  itemRef: string,
+  archived: boolean,
+  source: HistorySource = "mcp",
+): Promise<CoreResult<ItemDetail & { message?: string }>> {
+  const r = await loadVisibleItem(sb, actor, itemRef);
+  if (!r.ok) return r;
+  const { item: it, project } = r.data;
+  const plan = planArchive(it.archived_at, archived, refOf(project.key, it.number));
+  if (!plan.change) return coreOk({ ...(await detailOf(sb, project, it)), message: plan.message });
+  const w = await snapshotThenWrite(sb, actor, it, plan.patch, source);
+  if (!w.ok) return w;
+  return coreOk(await detailOf(sb, project, w.data));
+}
+
 export async function setItemStatus(
   sb: SupabaseClient,
   actor: string,
