@@ -43,24 +43,24 @@ Verify: `claude mcp get mykan` shows **✔ Connected**; in a session `/mcp` (or
 `/tools`) lists `mcp__mykan__list_projects`, `…__update_item_status`, etc. Your
 token lives only in `~/.claude.json` (your machine) — never in the repo.
 
-## Shared service key (legacy / transition)
+## Shared service key (retired)
 
-Before per-user tokens, MCP used a single shared `MYKAN_SERVICE_API_KEY`. The
-server still **dual-accepts** it (it authenticates as the owner) so existing
-registrations keep working during the rollout, but it will be retired once
-everyone holds a personal token. Don't register new clients with it.
-
-The key is a comma-separated list in the Vercel project env (production) and
-`.env.local` (local dev); rotate by adding a new value and removing the old.
+Before per-user tokens, MCP also accepted a single shared `MYKAN_SERVICE_API_KEY`
+(authenticating as the owner). It was retired on 2026-11-14 after the key leaked:
+the variable is no longer set in Vercel or `.env.local`, so the server accepts
+only personal `mk_…` tokens. The code path that reads it (`lib/service-auth.ts`)
+is inert while the variable is unset; don't set it again. Register every client
+— interactive, Codex, cron — with its own token.
 
 ## Tools
 
-`list_projects`, `list_items`, `get_item`, `update_item_status`,
-`create_item`, `set_item_body`, `append_item_note`, `set_item_tags`,
-`set_item_area`, `set_item_assignees`, `set_item_parent`,
-`set_project_github_account`, `list_areas`, `set_area_github_repo`,
-`refresh_item_from_github`, `set_item_type`, `get_attachment`, `epic_table`,
-`list_epics`, `tag_table`, `set_epic_order`, `move_epic_card`.
+`list_projects`, `list_items`, `get_item`, `epic_table`, `set_epic_order`, `move_epic_card`, `list_epics`, `tag_table`, `get_attachment`, `update_item_status`, `archive_item`, `unarchive_item`, `create_item`, `set_item_body`, `append_item_note`, `record_decision`, `ask_question`, `answer_question`, `update_item_entry`, `list_item_entries`, `delete_item_entry`, `restore_item_entry`, `list_item_entry_versions`, `restore_item_entry_version`, `set_item_type`, `set_item_tags`, `set_item_area`, `set_item_parent`, `set_item_assignees`, `set_project_github_account`, `list_areas`, `set_area_github_repo`, `refresh_item_from_github`, `sync_project_with_github`.
+
+`archive_item` (KANBAN-72) is the board's trash-icon soft delete: the card leaves
+the board, `list_items` and the tables, but keeps its body, entries, history and
+attachments, still opens by ref (`get_item` shows `archived_at`), and
+`unarchive_item` puts it back in the column it was in. Finished work goes to Done
+with `update_item_status`, not to the archive.
 
 `get_attachment` (KANBAN-54) reads one file from a card's `attachments` list, by id
 or file name: PNG/JPEG/GIF/WebP as a viewable image block (≤ 3 MB, so the base64
