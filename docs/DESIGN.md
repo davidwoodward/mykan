@@ -355,7 +355,7 @@ Every card has its own page, and no user-facing URL carries a GUID.
   number that isn't on screen (filtered out, archived, missing) selects nothing and the hint
   says so.
 - **Getting back to the same board.** View, grouping, status/type/tag/area/creator filters and
-  search live in the board URL (`?view=board&status=blocked&type=epic&q=…`; defaults omitted; the
+  search live in the board URL (`?view=board&status=blocked&type=epic&tags=ui&xtags=post-launch&q=…`; defaults omitted; the
   area is written as its path, never an id), updated with `replaceState` so filter
   changes don't add history entries (`lib/board-state.ts`). Before opening a card the
   board remembers its scroll (the desktop list is its own scroll box, which the browser
@@ -523,8 +523,25 @@ Tags are lightweight, inline, and keyboard-first — never a separate management
   (`tagHue`/`tagStyle`), never random — the same tag is always the same color. Lightness/chroma
   come from theme tokens (`--tag-l-*`) so chips read well in both themes; the active/selected
   state inverts (filled hue + light ink).
-- **Filtering is AND.** Selecting multiple tags shows items carrying **every** selected tag.
-  Clicking a chip toggles it as a filter; a "clear" affordance removes all.
+- **Filtering: include and exclude** (KANBAN-73). Each tag in the filter is off, included
+  or excluded. A card shows when it carries **every** included tag and **none** of the
+  excluded ones, so an untagged card passes an exclude ("hide post-launch" keeps everything
+  nobody tagged). The two lists never share a tag.
+  - **The picker** (the tag box on the desktop toolbar and in the touch filter sheet) opens on
+    focus and lists every matching tag, active ones included, each with a **three-state box**:
+    empty (off), ✓ on the accent fill (include), ✕ on red (exclude). A click on the box **or
+    the pill** cycles off → include → exclude → off, and the list stays open so you can keep
+    toggling; ↑/↓ move, **Enter** cycles the highlighted row, Esc closes. Typing **`-`** first
+    (`-post`) makes Enter exclude straight away. Each row is a `role="checkbox"` with
+    `aria-checked` true / mixed / false and a "tag: included/excluded/off" label.
+  - **Looks:** an included tag takes the tag's filled (active) look; an excluded tag is red
+    (`--color-bug` tokens) with its name struck through, in every place it shows.
+  - **Active-filter chips** (beside the tag box, and in the touch layout's pill row) carry a
+    × and **one tap clears** the tag; tapping a chip never cycles it, so an include can't flip
+    to an exclude by accident. "clear" / Clear removes all.
+  - A tag chip on a row or card still toggles that tag as an include.
+  - Excluded tags live in the board URL as `xtags=` beside `tags=`. Over MCP, `list_items` and
+    `tag_table` take `exclude_tags`.
 
 ## Item references
 

@@ -4,7 +4,7 @@
 // board. Scroll position is kept separately (sessionStorage), see
 // components/boardReturn.ts. Pure, so it runs under `node --test`.
 //
-//   /FPOON?view=board&status=in_progress,blocked&type=epic&tags=ui,mcp&area=coach/home&by=dawoodward@gmail.com&q=scroll
+//   /FPOON?view=board&status=in_progress,blocked&type=epic&tags=ui,mcp&xtags=post-launch&area=coach/home&by=dawoodward@gmail.com&q=scroll
 //
 // Defaults are omitted, so an untouched board is plain /FPOON. No ids: the area
 // filter is written as its path, which the board resolves back to a node once
@@ -21,6 +21,8 @@ export type BoardState = {
   status: BoardStatus[];
   type: BoardType[];
   tags: string[];
+  /** Excluded tags (KANBAN-73): a card carrying any of these is hidden. */
+  xtags: string[];
   /** Area path in normalised form ("coach/home"), or null. */
   area: string | null;
   /** Creator email, or null. */
@@ -35,6 +37,7 @@ export const DEFAULT_BOARD_STATE: BoardState = {
   status: [],
   type: [],
   tags: [],
+  xtags: [],
   area: null,
   by: null,
   q: "",
@@ -84,6 +87,10 @@ export function boardStateFromParams(src: ParamSource): BoardState {
     ),
   ];
   const tags = [...new Set(list(getParam(src, "tags")).map((t) => t.toLowerCase()))];
+  // A tag can't be both included and excluded; include wins.
+  const xtags = [
+    ...new Set(list(getParam(src, "xtags")).map((t) => t.toLowerCase())),
+  ].filter((t) => !tags.includes(t));
   const area = getParam(src, "area");
   const by = getParam(src, "by");
   return {
@@ -92,6 +99,7 @@ export function boardStateFromParams(src: ParamSource): BoardState {
     status,
     type,
     tags,
+    xtags,
     area: area && area.trim() ? normAreaPath(area) : null,
     by: by && by.trim() ? by.trim().toLowerCase() : null,
     q: getParam(src, "q") ?? "",
@@ -112,6 +120,7 @@ export function boardStateToParams(state: BoardState): URLSearchParams {
     p.set("type", BOARD_TYPES.filter((t) => state.type.includes(t)).join(","));
   }
   if (state.tags.length) p.set("tags", state.tags.join(","));
+  if (state.xtags.length) p.set("xtags", state.xtags.join(","));
   if (state.area) p.set("area", normAreaPath(state.area));
   if (state.by) p.set("by", state.by);
   if (state.q) p.set("q", state.q);

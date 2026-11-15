@@ -30,6 +30,15 @@ import {
 import { ProjectKeyProvider } from "@/components/RefBadge";
 import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
+import {
+  cycleTag,
+  parseTagQuery,
+  passesTagFilter,
+  setTagState,
+  tagStateOf,
+  type TagFilter,
+  type TagFilterState,
+} from "@/lib/tag-filter";
 import { displayName, itemRef } from "@/lib/format";
 import {
   ITEM_STATUSES,
@@ -102,7 +111,13 @@ export function ProjectDetailView({
   // back (browser Back, or Esc on the card) shows the same board.
   const [view, setView] = useState<View>(initialState.view);
   const [creatorFilter, setCreatorFilter] = useState<string | null>(initialState.by);
-  const [tagFilter, setTagFilter] = useState<string[]>(initialState.tags);
+  // Tag filter (KANBAN-73): included and excluded tags, never overlapping.
+  const [tagSel, setTagSel] = useState<TagFilter>({
+    include: initialState.tags,
+    exclude: initialState.xtags,
+  });
+  const tagFilter = tagSel.include;
+  const tagExclude = tagSel.exclude;
   const [showArchived, setShowArchived] = useState(initialState.archived);
   const [adding, setAdding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -532,11 +547,21 @@ export function ProjectDetailView({
     [areaFilter, setAreaFilter],
   );
 
+  // A tag chip on a row/card toggles it as an include (an excluded tag's
+  // cards are hidden, so its chips are never on screen to click).
   const toggleTag = useCallback((tag: string) => {
-    setTagFilter((cur) =>
-      cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag],
+    setTagSel((cur) =>
+      setTagState(tag, cur.include.includes(tag) ? "off" : "include", cur),
     );
   }, []);
+  // The picker's three-state cycle, and a direct set (typeahead "-tag", ×).
+  const cycleTagFilter = useCallback((tag: string) => {
+    setTagSel((cur) => cycleTag(tag, cur));
+  }, []);
+  const setTagFilterState = useCallback((tag: string, state: TagFilterState) => {
+    setTagSel((cur) => setTagState(tag, state, cur));
+  }, []);
+  const clearTagFilter = useCallback(() => setTagSel({ include: [], exclude: [] }), []);
 
   // Fire-and-forget inline tag edits from rows/cards (saveTags is optimistic).
   const changeItemTags = useCallback(
@@ -654,6 +679,7 @@ export function ProjectDetailView({
     status: statusFilter,
     type: typeFilter,
     tags: tagFilter,
+    xtags: tagExclude,
     area: areaFilter ? normAreaPath(pathOf(areaFilter)) : pendingAreaPath,
     by: creatorFilter,
     q: query,
@@ -720,9 +746,9 @@ export function ProjectDetailView({
   const visibleItems = useMemo(() => {
     let list = pool;
     if (creatorFilter) list = list.filter((it) => it.created_by === creatorFilter);
-    // AND semantics: an item must carry every selected tag.
-    if (tagFilter.length) {
-      list = list.filter((it) => tagFilter.every((t) => it.tags?.includes(t)));
+    // Every included tag and none of the excluded ones (KANBAN-73).
+    if (tagSel.include.length || tagSel.exclude.length) {
+      list = list.filter((it) => passesTagFilter(it.tags, tagSel));
     }
     // Area filter: the selected node and its whole subtree.
     if (areaFilter) {
@@ -743,7 +769,7 @@ export function ProjectDetailView({
       list = list.filter((it) => (searchIndex.get(it.id) ?? "").includes(q));
     }
     return list;
-  }, [pool, creatorFilter, tagFilter, areaFilter, statusFilter, typeFilter, categories, query, searchIndex]);
+  }, [pool, creatorFilter, tagSel, areaFilter, statusFilter, typeFilter, categories, query, searchIndex]);
 
   const grouped = useMemo(() => groupByStatus(visibleItems), [visibleItems]);
 
@@ -1051,13 +1077,14 @@ export function ProjectDetailView({
     statusFilter.length +
     typeFilter.length +
     tagFilter.length +
+    tagExclude.length +
     (areaFilter ? 1 : 0) +
     (creatorFilter ? 1 : 0) +
     (showArchived ? 1 : 0);
   const clearAllFilters = () => {
     setStatusFilter([]);
     setTypeFilter([]);
-    setTagFilter([]);
+    clearTagFilter();
     setAreaFilter(null);
     setCreatorFilter(null);
     setShowArchived(false);
@@ -1182,7 +1209,15 @@ export function ProjectDetailView({
               />
             ) : null}
             {tagFilter.map((t) => (
-              <ActivePill key={t} label={`#${t}`} onRemove={() => toggleTag(t)} />
+              <ActivePill key={t} label={`#${t}`} onRemove={() => setTagFilterState(t, "off")} />
+            ))}
+            {tagExclude.map((t) => (
+              <ActivePill
+                key={`not-${t}`}
+                label={`#${t}`}
+                exclude
+                onRemove={() => setTagFilterState(t, "off")}
+              />
             ))}
             {creatorFilter ? (
               <ActivePill
@@ -1330,9 +1365,10 @@ export function ProjectDetailView({
                 {allTags.length > 0 ? (
                   <TagFilterBar
                     tags={allTags}
-                    active={tagFilter}
-                    onToggle={toggleTag}
-                    onClear={() => setTagFilter([])}
+                    filter={tagSel}
+                    onCycle={cycleTagFilter}
+                    onSet={setTagFilterState}
+                    onClear={clearTagFilter}
                   />
                 ) : null}
                 {creators.length > 0 ? (
@@ -1584,9 +1620,10 @@ export function ProjectDetailView({
             <SheetSection label="Tags">
               <TagFilterBar
                 tags={allTags}
-                active={tagFilter}
-                onToggle={toggleTag}
-                onClear={() => setTagFilter([])}
+                filter={tagSel}
+                onCycle={cycleTagFilter}
+                onSet={setTagFilterState}
+                onClear={clearTagFilter}
                 large
               />
             </SheetSection>
@@ -1670,16 +1707,65 @@ const GROUP_OPTIONS = [
 const STATUS_OPTIONS = ITEM_STATUSES.map((st) => [st, STATUS_LABEL[st]] as const);
 const TYPE_OPTIONS = ITEM_TYPES.map((ty) => [ty, TYPE_LABEL[ty]] as const);
 
+const TAG_STATE_WORD: Record<TagFilterState, string> = {
+  off: "off",
+  include: "included",
+  exclude: "excluded",
+};
+const TAG_ARIA_CHECKED: Record<TagFilterState, "true" | "false" | "mixed"> = {
+  off: "false",
+  include: "true",
+  exclude: "mixed",
+};
+
+/**
+ * The three-state box in the tag picker (KANBAN-73): empty (off), ✓ (include),
+ * ✕ (exclude). Purely visual; the row it sits in is the control.
+ */
+function TagStateBox({ state, large }: { state: TagFilterState; large: boolean }) {
+  const size = large ? "h-5 w-5" : "h-3.5 w-3.5";
+  const look =
+    state === "include"
+      ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+      : state === "exclude"
+        ? "border-[var(--color-bug)] bg-[var(--color-bug)] text-[var(--color-surface)]"
+        : "border-[var(--color-line-strong)] bg-[var(--color-surface)]";
+  return (
+    <span aria-hidden="true" className={`grid shrink-0 place-items-center rounded-[3px] border ${size} ${look}`}>
+      {state === "include" ? (
+        <svg className="h-[75%] w-[75%]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12.5 10 17.5 19 7" />
+        </svg>
+      ) : state === "exclude" ? (
+        <svg className="h-[70%] w-[70%]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * The tag filter (KANBAN-73). The picker lists every matching tag with a
+ * three-state box; a click on the box or the pill (or Enter on the highlighted
+ * row) cycles it off → include → exclude → off, and the list stays open so you
+ * can keep toggling. Typing "-" first ("-post") makes Enter exclude straight
+ * away. The chips beside the box are the active filters: included ones in the
+ * tag's filled look, excluded ones red and struck through, and one tap on a
+ * chip clears it (it never cycles).
+ */
 function TagFilterBar({
   tags,
-  active,
-  onToggle,
+  filter,
+  onCycle,
+  onSet,
   onClear,
   large = false,
 }: {
   tags: string[];
-  active: string[];
-  onToggle: (tag: string) => void;
+  filter: TagFilter;
+  onCycle: (tag: string) => void;
+  onSet: (tag: string, state: TagFilterState) => void;
   onClear: () => void;
   /** Touch sizing, for the View & filters sheet (KANBAN-52). */
   large?: boolean;
@@ -1688,12 +1774,23 @@ function TagFilterBar({
   const [focused, setFocused] = useState(false);
   const [hi, setHi] = useState(0);
 
-  const query = q.trim().toLowerCase();
-  // Drop down on focus: with no query, show every not-yet-active tag; typing
-  // narrows by substring.
-  const matches = tags.filter((t) => !active.includes(t) && t.includes(query));
+  const { text, exclude: dashExclude } = parseTagQuery(q);
+  // Drop down on focus: with no query, every tag; typing narrows by substring.
+  // Active tags stay in the list so they can be cycled on to exclude or off.
+  const matches = tags.filter((t) => t.includes(text));
   const shown = matches.slice(0, 10);
   const more = matches.length - shown.length;
+  const anyActive = filter.include.length + filter.exclude.length > 0;
+
+  function pick(t: string) {
+    if (dashExclude) {
+      onSet(t, "exclude");
+      setQ("");
+      setHi(0);
+    } else {
+      onCycle(t);
+    }
+  }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
@@ -1704,12 +1801,8 @@ function TagFilterBar({
       setHi((h) => Math.max(0, h - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const pick = shown[hi];
-      if (pick) {
-        onToggle(pick);
-        setQ("");
-        setHi(0);
-      }
+      const t = shown[hi];
+      if (t) pick(t);
     } else if (e.key === "Escape") {
       e.preventDefault();
       setFocused(false);
@@ -1717,13 +1810,35 @@ function TagFilterBar({
     }
   }
 
+  const chip = (t: string, state: "include" | "exclude") => {
+    return (
+      <button
+        key={`${state}-${t}`}
+        type="button"
+        onClick={() => onSet(t, "off")}
+        aria-label={`Remove filter: ${state === "exclude" ? "not " : ""}#${t}`}
+        title={`Remove filter: ${state === "exclude" ? "not " : ""}#${t}`}
+        className={`inline-flex items-center rounded-full ${large ? "min-h-10 pr-1" : ""}`}
+      >
+        <Tag label={t} active={state === "include"} excluded={state === "exclude"} />
+        <span
+          aria-hidden="true"
+          className={`leading-none text-[var(--color-faint)] hover:text-[var(--color-ink)] ${
+            large ? "px-2 text-xl" : "-ml-0.5 px-1 text-sm"
+          }`}
+        >
+          ×
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {large ? null : <span className="text-xs text-[var(--color-faint)]">filter</span>}
 
-      {active.map((t) => (
-        <Tag key={t} label={t} active onClick={() => onToggle(t)} />
-      ))}
+      {filter.include.map((t) => chip(t, "include"))}
+      {filter.exclude.map((t) => chip(t, "exclude"))}
 
       <div className={large ? "relative w-full" : "relative"}>
         <input
@@ -1735,8 +1850,8 @@ function TagFilterBar({
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
-          placeholder={active.length ? "+ tag" : "filter by tag…"}
-          aria-label="Filter by tag"
+          placeholder={anyActive ? "+ tag" : "filter by tag…"}
+          aria-label="Filter by tag (type - first to exclude)"
           className={
             large
               ? "h-11 w-full rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3 text-base text-[var(--color-ink)] outline-none placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
@@ -1745,42 +1860,56 @@ function TagFilterBar({
         />
         {focused && shown.length > 0 ? (
           <div
-            className={`absolute left-0 z-20 flex max-h-56 flex-col gap-1 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-md ${
-              large ? "top-12 w-full" : "top-7 w-48"
+            className={`absolute left-0 z-20 flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-1.5 shadow-md ${
+              large ? "top-12 w-full" : "top-7 w-56"
             }`}
           >
-            {shown.map((t, i) => (
-              <button
-                key={t}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onToggle(t);
-                  setQ("");
-                  setHi(0);
-                }}
-                onMouseEnter={() => setHi(i)}
-                className={`flex rounded text-left ${large ? "py-2" : ""} ${
-                  i === hi ? "bg-[var(--color-accent-soft)]" : ""
-                }`}
-              >
-                <Tag label={t} />
-              </button>
-            ))}
+            <span className={`px-1 pb-1 text-[var(--color-faint)] ${large ? "text-xs" : "text-[10px]"}`}>
+              {dashExclude ? "Enter excludes" : "click: include → exclude → off"}
+            </span>
+            {shown.map((t, i) => {
+              const state = tagStateOf(t, filter);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={TAG_ARIA_CHECKED[state]}
+                  aria-label={`${t}: ${TAG_STATE_WORD[state]}`}
+                  onMouseDown={(e) => {
+                    // Keep focus in the box so the list stays open.
+                    e.preventDefault();
+                    setHi(i);
+                    pick(t);
+                  }}
+                  onMouseEnter={() => setHi(i)}
+                  className={`flex items-center gap-2 rounded px-1 text-left ${large ? "py-2" : "py-0.5"} ${
+                    i === hi ? "bg-[var(--color-accent-soft)]" : ""
+                  }`}
+                >
+                  <TagStateBox state={state} large={large} />
+                  <Tag label={t} active={state === "include"} excluded={state === "exclude"} />
+                </button>
+              );
+            })}
             {more > 0 ? (
               <span className="px-1 py-0.5 text-[10px] text-[var(--color-faint)]">
                 +{more} more — keep typing
               </span>
             ) : null}
           </div>
-        ) : focused && query && shown.length === 0 ? (
-          <div className="absolute left-0 top-7 z-20 w-48 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-faint)] shadow-md">
+        ) : focused && text && shown.length === 0 ? (
+          <div
+            className={`absolute left-0 z-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-faint)] shadow-md ${
+              large ? "top-12 w-full" : "top-7 w-48"
+            }`}
+          >
             No matching tags
           </div>
         ) : null}
       </div>
 
-      {active.length > 0 ? (
+      {anyActive ? (
         <button
           type="button"
           onClick={onClear}
@@ -1888,15 +2017,28 @@ function FilterPill({
 }
 
 /** A removable pill for an applied filter, in the touch toolbar (KANBAN-52). */
-function ActivePill({ label, onRemove }: { label: string; onRemove: () => void }) {
+function ActivePill({
+  label,
+  onRemove,
+  exclude = false,
+}: {
+  label: string;
+  onRemove: () => void;
+  /** An excluded tag (KANBAN-73): red, the tag struck through. */
+  exclude?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onRemove}
-      aria-label={`Remove filter: ${label}`}
-      className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-[var(--color-accent)] bg-[var(--color-accent-soft)] pl-3 pr-2 text-sm text-[var(--color-accent-ink)]"
+      aria-label={`Remove filter: ${exclude ? "not " : ""}${label}`}
+      className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full border pl-3 pr-2 text-sm ${
+        exclude
+          ? "border-[var(--color-bug-line)] bg-[var(--color-bug-bg)] text-[var(--color-bug)]"
+          : "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]"
+      }`}
     >
-      <span className="max-w-[12rem] truncate">{label}</span>
+      <span className={`max-w-[12rem] truncate ${exclude ? "line-through decoration-2" : ""}`}>{label}</span>
       <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
         <path d="M18 6 6 18M6 6l12 12" />
       </svg>
