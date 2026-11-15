@@ -23,6 +23,7 @@ test("round trip of a fully set state", () => {
     status: ["blocked", "new"],
     type: ["epic", "bug"],
     tags: ["ui", "mcp"],
+    xtags: ["post-launch"],
     area: "coach/home",
     by: "dawoodward@gmail.com",
     q: "scroll & back, 100%",
@@ -69,4 +70,12 @@ test("search text survives as typed (not trimmed)", () => {
 
 test("a type filter alone is a short URL", () => {
   assert.equal(boardSearch({ ...DEFAULT_BOARD_STATE, type: ["epic"] }), "?type=epic");
+});
+
+test("excluded tags (KANBAN-73) are lowercased, deduped, and never also included", () => {
+  const s = boardStateFromParams(new URLSearchParams("tags=ui&xtags=Post-Launch,post-launch,UI"));
+  assert.deepEqual(s.tags, ["ui"]);
+  assert.deepEqual(s.xtags, ["post-launch"]);
+  assert.equal(boardStateToParams(s).get("xtags"), "post-launch");
+  assert.equal(boardStateToParams(DEFAULT_BOARD_STATE).has("xtags"), false);
 });

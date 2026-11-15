@@ -125,10 +125,14 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_items",
-    "List non-archived items in a project. `project` is a key (current or old), name, or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, `parent` — the ref of the epic it belongs to, or null — and `created_at`/`created_by`/`updated_at` (ISO; created_by is an email, null on old cards). Optional `created_since` / `updated_since` (an ISO date like 2026-10-07, or a date/time) keep only cards created / last changed at or after it, e.g. created_since 30 days ago answers \"cards created in the last month\". `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it. To show a project's epics, call list_epics instead; to show one epic and its cards, epic_table.",
+    "List non-archived items in a project. `project` is a key (current or old), name, or id; optional `status` filters by kanban column. Each item includes its ref (e.g. AMOS-12), `url` (the card page, e.g. https://kanban.dbwoodward.com/AMOS-12), type (feature | bug | task | idea | epic), area path, tags, assignees, `parent` — the ref of the epic it belongs to, or null — and `created_at`/`created_by`/`updated_at` (ISO; created_by is an email, null on old cards). Optional `created_since` / `updated_since` (an ISO date like 2026-10-07, or a date/time) keep only cards created / last changed at or after it, e.g. created_since 30 days ago answers \"cards created in the last month\". `name` is the item's title: the first non-empty line of its body (there is no separate stored title), capped at 200 chars. The body is NOT included — call get_item for it. Optional `exclude_tags` hides every card carrying any of those tags (e.g. [\"post-launch\"] for everything not post-launch; untagged cards stay). To show a project's epics, call list_epics instead; to show one epic and its cards, epic_table.",
     {
       project: z.string().describe("project key (current or old), name, or id"),
       status: status.optional().describe("new | in_progress | blocked | testing | done"),
+      exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe("hide cards carrying any of these tags"),
       created_since: z
         .string()
         .optional()
@@ -140,10 +144,14 @@ function registerTools(server: McpServer) {
     },
     async (a) =>
       out(
-        await listItems(getSupabase(), actor(), a.project, a.status, {
-          created_since: a.created_since,
-          updated_since: a.updated_since,
-        }),
+        await listItems(
+          getSupabase(),
+          actor(),
+          a.project,
+          a.status,
+          { created_since: a.created_since, updated_since: a.updated_since },
+          a.exclude_tags ?? [],
+        ),
       ),
   );
 
@@ -260,14 +268,18 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "tag_table",
-    `Show every card carrying a tag as a ready-to-print table, the same columns as epic_table: #, Card, Type, Status, Note, as aligned plain text in a code block. Non-archived cards only, numbered: done first in the order they were completed (oldest first), then testing, in progress, blocked and new, each group by project then board order. Note is each card's title. \`tag\` is matched the way tags are stored (lowercase, trimmed). \`project\` (a key, name or id) limits it to one project; leave it out to search every project you can see. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. ${WIDTH_NOTE} Read-only.`,
+    `Show every card carrying a tag as a ready-to-print table, the same columns as epic_table: #, Card, Type, Status, Note, as aligned plain text in a code block. Non-archived cards only, numbered: done first in the order they were completed (oldest first), then testing, in progress, blocked and new, each group by project then board order. Note is each card's title. \`tag\` is matched the way tags are stored (lowercase, trimmed). \`project\` (a key, name or id) limits it to one project; leave it out to search every project you can see. \`exclude_tags\` leaves out cards that also carry any of those tags. Print the returned text exactly as it is: don't reformat it, re-sort it or add columns. ${WIDTH_NOTE} Read-only.`,
     {
       tag: z.string().describe("the tag, e.g. wt-2026-10-30"),
       project: z.string().optional().describe("project key, name or id; omit for every project"),
+      exclude_tags: z
+        .array(z.string())
+        .optional()
+        .describe("leave out cards that also carry any of these tags"),
       width: tableWidth,
     },
     async (a) => {
-      const r = await listItemsByTag(getSupabase(), actor(), a.tag, a.project);
+      const r = await listItemsByTag(getSupabase(), actor(), a.tag, a.project, a.exclude_tags ?? []);
       if (!r.ok) return out(r);
       const text = formatTagTable(r.data.tag, r.data.cards, a.width);
       return { content: [{ type: "text" as const, text }] };

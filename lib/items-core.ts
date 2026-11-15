@@ -23,6 +23,7 @@ import {
 } from "@/lib/types";
 import { writeBackOnStatusChange } from "@/lib/github-writeback";
 import { planArchive } from "@/lib/item-archive";
+import { passesTagFilter } from "@/lib/tag-filter";
 import { whitelist } from "@/lib/auth";
 import { ITEM_ATTACHMENTS_BUCKET, ITEM_IMAGES_BUCKET } from "@/lib/supabase-server";
 import {
@@ -261,7 +262,10 @@ export async function listItems(
   projectRef: string,
   status?: ItemStatus,
   since: SinceFilter = {},
+  /** Hide cards carrying any of these tags (KANBAN-73). */
+  excludeTags: string[] = [],
 ): Promise<CoreResult<ItemSummary[]>> {
+  const exclude = normalizeTags(excludeTags);
   const created = parseSince("created_since", since.created_since);
   if (!created.ok) return coreErr(created.error, 400);
   const updated = parseSince("updated_since", since.updated_since);
@@ -281,6 +285,7 @@ export async function listItems(
   if (created.iso) rows = rows.filter((it) => Date.parse(it.created_at) >= Date.parse(created.iso!));
   if (updated.iso) rows = rows.filter((it) => Date.parse(it.updated_at) >= Date.parse(updated.iso!));
   if (status) rows = rows.filter((it) => it.status === status);
+  if (exclude.length) rows = rows.filter((it) => passesTagFilter(it.tags, { include: [], exclude }));
   // Resolve area paths once for the whole project, not per row.
   const cats = await listCategories(sb, proj.data.id);
   // Parent refs come from the rows already in hand; only a parent that isn't
@@ -333,8 +338,11 @@ export async function listItemsByTag(
   actor: string,
   tag: string,
   projectRef?: string,
+  /** Leave out cards that also carry any of these tags (KANBAN-73). */
+  excludeTags: string[] = [],
 ): Promise<CoreResult<{ tag: string; cards: EpicTableChild[] }>> {
   const [norm] = normalizeTags([tag]);
+  const exclude = normalizeTags(excludeTags).filter((t) => t !== norm);
   if (!norm) return coreErr("Give a tag (up to 32 characters)", 400);
   let projects: Project[];
   if (projectRef?.trim()) {
@@ -349,17 +357,17 @@ export async function listItemsByTag(
   if (projects.length === 0) return coreOk({ tag: norm, cards: [] });
   const { data, error } = await sb
     .from("items")
-    .select("project_id, number, body, type, status, done_at, position")
+    .select("project_id, number, body, type, status, done_at, position, tags")
     .in("project_id", projects.map((p) => p.id))
     .contains("tags", [norm])
     .is("archived_at", null)
     .order("position", { ascending: true });
   if (error) return coreErr(error.message, 500);
   const keyOf = new Map(projects.map((p) => [p.id, p.key]));
-  const rows = (data ?? []) as Pick<
+  const rows = ((data ?? []) as Pick<
     Item,
-    "project_id" | "number" | "body" | "type" | "status" | "done_at" | "position"
-  >[];
+    "project_id" | "number" | "body" | "type" | "status" | "done_at" | "position" | "tags"
+  >[]).filter((it) => passesTagFilter(it.tags, { include: [], exclude }));
   const byProject = (it: (typeof rows)[number]) => keyOf.get(it.project_id) ?? "";
   const cards = [...rows]
     .sort((a, b) => byProject(a).localeCompare(byProject(b)))
