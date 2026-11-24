@@ -13,6 +13,7 @@ import {
   reviewReasons,
   entryStatus,
   typeLetter,
+  typeTip,
   validateSettingsPatch,
   type FocusEntryView,
 } from "./focus-rules.ts";
@@ -232,4 +233,12 @@ test("personal entries show no status and no type letter, others keep theirs", (
   assert.match(lines[4], /^1\s+ME-1\s+-\s+today\s+Call the bank$/);
   assert.doesNotMatch(lines[4], /new/);
   assert.match(lines[5], /^2\s+F\s+ASSET-230\s+new\s+/);
+});
+
+test("type tooltip: the type's name, and an epic's open/total cards", () => {
+  assert.equal(typeTip(entry("A-1", { type: "feature" })), "Feature");
+  assert.equal(typeTip(entry("A-1", { type: "idea" })), "Thought");
+  assert.equal(typeTip(entry("A-1", { type: "epic", progress: { done: 3, total: 12 } })), "Epic · 9/12 open");
+  assert.equal(typeTip(entry("A-1", { type: "epic", progress: null })), "Epic");
+  assert.equal(typeTip(entry("ME-1", { type: "task", personal: true })), "");
 });

@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { STATUS_LABEL, TYPE_LABEL, type ItemStatus, type ItemType } from "@/lib/types";
+import { STATUS_LABEL, type ItemStatus } from "@/lib/types";
 import {
   ageLabel,
   capError,
@@ -26,6 +26,7 @@ import {
   entryTitle,
   entryStatus,
   typeLetter,
+  typeTip,
   type FocusEntryView,
   type FocusHistoryEntry,
   type FocusSettings,
@@ -679,11 +680,11 @@ export function TypeLetter({
   e,
   className = "",
 }: {
-  e: Pick<FocusEntryView, "type" | "personal" | "visible">;
+  e: Pick<FocusEntryView, "type" | "personal" | "visible" | "progress">;
   className?: string;
 }) {
   const letter = typeLetter(e);
-  const name = letter ? (TYPE_LABEL[e.type as ItemType] ?? e.type ?? "") : "";
+  const name = typeTip(e);
   return (
     <span
       className={`w-3 shrink-0 text-center font-mono text-[11px] font-semibold text-[var(--color-muted)] ${className}`}
