@@ -18,12 +18,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { STATUS_LABEL, type ItemStatus } from "@/lib/types";
+import { STATUS_LABEL, TYPE_LABEL, type ItemStatus, type ItemType } from "@/lib/types";
 import {
   ageLabel,
   capError,
   describeReason,
   entryTitle,
+  entryStatus,
+  typeLetter,
   type FocusEntryView,
   type FocusHistoryEntry,
   type FocusSettings,
@@ -296,6 +298,7 @@ function FocusRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: e.id, disabled: !sortable });
   const [editing, setEditing] = useState(false);
   const shown = entryTitle(e) ?? "";
+  const status = entryStatus(e);
   const [titleDraft, setTitleDraft] = useState(shown);
   const [draft, setDraft] = useState(e.why_now ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -354,6 +357,7 @@ function FocusRow({
         <span className="w-4 shrink-0" aria-hidden="true" />
       )}
       <span className="mt-0.5 w-5 shrink-0 text-right text-sm font-semibold tabular-nums text-[var(--color-accent)]">{rank}</span>
+      <TypeLetter e={e} />
 
       <div className="min-w-0 flex-1">
         {e.visible && editing ? (
@@ -388,15 +392,19 @@ function FocusRow({
             </span>
           </div>
         ) : e.visible ? (
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <div className="flex min-w-0 items-baseline gap-x-2">
             <a
               href={path ?? "#"}
               title={renamed ? `Open ${e.ref}: ${e.title}` : `Open ${e.ref}`}
-              className="font-mono text-[11px] text-[var(--color-faint)] hover:text-[var(--color-ink)]"
+              className="shrink-0 font-mono text-[11px] text-[var(--color-faint)] hover:text-[var(--color-ink)]"
             >
               {e.ref}
             </a>
-            <a href={path ?? "#"} className="min-w-0 text-sm text-[var(--color-ink)] hover:underline">
+            <a
+              href={path ?? "#"}
+              title={shown}
+              className="min-w-0 flex-1 truncate text-sm text-[var(--color-ink)] hover:underline"
+            >
               {shown}
             </a>
           </div>
@@ -406,7 +414,7 @@ function FocusRow({
         {e.visible ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-[var(--color-faint)]">
             {e.personal ? <span className="rounded bg-[var(--color-canvas)] px-1.5">Personal</span> : null}
-            {e.status ? <span className="uppercase tracking-wider">{STATUS_LABEL[e.status as ItemStatus] ?? e.status}</span> : null}
+            {status ? <span className="uppercase tracking-wider">{STATUS_LABEL[status as ItemStatus] ?? status}</span> : null}
             {e.progress ? <span title="Epic cards done">{e.progress.done}/{e.progress.total} done</span> : null}
             {e.open_questions ? (
               <span className="text-[var(--color-accent-ink)]" title="Open questions on the card">
@@ -646,5 +654,23 @@ function AddBox({
         </ul>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The type column of a compact focus row (KANBAN-85): one letter, fixed width
+ * so refs line up. Blank (but still taking its width) for a personal entry.
+ */
+export function TypeLetter({ e }: { e: Pick<FocusEntryView, "type" | "personal" | "visible"> }) {
+  const letter = typeLetter(e);
+  const name = letter ? (TYPE_LABEL[e.type as ItemType] ?? e.type ?? "") : "";
+  return (
+    <span
+      className="mt-0.5 w-3 shrink-0 text-center font-mono text-[11px] font-semibold text-[var(--color-muted)]"
+      title={name || undefined}
+      aria-label={name || undefined}
+    >
+      {letter}
+    </span>
   );
 }

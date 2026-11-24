@@ -852,8 +852,12 @@ except the switch. Turning it off keeps the list; turning it on restores it.
 - **Where:** the top of Home, above Projects, in the app-shell container. Server-rendered
   decision (the page reads the setting), so there's no flash of the list for someone who
   has it off.
-- **Rows:** grip · rank · ref + title (links to the card page) · a quiet meta line (a
-  "Personal" chip, status, epic `N/M done`, open questions, "moved 3d", "by <date>") · the
+- **Rows (compact, KANBAN-85):** grip · rank · type letter (F feature, E epic, T task, B bug,
+  I thought; blank for a personal card, tooltip names the type) · ref + title on ONE line,
+  the title truncating with "…" (links to the card page) · a quiet meta line (a
+  "Personal" chip, status — never on a personal card, since nothing in the app can change
+  it; the ✓ is how those finish (KANBAN-86) — epic `N/M done`, open questions, "moved 3d",
+  "by <date>") · the
   why-now line · icon actions: pencil (edit why now), ✓ (tick off), × (drop). Every icon
   has `title` + `aria-label`. An idle card's age turns `--color-bug` and reads "idle Nd".
   A card the person can no longer see renders "No access", never its title.

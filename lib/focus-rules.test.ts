@@ -11,6 +11,8 @@ import {
   newest,
   personalKeyCandidates,
   reviewReasons,
+  entryStatus,
+  typeLetter,
   validateSettingsPatch,
   type FocusEntryView,
 } from "./focus-rules.ts";
@@ -177,8 +179,8 @@ test("text: header, review line, table, width", () => {
   assert.equal(lines[0], "Focus list (3 of 7)");
   assert.equal(lines[1], "Review due: daily review");
   assert.equal(lines[2], "```");
-  assert.match(lines[3], /^#\s+Card\s+Status\s+Done\s+Moved\s+Note$/);
-  assert.match(lines[5], /PS-147.*2\/5.*today.*Mac mini running/);
+  assert.match(lines[3], /^#\s+T\s+Card\s+Status\s+Done\s+Moved\s+Note$/);
+  assert.match(lines[5], /^1\s+E\s+PS-147.*2\/5.*today.*Mac mini/);
   assert.match(lines[6], /AMOS-3.*!14d/);
   assert.match(lines[7], /\(no access\)/);
   assert.ok(lines.every((l) => Array.from(l).length <= 60), "no line wider than 60");
@@ -201,4 +203,33 @@ test("an entry's own title wins over the card's, everywhere", () => {
 test("text: an empty list says so", () => {
   const text = formatFocusText({ entries: [], max_entries: 7, reasons: [] }, NOW);
   assert.match(text, /^Focus list \(0 of 7\)\nYour focus list is empty/);
+});
+
+test("type letter: F E T B I, blank for personal or unseen entries", () => {
+  const letters = ["feature", "epic", "task", "bug", "idea"].map((type) => typeLetter(entry("A-1", { type })));
+  assert.deepEqual(letters, ["F", "E", "T", "B", "I"]);
+  assert.equal(typeLetter(entry("ME-1", { type: "task", personal: true })), "");
+  assert.equal(typeLetter(entry("A-1", { visible: false })), "");
+  assert.equal(typeLetter(entry("A-1", { type: null })), "");
+});
+
+test("personal entries show no status and no type letter, others keep theirs", () => {
+  assert.equal(entryStatus(entry("ME-1", { personal: true, status: "new" })), null);
+  assert.equal(entryStatus(entry("A-1", { status: "blocked" })), "blocked");
+  const text = formatFocusText(
+    {
+      entries: [
+        entry("ME-1", { personal: true, type: "task", status: "new", title: "Call the bank" }),
+        entry("ASSET-230", { type: "feature", status: "new", title: "Inventory" }),
+      ],
+      max_entries: 7,
+      reasons: [],
+    },
+    NOW,
+  );
+  const lines = text.split("\n");
+  assert.match(lines[2], /^#\s+T\s+Card\s+Status/);
+  assert.match(lines[4], /^1\s+ME-1\s+-\s+today\s+Call the bank$/);
+  assert.doesNotMatch(lines[4], /new/);
+  assert.match(lines[5], /^2\s+F\s+ASSET-230\s+new\s+/);
 });
