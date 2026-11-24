@@ -94,40 +94,25 @@ screenshot he sent were ME-1, ASSET-230 and KANBAN-74.
 
 ## What remains (build order)
 
-1. **KANBAN-85: compact rows.**
-   - One line per entry: `2 F ASSET-230 Inventory: add…`.
-   - Type letters: F feature, E epic, T task, B bug, I idea ("Thought").
-   - The letter is **blank for personal (ME) entries**.
-   - Applies to the Home row's first line, the peek popover, the overlay, and `formatFocusText`
-     (add a `T` column; update `lib/focus-rules.test.ts`).
-   - Small and pure; do it first, since KANBAN-84 reuses it.
-2. **KANBAN-86: ME entries show a status nobody can change.**
-   - Blocked on its open question: (a) hide the status on ME entries; (b) a status menu on the
-     focus row; (c) a status menu for every entry.
-   - Don't build until it's answered (`answer_question`).
-3. **KANBAN-84: focus peek in the top bar.** The biggest piece.
-   - A target icon on the top bar of every page, for someone whose list is on (decide server-side
-     in `app/page.tsx` and `app/[ref]/page.tsx`).
-   - Hover shows the compact list in a popover (read-only).
-   - Click opens the full `FocusList` in an overlay (dialog/sheet) **without leaving the page**:
-     no navigation, URL, filters and scroll position kept.
-   - Badge: entry count, plus an accent dot when a review is due.
-   - On touch, a tap opens the overlay.
-   - After a change in the overlay, the row targets underneath should update. Lift
-     `FocusRowProvider`'s set, or have the overlay call a refresh on it.
-   - It stays on the top bar on phones, even after KANBAN-87.
-   - Overlays must close on Esc and on a press outside (`~/dev/me/standards/ui-ux.md` §1).
-4. **KANBAN-87: mobile top bar.**
+KANBAN-85 and 86 are done (PR #191). KANBAN-84 shipped in the PR after it: `components/FocusPeek.tsx`,
+`lib/focus-events.ts` (the `mykan:focus-changed` signal every focus view listens to), and the
+board's shortcuts ignore keys inside `[aria-modal='true']`. Both open questions are answered:
+86 = hide status on ME entries; 88 = phones only.
+
+At 400px the top bar is now full enough that the project name truncates away. KANBAN-87, then
+88, fix that; do them next.
+
+1. **KANBAN-87: mobile top bar.**
    - On the `compact:` layout, GitHub connect, MCP tokens and the theme toggle move into the
      profile menu, above "Keyboard-forward navigation".
    - Each opens its existing popup, as a sheet or centred dialog fitted to `visualViewport`.
    - Desktop is unchanged.
    - Components: `GithubConnect.tsx`, `McpTokenSettings.tsx`, `ThemeToggle.tsx`, `ProfileMenu.tsx`.
      Each popup's open state is local to its component today, so expose an "open" entry point.
-5. **KANBAN-88: left side of the top bar.**
+2. **KANBAN-88: left side of the top bar (phones only).**
    - Icon-only brand (`Brand.tsx`); keep `<` for the project picker; remove the pencil; the project
      name opens the editor (`ProjectHeader.tsx`).
-   - Open question: phones only, or desktop too.
+   - Phones only (`compact:`); desktop unchanged.
 
 When each card ships: progress note, move to **Testing**, and give David click-by-click checks.
 Then reconnect MCP if tool shapes changed.

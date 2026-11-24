@@ -875,6 +875,9 @@ export function ProjectDetailView({
       ) {
         return;
       }
+      // Keys typed inside a modal over the board (the focus overlay,
+      // KANBAN-84) belong to it, not to the board underneath.
+      if (t?.closest("[aria-modal='true']")) return;
       const sel = selectedId
         ? visibleItems.find((it) => it.id === selectedId) ?? null
         : null;
@@ -1025,6 +1028,9 @@ export function ProjectDetailView({
       ) {
         return;
       }
+      // Keys typed inside a modal over the board (the focus overlay,
+      // KANBAN-84) belong to it, not to the board underneath.
+      if (t?.closest("[aria-modal='true']")) return;
       e.preventDefault();
       // Only one of the two search boxes is laid out (offsetParent is null
       // for the hidden one).
