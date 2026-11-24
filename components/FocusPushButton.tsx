@@ -75,9 +75,9 @@ export function FocusPushButton({ cardRef, initialOnList }: { cardRef: string; i
   );
 }
 
-function TargetIcon({ filled = false }: { filled?: boolean }) {
+export function TargetIcon({ filled = false, small = false }: { filled?: boolean; small?: boolean }) {
   return (
-    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+    <svg className={small ? "h-4 w-4" : "h-[18px] w-[18px]"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
       <circle cx="12" cy="12" r="8.5" />
       <circle cx="12" cy="12" r="4.5" />
       <circle cx="12" cy="12" r="1.2" fill={filled ? "currentColor" : "none"} />
