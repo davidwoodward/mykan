@@ -232,7 +232,9 @@ export function newest(times: readonly (string | null | undefined)[]): string | 
  *
  *  - completed: an entry completed after the last review (one reason each);
  *  - daily: the day's review window (review_hour in time_zone) opened after the
- *    last review, or there has never been one;
+ *    last review, or there has never been one, and no card on the list has
+ *    moved since the window opened (working the list's cards counts as
+ *    reviewing it);
  *  - short: the list is at or below min_entries, raised with a completion or
  *    the daily review (a standing condition, so not on its own, or confirming
  *    a short list could never clear it);
@@ -254,7 +256,8 @@ export function reviewReasons(input: {
     if (after(h.completed_at)) reasons.push({ kind: "completed", ref: h.ref, title: entryTitle(h) });
   }
   const windowStart = dailyWindowStart(now, settings.review_hour, settings.time_zone).getTime();
-  const daily = last === null || last < windowStart;
+  const worked = active.some((e) => e.last_moved_at !== null && Date.parse(e.last_moved_at) >= windowStart);
+  const daily = (last === null || last < windowStart) && !worked;
   if (daily) reasons.push({ kind: "daily" });
   if ((daily || reasons.length > 0) && active.length <= settings.min_entries) {
     reasons.push({ kind: "short", count: active.length, min: settings.min_entries });
