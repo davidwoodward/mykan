@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { McpTokenSummary } from "@/lib/types";
 import { SITE_URL } from "@/lib/card-url";
+import { MenuSheet } from "@/components/MenuSheet";
 
 /**
  * Personal MCP token manager for the top bar (KANBAN-30, Phase I.5a). A key icon
@@ -16,8 +17,8 @@ import { SITE_URL } from "@/lib/card-url";
  */
 const MCP_URL = `${SITE_URL}/mcp`;
 
-export function McpTokenSettings() {
-  const [open, setOpen] = useState(false);
+export function McpTokenSettings({ onSheetClose }: { onSheetClose?: () => void } = {}) {
+  const [open, setOpen] = useState(!!onSheetClose);
   const [tokens, setTokens] = useState<McpTokenSummary[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
@@ -55,6 +56,17 @@ export function McpTokenSettings() {
     load();
   }, [open, load]);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    setFreshToken(null);
+    setFreshLabel(null);
+    setFreshId(null);
+    setError(null);
+    setLabelMissing(false);
+    setCopied(null);
+    onSheetClose?.(); // a sheet (KANBAN-87) is closed by its owner unmounting it
+  }, [onSheetClose]);
+
   // Dismiss on click-off / Esc. Closing also clears the one-time token reveal.
   useEffect(() => {
     if (!open) return;
@@ -73,17 +85,7 @@ export function McpTokenSettings() {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
-
-  function close() {
-    setOpen(false);
-    setFreshToken(null);
-    setFreshLabel(null);
-    setFreshId(null);
-    setError(null);
-    setLabelMissing(false);
-    setCopied(null);
-  }
+  }, [open, close]);
 
   async function copy(text: string, which: "token" | "command") {
     try {
@@ -152,39 +154,8 @@ export function McpTokenSettings() {
     ? `claude mcp add --transport http --scope user mykan ${MCP_URL} --header "Authorization: Bearer ${freshToken}"`
     : "";
 
-  return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => (open ? close() : setOpen(true))}
-        aria-label="MCP access tokens"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title="MCP access tokens"
-        className="grid h-8 w-8 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
-      >
-        {/* Key icon */}
-        <svg
-          className="h-[18px] w-[18px]"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="7.5" cy="15.5" r="4.5" />
-          <path d="M10.7 12.3 21 2m-4 4 2.5 2.5M14 9l2.5 2.5" />
-        </svg>
-      </button>
-
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="MCP access tokens"
-          className="absolute right-0 top-full z-30 mt-2 w-[min(94vw,26rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-lg"
-        >
+  const panel = (
+    <>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
             MCP access tokens
           </div>
@@ -348,6 +319,40 @@ export function McpTokenSettings() {
               {busy ? "Generating…" : "Generate token"}
             </button>
           </div>
+    </>
+  );
+
+  // Opened from the profile menu on the touch layout (KANBAN-87): the same
+  // panel, in a sheet, with no top-bar trigger.
+  if (onSheetClose) {
+    return (
+      <MenuSheet label="MCP access tokens" panelRef={wrapRef}>
+        {panel}
+      </MenuSheet>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => (open ? close() : setOpen(true))}
+        aria-label="MCP access tokens"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="MCP access tokens"
+        className="grid h-8 w-8 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
+      >
+        <KeyIcon />
+      </button>
+
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="MCP access tokens"
+          className="absolute right-0 top-full z-30 mt-2 w-[min(94vw,26rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-lg"
+        >
+          {panel}
         </div>
       ) : null}
     </div>
@@ -358,4 +363,23 @@ function fmt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** The key icon; also on the profile menu's row on the touch layout (KANBAN-87). */
+export function KeyIcon() {
+  return (
+    <svg
+      className="h-[18px] w-[18px]"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="M10.7 12.3 21 2m-4 4 2.5 2.5M14 9l2.5 2.5" />
+    </svg>
+  );
 }

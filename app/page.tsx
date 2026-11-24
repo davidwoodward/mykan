@@ -32,9 +32,12 @@ export default async function Home({
           <Brand />
           <div className="flex items-center gap-3">
             {focusOn ? <FocusPeek /> : null}
-            <GithubConnect />
-            <McpTokenSettings />
-            <ThemeToggle />
+            {/* Touch layout: these three move into the profile menu (KANBAN-87). */}
+            <div className="flex items-center gap-3 compact:hidden">
+              <GithubConnect />
+              <McpTokenSettings />
+              <ThemeToggle />
+            </div>
             <ProfileMenu
               name={session.user.name}
               email={session.user.email}

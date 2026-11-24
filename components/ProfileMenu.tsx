@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/app/actions";
 import { useKeyboardNav } from "@/components/useKeyboardNav";
 import { FocusSettingsPanel } from "@/components/FocusSettingsPanel";
+import { GithubConnect, GithubIcon } from "@/components/GithubConnect";
+import { KeyIcon, McpTokenSettings } from "@/components/McpTokenSettings";
+import { ThemeIcons, toggleTheme } from "@/components/ThemeToggle";
 
 /**
  * The top-bar profile menu (KANBAN-31). Replaces the old plaintext email + Sign
@@ -14,6 +17,11 @@ import { FocusSettingsPanel } from "@/components/FocusSettingsPanel";
  * The keyboard toggle shares `useKeyboardNav` with the board/list, so flipping
  * it here immediately arms/disarms the vim navigation over there (same tab, via
  * the store's listeners).
+ *
+ * On the touch layout (`compact:`, KANBAN-87) the top bar drops its GitHub, MCP
+ * token and theme icons; they become the first Settings rows here. GitHub and
+ * MCP tokens close the menu and open their usual panel as a centred sheet; the
+ * theme row flips the theme in place and leaves the menu open.
  */
 export function ProfileMenu({
   name,
@@ -25,7 +33,17 @@ export function ProfileMenu({
   keyboardDefault: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [sheet, setSheet] = useState<"github" | "mcp" | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const closeSheet = useCallback(() => {
+    setSheet(null);
+    buttonRef.current?.focus({ preventScroll: true });
+  }, []);
+  function openSheet(which: "github" | "mcp") {
+    setOpen(false);
+    setSheet(which);
+  }
   const { enabled: keyboardEnabled, setEnabled: setKeyboardEnabled } =
     useKeyboardNav(keyboardDefault);
 
@@ -54,6 +72,7 @@ export function ProfileMenu({
   return (
     <div ref={wrapRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Profile menu"
@@ -90,6 +109,12 @@ export function ProfileMenu({
           <div className="border-b border-[var(--color-line)] px-3 py-3">
             <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
               Settings
+            </div>
+            {/* Touch layout only: the top bar's GitHub, MCP and theme icons live here. */}
+            <div className="-mx-3 mb-2 hidden border-b border-[var(--color-line)] pb-2 compact:block">
+              <MenuRow icon={<GithubIcon />} label="GitHub connections" onClick={() => openSheet("github")} />
+              <MenuRow icon={<KeyIcon />} label="MCP access tokens" onClick={() => openSheet("mcp")} />
+              <MenuRow icon={<ThemeIcons />} label="Light / dark theme" onClick={toggleTheme} />
             </div>
             <button
               type="button"
@@ -137,7 +162,27 @@ export function ProfileMenu({
           </form>
         </div>
       ) : null}
+
+      {sheet === "github" ? <GithubConnect onSheetClose={closeSheet} /> : null}
+      {sheet === "mcp" ? <McpTokenSettings onSheetClose={closeSheet} /> : null}
     </div>
+  );
+}
+
+/** A full-width, finger-sized menu row: icon, then label. */
+function MenuRow({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="flex min-h-11 w-full items-center gap-3 px-3 text-left font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-accent-soft)]"
+    >
+      <span className="grid h-5 w-5 shrink-0 place-items-center text-[var(--color-muted)]" aria-hidden="true">
+        {icon}
+      </span>
+      {label}
+    </button>
   );
 }
 
