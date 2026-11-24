@@ -28,6 +28,7 @@ import {
   takeBoardScroll,
 } from "@/components/boardReturn";
 import { ProjectKeyProvider } from "@/components/RefBadge";
+import { FocusRowProvider } from "@/components/FocusRowTarget";
 import { AssigneeProvider } from "@/components/AssigneePicker";
 import { Tag } from "@/components/Tag";
 import {
@@ -82,6 +83,7 @@ export function ProjectDetailView({
   isPrivate,
   keyboardDefault,
   githubLinked,
+  focusOn = false,
 }: {
   projectId: string;
   projectKey: string | null;
@@ -90,6 +92,8 @@ export function ProjectDetailView({
   keyboardDefault: boolean;
   /** The project is bound to a GitHub account, so Sync with GitHub shows. */
   githubLinked: boolean;
+  /** The viewer's own focus list is on: rows show the focus target (KANBAN-83). */
+  focusOn?: boolean;
 }) {
   const router = useRouter();
   // View, grouping, filters and search, read from the board's URL when the
@@ -1092,6 +1096,7 @@ export function ProjectDetailView({
 
   return (
     <ProjectKeyProvider value={projectKey}>
+      <FocusRowProvider enabled={focusOn && !showArchived}>
       <AssigneeProvider
         value={{ members, enabled: !isPrivate, onChange: changeItemAssignees }}
       >
@@ -1694,6 +1699,7 @@ export function ProjectDetailView({
       </EpicProvider>
       </CategoryProvider>
       </AssigneeProvider>
+      </FocusRowProvider>
     </ProjectKeyProvider>
   );
 }

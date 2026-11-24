@@ -25,6 +25,7 @@ import { InlineAttachments } from "@/components/InlineAttachments";
 import { ItemHistory } from "@/components/ItemHistory";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
+import { FocusRowTarget } from "@/components/FocusRowTarget";
 import { RefBadge, useProjectKey } from "@/components/RefBadge";
 import { cardPath } from "@/lib/card-url";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
@@ -461,6 +462,7 @@ function Card({
           <EpicProgress item={item} />
           <OpenQuestionsBadge itemId={item.id} />
           <GithubSyncBadge item={item} onItemChange={onItemChange} />
+          <FocusRowTarget itemId={item.id} number={item.number} />
           <InlineAttachments item={item} onItemChange={onItemChange} />
           <ItemHistory
             item={item}

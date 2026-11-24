@@ -884,3 +884,8 @@ except the switch. Turning it off keeps the list; turning it on restores it.
   Esc or focus leaving both fields); the card is never changed, and clearing the title goes
   back to the card's. The ref beside it still opens the card (its tooltip names the card's
   own title when they differ).
+- **On list rows and board cards (KANBAN-83):** the same target sits with each row's
+  actions (after the pencil) and on each board card's badge line, only for someone whose
+  list is on and never in the archived view. Outline adds the card; filled means it's
+  already on the list and opens Home. Always visible (not hover-only), so it reads at a
+  glance which cards are on your list.

@@ -673,3 +673,21 @@ export async function focusStateForItem(
     .limit(1);
   return { onList: (data ?? []).length > 0 };
 }
+
+/**
+ * The ids of the cards on the caller's active list, for the list and board
+ * targets (KANBAN-83). Off → empty: nothing to mark.
+ */
+export async function activeFocusItemIds(sb: SupabaseClient, actor: string): Promise<CoreResult<string[]>> {
+  const s = await getFocusSettings(sb, actor);
+  if (!s.ok) return s;
+  if (!s.data.enabled) return coreOk([]);
+  const { data, error } = await sb
+    .from("focus_entries")
+    .select("item_id")
+    .eq("user_email", actor)
+    .is("completed_at", null)
+    .is("removed_at", null);
+  if (error) return coreErr(error.message, 500);
+  return coreOk(((data ?? []) as { item_id: string }[]).map((r) => r.item_id));
+}

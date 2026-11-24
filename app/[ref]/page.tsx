@@ -21,7 +21,7 @@ import {
 } from "@/lib/card-url";
 import { richDocTitle, type Item, type Project } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase-server";
-import { focusStateForItem } from "@/lib/focus-core";
+import { focusStateForItem, getFocusSettings } from "@/lib/focus-core";
 
 // The root segment is a project key (/FPOON, the board) or a card ref
 // (/FPOON-42, the card page), KANBAN-44. Static top-level routes (api, mcp,
@@ -109,6 +109,9 @@ export default async function RootRefPage({ params, searchParams }: Props) {
   // The viewer's own focus state for this card (KANBAN-82); null when their
   // focus list is off, so nothing focus-related renders for them.
   const focus = item ? await focusStateForItem(getSupabase(), email, item.id) : null;
+  // On the board, rows show the focus target only for someone whose list is on.
+  const focusSettings = item ? null : await getFocusSettings(getSupabase(), email);
+  const focusOn = !!focusSettings?.ok && focusSettings.data.enabled;
 
   return (
     // Desktop (≥lg): the viewport is locked to one screen with the header
@@ -158,6 +161,7 @@ export default async function RootRefPage({ params, searchParams }: Props) {
             isPrivate={project.is_private}
             keyboardDefault={isOwner(email)}
             githubLinked={!!project.github_account_id}
+            focusOn={focusOn}
           />
         )}
       </main>

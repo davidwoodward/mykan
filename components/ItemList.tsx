@@ -32,6 +32,7 @@ import { GithubItemMeta } from "@/components/GithubItemMeta";
 import { GithubSyncBadge } from "@/components/GithubSyncBadge";
 import { ClampedText } from "@/components/ClampedText";
 import { EditButton } from "@/components/EditButton";
+import { FocusRowTarget } from "@/components/FocusRowTarget";
 import { DeleteIconButton } from "@/components/DeleteIconButton";
 import { RefBadge, useProjectKey } from "@/components/RefBadge";
 import { cardPath } from "@/lib/card-url";
@@ -504,6 +505,7 @@ function ItemRow({
           label={text || "item"}
           className="self-center"
         />
+        <FocusRowTarget itemId={item.id} number={item.number} className="self-center" />
         <GithubSyncBadge item={item} onItemChange={onItemChange} />
         <InlineAttachments item={item} onItemChange={onItemChange} />
         <ItemHistory
