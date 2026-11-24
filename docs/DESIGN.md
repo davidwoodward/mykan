@@ -876,3 +876,11 @@ except the switch. Turning it off keeps the list; turning it on restores it.
 - **Personal project:** created by mykan the first time the list is turned on (key ME, ME2,
   …), private, never in the project list or switcher; its board URL goes home, its cards
   keep their pages.
+- **From a card (KANBAN-82):** a target icon in the card header ("Add to your focus list")
+  shows only to someone whose list is on; the page decides server-side, so nobody else sees
+  it. Once on the list it turns filled and opens Home.
+- **Each entry has its own title** (`focus_entries.label`), seeded from the card's title when
+  added. The row's pencil edits that title and the why-now line together (one save on Enter,
+  Esc or focus leaving both fields); the card is never changed, and clearing the title goes
+  back to the card's. The ref beside it still opens the card (its tooltip names the card's
+  own title when they differ).

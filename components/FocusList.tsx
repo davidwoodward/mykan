@@ -23,6 +23,7 @@ import {
   ageLabel,
   capError,
   describeReason,
+  entryTitle,
   type FocusEntryView,
   type FocusHistoryEntry,
   type FocusSettings,
@@ -194,8 +195,8 @@ export function FocusList() {
                       void act(() => call(`/api/focus/entries/${e.id}`, { method: "PATCH", body: JSON.stringify({ complete: true }) }))
                     }
                     onDrop={() => void act(() => call(`/api/focus/entries/${e.id}`, { method: "DELETE" }))}
-                    onWhyNow={(why_now) =>
-                      void act(() => call(`/api/focus/entries/${e.id}`, { method: "PATCH", body: JSON.stringify({ why_now }) }))
+                    onEdit={(patch) =>
+                      void act(() => call(`/api/focus/entries/${e.id}`, { method: "PATCH", body: JSON.stringify(patch) }))
                     }
                   />
                 ))}
@@ -249,7 +250,7 @@ export function FocusList() {
                   ) : (
                     <span className="font-mono text-[11px] text-[var(--color-faint)]">no access</span>
                   )}
-                  <span className="min-w-0 flex-1 truncate">{h.title ?? ""}</span>
+                  <span className="min-w-0 flex-1 truncate">{entryTitle(h) ?? ""}</span>
                   <span
                     className="shrink-0 text-[10px] text-[var(--color-faint)]"
                     title="How long it was on your list, and when it left"
@@ -281,7 +282,7 @@ function FocusRow({
   sortable,
   onComplete,
   onDrop,
-  onWhyNow,
+  onEdit,
 }: {
   entry: FocusEntryView;
   rank: number;
@@ -290,24 +291,41 @@ function FocusRow({
   sortable: boolean;
   onComplete: () => void;
   onDrop: () => void;
-  onWhyNow: (why: string) => void;
+  onEdit: (patch: { label?: string; why_now?: string }) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: e.id, disabled: !sortable });
   const [editing, setEditing] = useState(false);
+  const shown = entryTitle(e) ?? "";
+  const [titleDraft, setTitleDraft] = useState(shown);
   const [draft, setDraft] = useState(e.why_now ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLDivElement>(null);
   const label = e.ref ?? "this entry";
   const path = e.url ? e.url.replace(/^https?:\/\/[^/]+/, "") : null;
+  // The entry's own title can differ from the card's (KANBAN-82).
+  const renamed = !!e.label && e.label !== e.title;
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
-  // One save on Enter, Esc or click-off, only when changed (DESIGN.md).
+  // One save on Enter, Esc or click-off (focus leaving both fields), only for
+  // what changed (DESIGN.md). The title is the entry's own: the card is never
+  // touched; an empty title goes back to the card's.
   function finish() {
     setEditing(false);
-    if (draft.trim() !== (e.why_now ?? "")) onWhyNow(draft.trim());
+    const patch: { label?: string; why_now?: string } = {};
+    const t = titleDraft.replace(/\s+/g, " ").trim();
+    if (t !== shown) patch.label = t === (e.title ?? "") ? "" : t;
+    if (draft.trim() !== (e.why_now ?? "")) patch.why_now = draft.trim();
+    if (Object.keys(patch).length) onEdit(patch);
   }
+  const keys = (ev: KeyboardEvent<HTMLInputElement>) => {
+    if (ev.key === "Enter" || ev.key === "Escape") {
+      ev.preventDefault();
+      finish();
+    }
+  };
 
   return (
     <li
@@ -338,13 +356,48 @@ function FocusRow({
       <span className="mt-0.5 w-5 shrink-0 text-right text-sm font-semibold tabular-nums text-[var(--color-accent)]">{rank}</span>
 
       <div className="min-w-0 flex-1">
-        {e.visible ? (
+        {e.visible && editing ? (
+          <div
+            ref={editRef}
+            className="flex flex-col gap-1"
+            onBlur={(ev) => {
+              if (!editRef.current?.contains(ev.relatedTarget as Node | null)) finish();
+            }}
+          >
+            <input
+              ref={inputRef}
+              value={titleDraft}
+              maxLength={200}
+              onChange={(ev) => setTitleDraft(ev.target.value)}
+              onKeyDown={keys}
+              placeholder={e.title ?? "Title on your focus list"}
+              aria-label={`Focus title for ${label} (the card is not changed)`}
+              className="w-full rounded border border-[var(--color-line)] bg-transparent px-2 py-1 text-sm outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
+            />
+            <input
+              value={draft}
+              maxLength={200}
+              onChange={(ev) => setDraft(ev.target.value)}
+              onKeyDown={keys}
+              placeholder="Why this, why now? (one line)"
+              aria-label={`Why now for ${label}`}
+              className="w-full rounded border border-[var(--color-line)] bg-transparent px-2 py-1 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
+            />
+            <span className="text-[10px] text-[var(--color-faint)]">
+              {`Your wording here only; ${e.ref} keeps its own title. Clear the title to use the card's.`}
+            </span>
+          </div>
+        ) : e.visible ? (
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <a href={path ?? "#"} className="font-mono text-[11px] text-[var(--color-faint)] hover:text-[var(--color-ink)]">
+            <a
+              href={path ?? "#"}
+              title={renamed ? `Open ${e.ref}: ${e.title}` : `Open ${e.ref}`}
+              className="font-mono text-[11px] text-[var(--color-faint)] hover:text-[var(--color-ink)]"
+            >
               {e.ref}
             </a>
             <a href={path ?? "#"} className="min-w-0 text-sm text-[var(--color-ink)] hover:underline">
-              {e.title}
+              {shown}
             </a>
           </div>
         ) : (
@@ -372,24 +425,7 @@ function FocusRow({
             {e.target_date ? <span title="Target date">by {e.target_date}</span> : null}
           </div>
         ) : null}
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={draft}
-            maxLength={200}
-            onChange={(ev) => setDraft(ev.target.value)}
-            onBlur={finish}
-            onKeyDown={(ev) => {
-              if (ev.key === "Enter" || ev.key === "Escape") {
-                ev.preventDefault();
-                finish();
-              }
-            }}
-            placeholder="Why this, why now? (one line)"
-            aria-label={`Why now for ${label}`}
-            className="mt-1 w-full rounded border border-[var(--color-line)] bg-transparent px-2 py-1 text-xs outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
-          />
-        ) : e.why_now ? (
+        {editing ? null : e.why_now ? (
           <p className="mt-0.5 text-xs text-[var(--color-muted)]">{e.why_now}</p>
         ) : null}
       </div>
@@ -397,13 +433,14 @@ function FocusRow({
       <div className="flex shrink-0 items-center">
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !e.visible}
           onClick={() => {
+            setTitleDraft(entryTitle(e) ?? "");
             setDraft(e.why_now ?? "");
             setEditing(true);
           }}
-          title="Edit why now"
-          aria-label={`Edit why now for ${label}`}
+          title="Edit title and why now"
+          aria-label={`Edit the focus title and why now for ${label}`}
           className={iconBtn}
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

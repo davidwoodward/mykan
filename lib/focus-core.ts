@@ -33,6 +33,7 @@ type EntryRow = {
   user_email: string;
   item_id: string;
   position: number;
+  label: string | null;
   why_now: string | null;
   target_date: string | null;
   added_at: string;
@@ -270,6 +271,7 @@ export async function loadFocus(
       id: e.id,
       item_id: e.item_id,
       position: e.position,
+      label: e.label,
       why_now: e.why_now,
       target_date: e.target_date,
       added_at: e.added_at,
@@ -318,6 +320,7 @@ export async function loadFocus(
       ref: d?.ref ?? null,
       url: d?.url ?? null,
       title: d?.title ?? null,
+      label: e.label,
       added_at: e.added_at,
       completed_at: e.completed_at,
       removed_at: e.removed_at,
@@ -358,6 +361,8 @@ export type AddFocusInput = {
   text?: string;
   /** 1-based rank to insert at; default the end. */
   position?: number;
+  /** The entry's own title; default the card's title at the time it's added. */
+  label?: string | null;
   why_now?: string | null;
   target_date?: string | null;
 };
@@ -367,6 +372,14 @@ function cleanWhyNow(v: unknown): CoreResult<string | null> {
   if (typeof v !== "string") return coreErr("why_now must be text", 400);
   const t = v.replace(/\s+/g, " ").trim();
   if (t.length > 200) return coreErr("why_now is one line, up to 200 characters", 400);
+  return coreOk(t || null);
+}
+
+function cleanLabel(v: unknown): CoreResult<string | null> {
+  if (v === undefined || v === null) return coreOk(null);
+  if (typeof v !== "string") return coreErr("label must be text", 400);
+  const t = v.replace(/\s+/g, " ").trim();
+  if (t.length > 200) return coreErr("A focus title is one line, up to 200 characters", 400);
   return coreOk(t || null);
 }
 
@@ -399,6 +412,9 @@ export async function addFocusEntry(
   if (!why.ok) return why;
   const date = cleanDate(input.target_date);
   if (!date.ok) return date;
+  const lbl = cleanLabel(input.label);
+  if (!lbl.ok) return lbl;
+  let label = lbl.data;
   const item = input.item?.trim();
   const text = input.text?.replace(/\s+/g, " ").trim();
   if (!item === !text) return coreErr("Give either a card (KEY-N) or text for a new card, not both", 400);
@@ -418,6 +434,9 @@ export async function addFocusEntry(
     }
     itemId = it.data.item.id;
     ref = refOf(it.data.project.key, it.data.item.number);
+    // Pushed from a card: the entry starts with the card's title as its own,
+    // so rewriting it later never touches the card (KANBAN-82).
+    label ??= richDocTitle(it.data.item.body) || null;
   } else {
     if (text!.length > 200) return coreErr("A quick-add is one line, up to 200 characters", 400);
     const pid = await ensurePersonalProject(sb, actor, s.data);
@@ -435,6 +454,7 @@ export async function addFocusEntry(
       user_email: actor,
       item_id: itemId,
       position: positionAt(rows.data, input.position),
+      label,
       why_now: why.data,
       target_date: date.data,
     })
@@ -553,13 +573,18 @@ export async function updateFocusEntry(
   sb: SupabaseClient,
   actor: string,
   ref: string,
-  patch: { why_now?: unknown; target_date?: unknown },
+  patch: { label?: unknown; why_now?: unknown; target_date?: unknown },
 ): Promise<CoreResult<{ updated: string }>> {
   const s = await requireEnabled(sb, actor);
   if (!s.ok) return s;
   const e = await findActiveEntry(sb, actor, ref);
   if (!e.ok) return e;
   const row: Record<string, unknown> = {};
+  if ("label" in patch) {
+    const l = cleanLabel(patch.label);
+    if (!l.ok) return l;
+    row.label = l.data; // empty → null → the card's current title
+  }
   if ("why_now" in patch) {
     const w = cleanWhyNow(patch.why_now);
     if (!w.ok) return w;
@@ -625,3 +650,26 @@ export async function focusCandidates(
   );
 }
 
+
+/**
+ * For the card page (KANBAN-82): whether the caller's focus list is on and, if
+ * so, whether this card is on it. Off → `null`, so the page renders nothing
+ * focus-related at all.
+ */
+export async function focusStateForItem(
+  sb: SupabaseClient,
+  actor: string,
+  itemId: string,
+): Promise<{ onList: boolean } | null> {
+  const s = await getFocusSettings(sb, actor);
+  if (!s.ok || !s.data.enabled) return null;
+  const { data } = await sb
+    .from("focus_entries")
+    .select("id")
+    .eq("user_email", actor)
+    .eq("item_id", itemId)
+    .is("completed_at", null)
+    .is("removed_at", null)
+    .limit(1);
+  return { onList: (data ?? []).length > 0 };
+}

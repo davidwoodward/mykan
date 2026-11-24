@@ -23,6 +23,7 @@ import {
   dropFocusEntry,
   loadFocus,
   setFocusOrder,
+  updateFocusEntry,
 } from "@/lib/focus-core";
 import { formatFocusText } from "@/lib/focus-rules";
 import {
@@ -147,10 +148,11 @@ function registerFocusTools(server: McpServer) {
 
   server.tool(
     "add_focus",
-    "Add to YOUR focus list, only when the user asks. Pass `item` (an existing card's KEY-N ref or id, any project you can see) OR `text` (a one-line title: creates a new card in the user's private personal project and adds it). Optional `position` (1-based rank; default the bottom), `why_now` (one line, up to 200 chars), `target_date` (YYYY-MM-DD). Refused when the list is full (the hard cap: drop something first) or the card is already on it. Counts as a review. Returns the updated list as get_focus prints it.",
+    "Add to YOUR focus list, only when the user asks. Pass `item` (an existing card's KEY-N ref or id, any project you can see) OR `text` (a one-line title: creates a new card in the user's private personal project and adds it). An added card's entry takes the card's title as its own; pass `label` to word it differently (the card is never changed). Optional `position` (1-based rank; default the bottom), `why_now` (one line, up to 200 chars), `target_date` (YYYY-MM-DD). Refused when the list is full (the hard cap: drop something first) or the card is already on it. Counts as a review. Returns the updated list as get_focus prints it.",
     {
       item: z.string().optional().describe("an existing card: KEY-N ref or id"),
       text: z.string().optional().describe("quick-add: a one-line title for a new personal card"),
+      label: z.string().optional().describe("the entry's own title on the list; default the card's title"),
       position: z.number().int().min(1).optional().describe("1-based rank to insert at; default the bottom"),
       why_now: z.string().optional().describe("one line: why this, why now"),
       target_date: z.string().optional().describe("YYYY-MM-DD"),
@@ -167,6 +169,25 @@ function registerFocusTools(server: McpServer) {
       width: tableWidth,
     },
     async (a) => after(await setFocusOrder(getSupabase(), actor(), a.entries), a.width),
+  );
+
+  server.tool(
+    "edit_focus",
+    "Edit an entry on YOUR focus list, only when the user asks: `label` (the entry's own title on the list; the card itself is never changed; an empty string goes back to the card's title), `why_now` (one line; empty clears it), `target_date` (YYYY-MM-DD; empty clears it). `item` is the card's KEY-N ref. Counts as a review. Returns the updated list.",
+    {
+      item: z.string().describe("the card's KEY-N ref"),
+      label: z.string().optional().describe("the entry's own title; empty = the card's title"),
+      why_now: z.string().optional().describe("one line; empty clears it"),
+      target_date: z.string().optional().describe("YYYY-MM-DD; empty clears it"),
+      width: tableWidth,
+    },
+    async (a) => {
+      const patch: { label?: unknown; why_now?: unknown; target_date?: unknown } = {};
+      if (a.label !== undefined) patch.label = a.label;
+      if (a.why_now !== undefined) patch.why_now = a.why_now;
+      if (a.target_date !== undefined) patch.target_date = a.target_date;
+      return after(await updateFocusEntry(getSupabase(), actor(), a.item, patch), a.width);
+    },
   );
 
   server.tool(

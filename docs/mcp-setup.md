@@ -54,7 +54,7 @@ is inert while the variable is unset; don't set it again. Register every client
 
 ## Tools
 
-`list_projects`, `list_items`, `get_item`, `epic_table`, `set_epic_order`, `move_epic_card`, `list_epics`, `tag_table`, `get_attachment`, `update_item_status`, `archive_item`, `unarchive_item`, `create_item`, `set_item_body`, `append_item_note`, `record_decision`, `ask_question`, `answer_question`, `update_item_entry`, `list_item_entries`, `delete_item_entry`, `restore_item_entry`, `list_item_entry_versions`, `restore_item_entry_version`, `set_item_type`, `set_item_tags`, `set_item_area`, `set_item_parent`, `set_item_assignees`, `set_project_github_account`, `list_areas`, `set_area_github_repo`, `refresh_item_from_github`, `sync_project_with_github`, `get_focus`, `add_focus`, `set_focus_order`, `drop_focus`, `complete_focus`, `confirm_focus_review`.
+`list_projects`, `list_items`, `get_item`, `epic_table`, `set_epic_order`, `move_epic_card`, `list_epics`, `tag_table`, `get_attachment`, `update_item_status`, `archive_item`, `unarchive_item`, `create_item`, `set_item_body`, `append_item_note`, `record_decision`, `ask_question`, `answer_question`, `update_item_entry`, `list_item_entries`, `delete_item_entry`, `restore_item_entry`, `list_item_entry_versions`, `restore_item_entry_version`, `set_item_type`, `set_item_tags`, `set_item_area`, `set_item_parent`, `set_item_assignees`, `set_project_github_account`, `list_areas`, `set_area_github_repo`, `refresh_item_from_github`, `sync_project_with_github`, `get_focus`, `add_focus`, `set_focus_order`, `drop_focus`, `complete_focus`, `confirm_focus_review`, `edit_focus`.
 
 The focus tools (KANBAN-79) act only on the caller's own focus list, the private,
 ranked list of priorities across every project that a person turns on in
@@ -64,7 +64,11 @@ review is due, then `#`, `Card`, `Status`, `Done`, `Moved`, `Note` columns) and
 takes `width` like the table tools. `add_focus` takes an existing card
 (`item`) or a one-line `text`, which creates a card in the caller's hidden
 personal project; both are refused when the list is at its hard cap.
-`set_focus_order`, `drop_focus` and `confirm_focus_review` count as a review;
+An entry has its own title (`label`, KANBAN-82): an added card's entry starts
+with the card's title, and `add_focus`'s `label` or `edit_focus` rewords it
+without ever changing the card. `edit_focus` also sets `why_now` and
+`target_date`. `set_focus_order`, `edit_focus`, `drop_focus` and
+`confirm_focus_review` count as a review;
 `complete_focus` ticks an entry off without changing the card's status, and
 raises one. Every focus mutator returns the updated list. When the list is off,
 every focus tool says so. `list_projects` never shows personal projects.
