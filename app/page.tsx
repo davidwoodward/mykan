@@ -6,6 +6,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { GithubConnect } from "@/components/GithubConnect";
 import { McpTokenSettings } from "@/components/McpTokenSettings";
 import { Brand } from "@/components/Brand";
+import { FocusList } from "@/components/FocusList";
+import { getSupabase } from "@/lib/supabase-server";
+import { getFocusSettings } from "@/lib/focus-core";
 
 export default async function Home({
   searchParams,
@@ -17,6 +20,9 @@ export default async function Home({
   // /?new=1 (the project switcher's "New project" option) lands with the
   // create form already open.
   const startAdding = (await searchParams).new === "1";
+  // The focus list (KANBAN-74) is opt-in per person; off shows Home as before.
+  const focus = await getFocusSettings(getSupabase(), session.user.email);
+  const focusOn = focus.ok && focus.data.enabled;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -37,6 +43,7 @@ export default async function Home({
       </header>
 
       <main className="mx-auto w-full flex-1 px-3 pt-4 pb-12 sm:w-[95%] sm:px-4">
+        {focusOn ? <FocusList /> : null}
         <ProjectsView
           viewerEmail={session.user.email}
           members={whitelist()}

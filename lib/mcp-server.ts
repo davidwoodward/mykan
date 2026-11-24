@@ -7,7 +7,7 @@ import { matchesServiceKey } from "@/lib/service-auth";
 import { defaultMcpActorEmail, mcpActorEmail } from "@/lib/auth";
 import { runAsMcpActor } from "@/lib/mcp-actor-context";
 import { looksLikeMcpToken, verifyMcpToken } from "@/lib/mcp-tokens";
-import { listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
+import { displayProjects, listProjects, setProjectGithubAccount, type CoreResult } from "@/lib/projects-core";
 import { listAreas, setAreaGithubRepo } from "@/lib/categories-core";
 import { projectUrl } from "@/lib/card-url";
 import { normAreaPath } from "@/lib/board-state";
@@ -16,6 +16,15 @@ import { formatEpicList } from "@/lib/epic-list";
 import { formatTagTable } from "@/lib/tag-table";
 import { moveEpicChild, setEpicOrder, type EpicReorderResult } from "@/lib/epic-reorder-core";
 import { refreshItemFromGithub, syncProjectWithGithub } from "@/lib/github-core";
+import {
+  addFocusEntry,
+  completeFocusEntry,
+  confirmFocusReview,
+  dropFocusEntry,
+  loadFocus,
+  setFocusOrder,
+} from "@/lib/focus-core";
+import { formatFocusText } from "@/lib/focus-rules";
 import {
   appendItemNote,
   createItem,
@@ -111,7 +120,79 @@ const WIDTH_NOTE =
 const fail = (error: string) => json({ error });
 const CAP = `${MCP_ENTRY_MAX_CHARS.toLocaleString("en-US")} characters`;
 
+// ── Focus list (KANBAN-79) ─────────────────────────────────────────────────
+// Every focus tool acts on the CALLER's own list (the token owner). None takes
+// another person's email; nobody can read or change someone else's list.
+function registerFocusTools(server: McpServer) {
+  const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
+  const after = async (r: CoreResult<unknown>, width?: number) => {
+    if (!r.ok) return text(r.error);
+    const v = await loadFocus(getSupabase(), actor());
+    if (!v.ok) return text(v.error);
+    if (!v.data.enabled) return text(v.data.message);
+    return text(formatFocusText({ ...v.data, max_entries: v.data.settings.max_entries }, new Date(), width));
+  };
+
+  server.tool(
+    "get_focus",
+    `Show YOUR focus list: your private, ranked list of the cards that matter most right now, across every project. Ready-to-print text: a header "Focus list (N of MAX)", then "Review due: <reasons>" when a review is due, then a table with columns #, Card, Status, Done (epic progress), Moved (age of the newest change on the card or its epic's cards; "!" marks an idle one), Note (title · why now). Print it exactly as returned. A review is due when an entry was finished since the last review, at the day's review hour, and (with those) when the list is short or a card is idle; when it says "Review due", show the user and ask them to re-prioritize or confirm (confirm_focus_review). If the focus list is off for the user, says so. ${WIDTH_NOTE} Read-only.`,
+    { width: tableWidth },
+    async (a) => {
+      const v = await loadFocus(getSupabase(), actor());
+      if (!v.ok) return text(v.error);
+      if (!v.data.enabled) return text(v.data.message);
+      return text(formatFocusText({ ...v.data, max_entries: v.data.settings.max_entries }, new Date(), a.width));
+    },
+  );
+
+  server.tool(
+    "add_focus",
+    "Add to YOUR focus list, only when the user asks. Pass `item` (an existing card's KEY-N ref or id, any project you can see) OR `text` (a one-line title: creates a new card in the user's private personal project and adds it). Optional `position` (1-based rank; default the bottom), `why_now` (one line, up to 200 chars), `target_date` (YYYY-MM-DD). Refused when the list is full (the hard cap: drop something first) or the card is already on it. Counts as a review. Returns the updated list as get_focus prints it.",
+    {
+      item: z.string().optional().describe("an existing card: KEY-N ref or id"),
+      text: z.string().optional().describe("quick-add: a one-line title for a new personal card"),
+      position: z.number().int().min(1).optional().describe("1-based rank to insert at; default the bottom"),
+      why_now: z.string().optional().describe("one line: why this, why now"),
+      target_date: z.string().optional().describe("YYYY-MM-DD"),
+      width: tableWidth,
+    },
+    async (a) => after(await addFocusEntry(getSupabase(), actor(), a), a.width),
+  );
+
+  server.tool(
+    "set_focus_order",
+    "Reorder YOUR focus list, only when the user asks. `entries` lists cards on the list (KEY-N refs) top first; any you leave out keep their order below the ones you list. Counts as a review. Returns the updated list.",
+    {
+      entries: z.array(z.string()).min(1).describe("cards on your list (KEY-N), top first"),
+      width: tableWidth,
+    },
+    async (a) => after(await setFocusOrder(getSupabase(), actor(), a.entries), a.width),
+  );
+
+  server.tool(
+    "drop_focus",
+    "Take a card off YOUR focus list, only when the user asks (the card itself is untouched). `item` is the card's KEY-N ref. Counts as a review. Returns the updated list.",
+    { item: z.string().describe("the card's KEY-N ref"), width: tableWidth },
+    async (a) => after(await dropFocusEntry(getSupabase(), actor(), a.item), a.width),
+  );
+
+  server.tool(
+    "complete_focus",
+    "Tick a card off YOUR focus list as finished, only when the user asks. The card's status is NOT changed (moving a card to done with update_item_status ticks it off automatically). `item` is the card's KEY-N ref. A finished entry raises a review. Returns the updated list.",
+    { item: z.string().describe("the card's KEY-N ref"), width: tableWidth },
+    async (a) => after(await completeFocusEntry(getSupabase(), actor(), a.item), a.width),
+  );
+
+  server.tool(
+    "confirm_focus_review",
+    "Confirm YOUR focus list as it stands, when the user has reviewed it and wants no changes. Clears \"Review due\" until the next trigger (a finished entry or the next day's review hour). Returns the list.",
+    { width: tableWidth },
+    async (a) => after(await confirmFocusReview(getSupabase(), actor()), a.width),
+  );
+}
+
 function registerTools(server: McpServer) {
+  registerFocusTools(server);
   server.tool(
     "list_projects",
     "List mykan projects visible to the agent (id, name, key, privacy). `key` is the current key; old keys from renames still work wherever a project or KEY-N ref is accepted. Each row's `url` is the project's board, e.g. https://kanban.dbwoodward.com/KANBAN.",
@@ -119,7 +200,8 @@ function registerTools(server: McpServer) {
     async () => {
       const r = await listProjects(getSupabase(), actor());
       if (!r.ok) return out(r);
-      return json(r.data.map((p) => ({ ...p, url: p.key ? projectUrl(p.key) : null })));
+      // Personal projects (KANBAN-75) are hidden; get_focus is how they show.
+      return json(displayProjects(r.data).map((p) => ({ ...p, url: p.key ? projectUrl(p.key) : null })));
     },
   );
 

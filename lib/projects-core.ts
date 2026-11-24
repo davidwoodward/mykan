@@ -164,3 +164,7 @@ export async function setProjectGithubAccount(
   // Re-resolve so the returned project carries the enriched github_account login.
   return resolveProject(sb, actor, proj.data.id);
 }
+
+
+// Personal projects are hidden from every project list (KANBAN-75).
+export { displayProjects } from "@/lib/focus-rules";

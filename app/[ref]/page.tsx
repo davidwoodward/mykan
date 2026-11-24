@@ -100,6 +100,9 @@ export default async function RootRefPage({ params, searchParams }: Props) {
   if (r.action === "redirect") permanentRedirect(withQuery(r.to, query));
   if (r.action !== "render") notFound();
   const { project, item } = r;
+  // A personal project (KANBAN-75) has no board: it is reached only through the
+  // focus list. Its cards keep their pages; its bare /KEY goes home.
+  if (project.is_personal && !item) redirect("/");
   const members = projectMembers(project);
 
   return (
