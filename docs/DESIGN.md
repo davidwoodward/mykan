@@ -869,7 +869,9 @@ except the switch. Turning it off keeps the list; turning it on restores it.
   full and to tick off or drop an entry first.
 - **Review banner** above the list when a review is due, naming the reasons ("PS-12 done ·
   2 entries left", "daily review", "AMOS-3 idle 9d") with **Confirm as is**. Any change to
-  the list also counts as a review; ticking off does not (it raises one).
+  the list also counts as a review; ticking off does not (it raises one). The daily review
+  is skipped when a card on the list (or an epic's card) has moved since the review hour:
+  working the list counts as reviewing it.
 - **Recently finished** (done or dropped) sits behind a small toggle under the list.
 - **Settings** (shown only while on): maximum entries (hard cap), "review when down to",
   idle after N days, daily review hour. The browser's time zone is saved with each change.

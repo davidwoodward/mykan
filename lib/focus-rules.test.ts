@@ -152,6 +152,36 @@ test("review: the daily window brings back short and stale", () => {
   assert.equal(describeReason(r[2]), "A-1 idle 14d");
 });
 
+test("review: working a listed card since today's window opened counts as the daily review", () => {
+  const r = reviewReasons({
+    settings: settings("2026-11-23T20:00:00Z"),
+    active: [entry("A-1"), entry("B-1", { last_moved_at: "2026-11-24T16:30:00Z" }), entry("C-1")],
+    history: [],
+    now: NOW,
+  });
+  assert.deepEqual(r, []);
+});
+
+test("review: card work before today's window doesn't count", () => {
+  const r = reviewReasons({
+    settings: settings("2026-11-23T20:00:00Z"),
+    active: [entry("A-1", { last_moved_at: "2026-11-24T15:30:00Z" }), entry("B-1"), entry("C-1")],
+    history: [],
+    now: NOW,
+  });
+  assert.deepEqual(r, [{ kind: "daily" }]);
+});
+
+test("review: card work doesn't clear a completion", () => {
+  const r = reviewReasons({
+    settings: settings("2026-11-24T16:30:00Z"),
+    active: [entry("A-1", { last_moved_at: "2026-11-24T16:50:00Z" }), entry("B-1"), entry("C-1")],
+    history: [{ ref: "PS-9", title: "Mac mini", label: null, completed_at: "2026-11-24T16:45:00Z" }],
+    now: NOW,
+  });
+  assert.deepEqual(r, [{ kind: "completed", ref: "PS-9", title: "Mac mini" }]);
+});
+
 test("personal project keys start at ME", () => {
   const k = personalKeyCandidates();
   assert.equal(k[0], "ME");

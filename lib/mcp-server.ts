@@ -136,7 +136,7 @@ function registerFocusTools(server: McpServer) {
 
   server.tool(
     "get_focus",
-    `Show YOUR focus list: your private, ranked list of the cards that matter most right now, across every project. Ready-to-print text: a header "Focus list (N of MAX)", then "Review due: <reasons>" when a review is due, then a table with columns #, Card, Status, Done (epic progress), Moved (age of the newest change on the card or its epic's cards; "!" marks an idle one), Note (title · why now). Print it exactly as returned. A review is due when an entry was finished since the last review, at the day's review hour, and (with those) when the list is short or a card is idle; when it says "Review due", show the user and ask them to re-prioritize or confirm (confirm_focus_review). If the focus list is off for the user, says so. ${WIDTH_NOTE} Read-only.`,
+    `Show YOUR focus list: your private, ranked list of the cards that matter most right now, across every project. Ready-to-print text: a header "Focus list (N of MAX)", then "Review due: <reasons>" when a review is due, then a table with columns #, Card, Status, Done (epic progress), Moved (age of the newest change on the card or its epic's cards; "!" marks an idle one), Note (title · why now). Print it exactly as returned. A review is due when an entry was finished since the last review, at the day's review hour unless a card on the list has moved since then, and (with those) when the list is short or a card is idle; when it says "Review due", show the user and ask them to re-prioritize or confirm (confirm_focus_review). If the focus list is off for the user, says so. ${WIDTH_NOTE} Read-only.`,
     { width: tableWidth },
     async (a) => {
       const v = await loadFocus(getSupabase(), actor());
