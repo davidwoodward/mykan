@@ -534,7 +534,7 @@ function AddBox({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Add a card from any project, or type something new…"
+          placeholder="Add a card, or type something new…"
           aria-label="Add to your focus list"
           role="combobox"
           aria-expanded={open}
