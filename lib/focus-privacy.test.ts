@@ -98,3 +98,13 @@ test("a personal project can't be shared", () => {
   const header = readFileSync(join(ROOT, "components", "ProjectHeader.tsx"), "utf8");
   assert.match(header, /!project\.is_personal/);
 });
+
+test("the top-bar focus peek renders only for someone whose list is on", () => {
+  for (const page of ["app/page.tsx", "app/[ref]/page.tsx"]) {
+    const src = readFileSync(page, "utf8");
+    const uses = src.match(/<FocusPeek\b[^>]*\/>/g) ?? [];
+    assert.equal(uses.length, 1, `${page} mounts FocusPeek once`);
+    assert.match(src, /\{focusOn \? <FocusPeek \/> : null\}/, `${page} gates FocusPeek on focusOn`);
+    assert.match(src, /focusOn = [^;]*\.data\.enabled/, `${page} decides focusOn from the viewer's own settings`);
+  }
+});

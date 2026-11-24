@@ -893,3 +893,17 @@ except the switch. Turning it off keeps the list; turning it on restores it.
   list is on and never in the archived view. Outline adds the card; filled means it's
   already on the list and opens Home. Always visible (not hover-only), so it reads at a
   glance which cards are on your list.
+- **Top-bar peek (KANBAN-84):** a target in the top bar of Home, boards and card pages, first
+  among the right-hand controls, only for someone whose list is on (decided server-side).
+  Its badge is the entry count; an accent dot means a review is due. Hover (mouse/pen, after
+  the 150ms tooltip delay) or keyboard focus shows the list read-only in its compact form,
+  with "N of MAX" and the review line; the popover is its tooltip, so the button has no
+  `title`. Click, Enter/Space or a tap opens the full list in an overlay (a portal on
+  `<body>`, `aria-modal`) over the current page: no navigation, so URL, filters and scroll
+  stay put. Esc (once nothing inside has claimed it), the × or a press outside closes it,
+  and focus returns to the target. Page shortcuts ignore keys typed inside any
+  `[aria-modal='true']`.
+- **Every view stays in step:** any change to the list fires `mykan:focus-changed`
+  (`lib/focus-events.ts`); Home's list, the overlay, the peek badge, row targets and the card
+  target refetch on it. In the add box, Esc closes the menu, then clears the text, and only
+  then falls through (so it can close the overlay).

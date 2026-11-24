@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { announceFocusChange, onFocusChange } from "@/lib/focus-events";
 import Link from "next/link";
 
 /**
@@ -11,10 +12,34 @@ import Link from "next/link";
  * without touching the card. Once on the list it becomes a filled icon that
  * opens Home, where the list is.
  */
-export function FocusPushButton({ cardRef, initialOnList }: { cardRef: string; initialOnList: boolean }) {
+export function FocusPushButton({
+  cardRef,
+  itemId,
+  initialOnList,
+}: {
+  cardRef: string;
+  itemId: string;
+  initialOnList: boolean;
+}) {
   const [onList, setOnList] = useState(initialOnList);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const source = useId();
+
+  // The top-bar overlay (KANBAN-84) can add or drop this card without leaving
+  // the page; follow it.
+  useEffect(
+    () =>
+      onFocusChange(source, () => {
+        fetch("/api/focus/ids")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d: { item_ids?: string[] } | null) => {
+            if (d) setOnList((d.item_ids ?? []).includes(itemId));
+          })
+          .catch(() => {});
+      }),
+    [source, itemId],
+  );
 
   const cls =
     "grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-[var(--color-accent-soft)]";
@@ -44,6 +69,7 @@ export function FocusPushButton({ cardRef, initialOnList }: { cardRef: string; i
       const d = await res.json().catch(() => ({}));
       if (res.ok || res.status === 409 && /already on your focus list/.test((d as { error?: string }).error ?? "")) {
         setOnList(true);
+        announceFocusChange(source);
       } else {
         setError((d as { error?: string }).error ?? `HTTP ${res.status}`);
       }

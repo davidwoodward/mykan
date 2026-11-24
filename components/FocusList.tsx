@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -31,6 +31,7 @@ import {
   type FocusSettings,
   type ReviewReason,
 } from "@/lib/focus-rules";
+import { announceFocusChange, onFocusChange } from "@/lib/focus-events";
 
 /**
  * The focus list on the home page (KANBAN-76/77/78): the signed-in person's own
@@ -68,7 +69,10 @@ async function call(url: string, init?: RequestInit): Promise<unknown> {
   return data;
 }
 
-export function FocusList() {
+export function FocusList({ className = "mb-8" }: { className?: string } = {}) {
+  // Unique per mount: Home and the top-bar overlay (KANBAN-84) can both show it.
+  const uid = useId();
+  const headingId = `${uid}-heading`;
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,6 +104,9 @@ export function FocusList() {
     };
   }, [apply]);
 
+  // Another view (the overlay, Home, a row or card target) changed the list.
+  useEffect(() => onFocusChange(uid, () => void load()), [uid, load]);
+
   const act = useCallback(
     async (fn: () => Promise<unknown>) => {
       setBusy(true);
@@ -111,9 +118,10 @@ export function FocusList() {
       } finally {
         await load();
         setBusy(false);
+        announceFocusChange(uid);
       }
     },
-    [load],
+    [load, uid],
   );
 
   const sensors = useSensors(
@@ -146,9 +154,9 @@ export function FocusList() {
   const full = capError(entries.length, settings.max_entries);
 
   return (
-    <section aria-labelledby="focus-heading" className="mb-8">
+    <section aria-labelledby={headingId} className={className}>
       <div className="mb-2 flex items-baseline gap-2">
-        <h2 id="focus-heading" className="text-sm font-medium text-[var(--color-muted)]">
+        <h2 id={headingId} className="text-sm font-medium text-[var(--color-muted)]">
           Focus
         </h2>
         <span className="text-[11px] text-[var(--color-faint)]" title="Entries on your list, and your maximum">
@@ -357,7 +365,7 @@ function FocusRow({
         <span className="w-4 shrink-0" aria-hidden="true" />
       )}
       <span className="mt-0.5 w-5 shrink-0 text-right text-sm font-semibold tabular-nums text-[var(--color-accent)]">{rank}</span>
-      <TypeLetter e={e} />
+      <TypeLetter e={e} className="mt-[5px]" />
 
       <div className="min-w-0 flex-1">
         {e.visible && editing ? (
@@ -563,9 +571,15 @@ function AddBox({
       ev.preventDefault();
       void choose(options[hiClamped]);
     } else if (ev.key === "Escape") {
-      ev.preventDefault();
-      if (open) setOpen(false);
-      else setQ("");
+      // Close, then clear; an Esc with nothing left to undo is left alone so
+      // the top-bar overlay (KANBAN-84) can close on it.
+      if (open) {
+        ev.preventDefault();
+        setOpen(false);
+      } else if (q) {
+        ev.preventDefault();
+        setQ("");
+      }
     } else if (ev.key === "Tab") {
       setOpen(false);
     }
@@ -661,12 +675,18 @@ function AddBox({
  * The type column of a compact focus row (KANBAN-85): one letter, fixed width
  * so refs line up. Blank (but still taking its width) for a personal entry.
  */
-export function TypeLetter({ e }: { e: Pick<FocusEntryView, "type" | "personal" | "visible"> }) {
+export function TypeLetter({
+  e,
+  className = "",
+}: {
+  e: Pick<FocusEntryView, "type" | "personal" | "visible">;
+  className?: string;
+}) {
   const letter = typeLetter(e);
   const name = letter ? (TYPE_LABEL[e.type as ItemType] ?? e.type ?? "") : "";
   return (
     <span
-      className="mt-0.5 w-3 shrink-0 text-center font-mono text-[11px] font-semibold text-[var(--color-muted)]"
+      className={`w-3 shrink-0 text-center font-mono text-[11px] font-semibold text-[var(--color-muted)] ${className}`}
       title={name || undefined}
       aria-label={name || undefined}
     >

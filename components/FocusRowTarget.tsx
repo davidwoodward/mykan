@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
+import { announceFocusChange, onFocusChange } from "@/lib/focus-events";
 import { itemRef } from "@/lib/format";
 import { useProjectKey } from "@/components/RefBadge";
 import { TargetIcon } from "@/components/FocusPushButton";
@@ -18,18 +19,27 @@ const FocusRowContext = createContext<Ctx | null>(null);
 
 export function FocusRowProvider({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
   const [onList, setOnList] = useState<Set<string>>(() => new Set());
+  const source = useId();
 
+  // Load once, and again whenever the list changes elsewhere on the page (the
+  // top-bar overlay, KANBAN-84), so a dropped or added card's target follows.
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    fetch("/api/focus/ids")
-      .then((r) => (r.ok ? r.json() : { item_ids: [] }))
-      .then((d: { item_ids?: string[] }) => !cancelled && setOnList(new Set(d.item_ids ?? [])))
-      .catch(() => {});
+    const load = () =>
+      fetch("/api/focus/ids")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { item_ids?: string[] } | null) => {
+          if (!cancelled && d) setOnList(new Set(d.item_ids ?? []));
+        })
+        .catch(() => {});
+    void load();
+    const off = onFocusChange(source, () => void load());
     return () => {
       cancelled = true;
+      off();
     };
-  }, [enabled]);
+  }, [enabled, source]);
 
   const add = useCallback(async (itemId: string, ref: string): Promise<string | null> => {
     const res = await fetch("/api/focus", {
@@ -40,10 +50,11 @@ export function FocusRowProvider({ enabled, children }: { enabled: boolean; chil
     const d = (await res.json().catch(() => ({}))) as { error?: string };
     if (res.ok || /already on your focus list/.test(d.error ?? "")) {
       setOnList((s) => new Set(s).add(itemId));
+      announceFocusChange(source);
       return null;
     }
     return d.error ?? `HTTP ${res.status}`;
-  }, []);
+  }, [source]);
 
   const value = useMemo(() => (enabled ? { onList, add } : null), [enabled, onList, add]);
   return <FocusRowContext.Provider value={value}>{children}</FocusRowContext.Provider>;

@@ -640,7 +640,7 @@ function CardEditor({
           {item.archived_at ? " · archived" : ""}
         </span>
         <GithubSyncBadge item={item} onItemChange={takeItemChange} />
-        {focusState ? <FocusPushButton cardRef={ref} initialOnList={focusState.onList} /> : null}
+        {focusState ? <FocusPushButton cardRef={ref} itemId={item.id} initialOnList={focusState.onList} /> : null}
         <span className="ml-auto flex min-w-0 items-center gap-2 text-xs text-[var(--color-faint)]">
           <DraftIndicator status={draft.status} error={draft.error} dirty={draft.dirty} />
           <span data-keep-draft className="inline-flex items-center gap-1">

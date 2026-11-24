@@ -7,6 +7,7 @@ import { GithubConnect } from "@/components/GithubConnect";
 import { McpTokenSettings } from "@/components/McpTokenSettings";
 import { Brand } from "@/components/Brand";
 import { FocusList } from "@/components/FocusList";
+import { FocusPeek } from "@/components/FocusPeek";
 import { getSupabase } from "@/lib/supabase-server";
 import { getFocusSettings } from "@/lib/focus-core";
 
@@ -30,6 +31,7 @@ export default async function Home({
         <div className="mx-auto flex w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <Brand />
           <div className="flex items-center gap-3">
+            {focusOn ? <FocusPeek /> : null}
             <GithubConnect />
             <McpTokenSettings />
             <ThemeToggle />
