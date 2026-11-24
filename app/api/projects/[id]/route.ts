@@ -69,6 +69,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (access.project.created_by !== gate.email) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    // The hidden personal project behind the focus list stays private (KANBAN-75).
+    if ((access.project as { is_personal?: boolean }).is_personal && (body.sharedWith as unknown[]).length > 0) {
+      return NextResponse.json({ error: "Your personal project stays private" }, { status: 400 });
+    }
     const members = normalizeAssignees(
       body.sharedWith as string[],
       whitelist(),
