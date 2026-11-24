@@ -5,14 +5,15 @@ import { bodyOf, respond } from "../../http";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** { complete: true } ticks the entry off; otherwise edits why_now / target_date. */
+/** { complete: true } ticks the entry off; otherwise edits label / why_now / target_date. */
 export async function PATCH(req: Request, { params }: Ctx) {
   const gate = await requireSession();
   if ("error" in gate) return gate.error;
   const { id } = await params;
   const b = await bodyOf(req);
   if (b.complete === true) return respond(await completeFocusEntry(getSupabase(), gate.email, id));
-  const patch: { why_now?: unknown; target_date?: unknown } = {};
+  const patch: { label?: unknown; why_now?: unknown; target_date?: unknown } = {};
+  if ("label" in b) patch.label = b.label;
   if ("why_now" in b) patch.why_now = b.why_now;
   if ("target_date" in b) patch.target_date = b.target_date;
   return respond(await updateFocusEntry(getSupabase(), gate.email, id, patch));

@@ -30,6 +30,12 @@ export type FocusEntryView = {
   id: string;
   item_id: string;
   position: number;
+  /**
+   * The entry's own title on the focus list (KANBAN-82): seeded from the card's
+   * title when pushed, rewritable without touching the card. Null → the card's
+   * current title. Show `entryTitle(e)`.
+   */
+  label: string | null;
   why_now: string | null;
   target_date: string | null;
   added_at: string;
@@ -51,6 +57,11 @@ export type FocusEntryView = {
   stale: boolean;
 };
 
+/** What the list shows for an entry: its own title, else the card's. */
+export function entryTitle(e: Pick<FocusEntryView, "label" | "title">): string | null {
+  return e.label ?? e.title;
+}
+
 /** A finished or dropped entry, for history and for "completed" reasons. */
 export type FocusHistoryEntry = {
   id: string;
@@ -58,6 +69,7 @@ export type FocusHistoryEntry = {
   ref: string | null;
   url: string | null;
   title: string | null;
+  label: string | null;
   added_at: string;
   completed_at: string | null;
   removed_at: string | null;
@@ -229,8 +241,8 @@ export function newest(times: readonly (string | null | undefined)[]): string | 
  */
 export function reviewReasons(input: {
   settings: Pick<FocusSettings, "min_entries" | "review_hour" | "time_zone" | "last_reviewed_at">;
-  active: readonly Pick<FocusEntryView, "ref" | "title" | "stale" | "last_moved_at">[];
-  history: readonly Pick<FocusHistoryEntry, "ref" | "title" | "completed_at">[];
+  active: readonly Pick<FocusEntryView, "ref" | "title" | "label" | "stale" | "last_moved_at">[];
+  history: readonly Pick<FocusHistoryEntry, "ref" | "title" | "label" | "completed_at">[];
   now: Date;
 }): ReviewReason[] {
   const { settings, active, history, now } = input;
@@ -239,7 +251,7 @@ export function reviewReasons(input: {
 
   const reasons: ReviewReason[] = [];
   for (const h of history) {
-    if (after(h.completed_at)) reasons.push({ kind: "completed", ref: h.ref, title: h.title });
+    if (after(h.completed_at)) reasons.push({ kind: "completed", ref: h.ref, title: entryTitle(h) });
   }
   const windowStart = dailyWindowStart(now, settings.review_hour, settings.time_zone).getTime();
   const daily = last === null || last < windowStart;
@@ -249,7 +261,7 @@ export function reviewReasons(input: {
   }
   if (daily) {
     for (const e of active) {
-      if (e.stale) reasons.push({ kind: "stale", ref: e.ref, title: e.title, days: daysSince(e.last_moved_at, now) });
+      if (e.stale) reasons.push({ kind: "stale", ref: e.ref, title: entryTitle(e), days: daysSince(e.last_moved_at, now) });
     }
   }
   return reasons;
@@ -329,7 +341,7 @@ export function formatFocusText(
   const headers = ["#", "Card", "Status", "Done", "Moved", "Note"];
   const rows = view.entries.map((e, i) => {
     if (!e.visible) return [String(i + 1), "(no access)", "-", "-", "-", "You can no longer see this card"];
-    const note = [e.title ?? "", e.why_now ? `· ${e.why_now}` : ""].filter(Boolean).join(" ");
+    const note = [entryTitle(e) ?? "", e.why_now ? `· ${e.why_now}` : ""].filter(Boolean).join(" ");
     return [
       String(i + 1),
       e.ref ?? "-",

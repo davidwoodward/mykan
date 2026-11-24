@@ -20,6 +20,8 @@ import {
   type RootSegment,
 } from "@/lib/card-url";
 import { richDocTitle, type Item, type Project } from "@/lib/types";
+import { getSupabase } from "@/lib/supabase-server";
+import { focusStateForItem } from "@/lib/focus-core";
 
 // The root segment is a project key (/FPOON, the board) or a card ref
 // (/FPOON-42, the card page), KANBAN-44. Static top-level routes (api, mcp,
@@ -104,6 +106,9 @@ export default async function RootRefPage({ params, searchParams }: Props) {
   // focus list. Its cards keep their pages; its bare /KEY goes home.
   if (project.is_personal && !item) redirect("/");
   const members = projectMembers(project);
+  // The viewer's own focus state for this card (KANBAN-82); null when their
+  // focus list is off, so nothing focus-related renders for them.
+  const focus = item ? await focusStateForItem(getSupabase(), email, item.id) : null;
 
   return (
     // Desktop (≥lg): the viewport is locked to one screen with the header
@@ -143,6 +148,7 @@ export default async function RootRefPage({ params, searchParams }: Props) {
             projectId={project.id}
             projectKey={project.key}
             initialItem={item}
+            focusState={focus}
           />
         ) : (
           <ProjectDetailView

@@ -782,3 +782,8 @@ drop trigger if exists focus_entries_complete_on_done on mykan.items;
 create trigger focus_entries_complete_on_done
   after update of status on mykan.items
   for each row execute function mykan.focus_entries_complete_on_done();
+
+alter table mykan.focus_entries add column if not exists label text;
+alter table mykan.focus_entries drop constraint if exists focus_entries_label_len;
+alter table mykan.focus_entries add constraint focus_entries_label_len check (label is null or length(label) between 1 and 200);
+-- Migration: supabase/migrations/2026-11-24-2-focus-entry-label.sql (KANBAN-82)

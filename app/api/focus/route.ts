@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       item: typeof b.item === "string" ? b.item : undefined,
       text: typeof b.text === "string" ? b.text : undefined,
       position: typeof b.position === "number" ? b.position : undefined,
+      label: b.label as string | null | undefined,
       why_now: b.why_now as string | null | undefined,
       target_date: b.target_date as string | null | undefined,
     }),

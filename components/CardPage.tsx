@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RichTextEditor, type EditorRead } from "@/components/RichTextEditor";
 import { AbandonButton } from "@/components/AbandonButton";
+import { FocusPushButton } from "@/components/FocusPushButton";
 import { useAbandonable, type PendingRestore } from "@/components/useAbandonable";
 import { TagEditor, type TagEditorHandle } from "@/components/TagEditor";
 import { Attachments } from "@/components/Attachments";
@@ -88,10 +89,13 @@ export function CardPage({
   projectId,
   projectKey,
   initialItem,
+  focusState = null,
 }: {
   projectId: string;
   projectKey: string;
   initialItem: Item;
+  /** The viewer's focus state for this card; null when their list is off (KANBAN-82). */
+  focusState?: { onList: boolean } | null;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<Item[] | null>(null);
@@ -282,6 +286,7 @@ export function CardPage({
               onSaved={applyItem}
               onItemChange={applyItem}
               onRemount={() => setEpoch((n) => n + 1)}
+              focusState={focusState}
             />
             <CardSections
               item={item}
@@ -329,7 +334,9 @@ function CardEditor({
   onSaved,
   onItemChange,
   onRemount,
+  focusState,
 }: {
+  focusState: { onList: boolean } | null;
   item: Item;
   projectKey: string;
   allTags: string[];
@@ -633,6 +640,7 @@ function CardEditor({
           {item.archived_at ? " · archived" : ""}
         </span>
         <GithubSyncBadge item={item} onItemChange={takeItemChange} />
+        {focusState ? <FocusPushButton cardRef={ref} initialOnList={focusState.onList} /> : null}
         <span className="ml-auto flex min-w-0 items-center gap-2 text-xs text-[var(--color-faint)]">
           <DraftIndicator status={draft.status} error={draft.error} dirty={draft.dirty} />
           <span data-keep-draft className="inline-flex items-center gap-1">

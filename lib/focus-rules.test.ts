@@ -83,6 +83,7 @@ const entry = (ref: string, over: Partial<FocusEntryView> = {}): FocusEntryView 
   id: ref,
   item_id: ref,
   position: 1024,
+  label: null,
   why_now: null,
   target_date: null,
   added_at: "2026-11-01T00:00:00Z",
@@ -124,8 +125,8 @@ test("review: a completion after the last review raises it, with short when at t
     settings: settings("2026-11-24T16:30:00Z"),
     active: [entry("A-1"), entry("B-1")],
     history: [
-      { ref: "PS-9", title: "Mac mini", completed_at: "2026-11-24T16:45:00Z" },
-      { ref: "PS-1", title: "old", completed_at: "2026-11-20T00:00:00Z" },
+      { ref: "PS-9", title: "Mac mini", label: null, completed_at: "2026-11-24T16:45:00Z" },
+      { ref: "PS-1", title: "old", label: null, completed_at: "2026-11-20T00:00:00Z" },
     ],
     now: NOW,
   });
@@ -181,6 +182,20 @@ test("text: header, review line, table, width", () => {
   assert.match(lines[6], /AMOS-3.*!14d/);
   assert.match(lines[7], /\(no access\)/);
   assert.ok(lines.every((l) => Array.from(l).length <= 60), "no line wider than 60");
+});
+
+test("an entry's own title wins over the card's, everywhere", () => {
+  const e = entry("PS-147", { title: "Card title on the board", label: "Get Kenyon unblocked" });
+  const text = formatFocusText({ entries: [e], max_entries: 7, reasons: [] }, NOW);
+  assert.match(text, /PS-147.*Get Kenyon unblocked/);
+  assert.doesNotMatch(text, /Card title on the board/);
+  const r = reviewReasons({
+    settings: settings("2026-11-24T16:30:00Z"),
+    active: [entry("A-1"), entry("B-1"), entry("C-1")],
+    history: [{ ref: "PS-9", title: "Card title", label: "My words", completed_at: "2026-11-24T16:45:00Z" }],
+    now: NOW,
+  });
+  assert.deepEqual(r, [{ kind: "completed", ref: "PS-9", title: "My words" }]);
 });
 
 test("text: an empty list says so", () => {
