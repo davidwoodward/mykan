@@ -870,7 +870,7 @@ except the switch. Turning it off keeps the list; turning it on restores it.
   decision (the page reads the setting), so there's no flash of the list for someone who
   has it off.
 - **Rows (compact, KANBAN-85):** grip · rank · type letter (F feature, E epic, T task, B bug,
-  I thought; blank for a personal card, tooltip names the type) · ref + title on ONE line,
+  I thought; blank for a personal card; tooltip names the type, and for an epic its open/total cards, e.g. "Epic · 9/12 open") · ref + title on ONE line,
   the title truncating with "…" (links to the card page) · a quiet meta line (a
   "Personal" chip, status — never on a personal card, since nothing in the app can change
   it; the ✓ is how those finish (KANBAN-86) — epic `N/M done`, open questions, "moved 3d",

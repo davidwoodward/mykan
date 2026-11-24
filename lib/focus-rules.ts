@@ -74,6 +74,19 @@ export function typeLetter(e: Pick<FocusEntryView, "type" | "personal" | "visibl
   return TYPE_LETTER[e.type] ?? "";
 }
 
+const TYPE_NAME: Record<string, string> = { feature: "Feature", epic: "Epic", task: "Task", bug: "Bug", idea: "Thought" };
+
+/**
+ * The type letter's tooltip: the type's name, and for an epic its open cards
+ * over all its cards ("Epic · 9/12 open"). Empty when the letter is blank.
+ */
+export function typeTip(e: Pick<FocusEntryView, "type" | "personal" | "visible" | "progress">): string {
+  if (!typeLetter(e)) return "";
+  const name = TYPE_NAME[e.type ?? ""] ?? e.type ?? "";
+  if (e.type === "epic" && e.progress) return `${name} · ${e.progress.total - e.progress.done}/${e.progress.total} open`;
+  return name;
+}
+
 /**
  * The status a focus row shows, or null for none (KANBAN-86): a personal
  * entry shows no status, because nothing in the app can change it; the tick
