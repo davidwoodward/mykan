@@ -134,7 +134,7 @@ export function GithubConnect({ onSheetClose }: { onSheetClose?: () => void } = 
 
   const panel = (
     <>
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className={`mb-2 flex items-center justify-between gap-2 ${onSheetClose ? "pr-9" : ""}`}>
             <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
               GitHub connections
             </span>
@@ -265,7 +265,7 @@ export function GithubConnect({ onSheetClose }: { onSheetClose?: () => void } = 
   // panel, in a sheet, with no top-bar trigger.
   if (onSheetClose) {
     return (
-      <MenuSheet label="GitHub connections" panelRef={wrapRef}>
+      <MenuSheet label="GitHub connections" panelRef={wrapRef} onClose={onSheetClose}>
         {panel}
       </MenuSheet>
     );
