@@ -99,8 +99,8 @@ KANBAN-85 and 86 are done (PR #191). KANBAN-84 shipped in the PR after it: `comp
 board's shortcuts ignore keys inside `[aria-modal='true']`. Both open questions are answered:
 86 = hide status on ME entries; 88 = phones only.
 
-At 400px the top bar is now full enough that the project name truncates away. KANBAN-87, then
-88, fix that; do them next.
+KANBAN-87 (PR #193, #194) and KANBAN-88 shipped: the phone top bar is decongested. The epic's
+build order is complete; what's left is David's testing.
 
 1. **KANBAN-87: mobile top bar.**
    - On the `compact:` layout, GitHub connect, MCP tokens and the theme toggle move into the

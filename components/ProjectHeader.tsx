@@ -306,10 +306,23 @@ export function ProjectHeader({
     <div ref={wrapRef} className="relative flex min-w-0 items-center gap-1.5">
       <div className="flex min-w-0 items-baseline gap-2">
         <h1
-          className="truncate text-base font-semibold tracking-tight"
+          className="truncate text-base font-semibold tracking-tight compact:hidden"
           title={project.description ?? ""}
         >
           {project.name}
+        </h1>
+        {/* Touch layout (KANBAN-88): the name itself opens the editor; no pencil. */}
+        <h1 className="hidden min-w-0 text-base font-semibold tracking-tight compact:block">
+          <button
+            type="button"
+            onClick={() => (editing ? void commit() : open())}
+            aria-label={`Edit project ${project.name}`}
+            title="Edit project"
+            aria-expanded={editing}
+            className={`block max-w-full truncate text-left ${editing ? "text-[var(--color-accent-ink)]" : ""}`}
+          >
+            {project.name}
+          </button>
         </h1>
         <Byline
           createdBy={project.created_by}
@@ -325,7 +338,7 @@ export function ProjectHeader({
         aria-label="Edit project"
         title="Edit project"
         aria-expanded={editing}
-        className={`grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)] ${
+        className={`grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)] compact:hidden ${
           editing ? "text-[var(--color-accent-ink)]" : "text-[var(--color-faint)]"
         }`}
       >
@@ -345,7 +358,12 @@ export function ProjectHeader({
       </button>
 
       {editing ? (
-        <div className="absolute left-0 top-full z-30 mt-2 w-[min(90vw,24rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-lg">
+        <div
+          // Touch layout (KANBAN-88): the name that opens this sits mid-bar, so
+          // anchoring here ran off the right edge; pin it across the screen
+          // under the bar instead, on the raised shade so it reads as a layer.
+          className="absolute left-0 top-full z-30 mt-2 w-[min(90vw,24rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-lg compact:fixed compact:inset-x-3 compact:top-[calc(env(safe-area-inset-top,0px)+var(--app-header-h)+0.25rem)] compact:mt-0 compact:w-auto compact:max-h-[calc(100dvh-var(--app-header-h)-1rem)] compact:overflow-y-auto compact:border-[var(--color-line-strong)] compact:bg-[var(--color-raised)] compact:shadow-2xl compact:[&_input]:bg-[var(--color-canvas)] compact:[&_select]:bg-[var(--color-canvas)] compact:[&_textarea]:bg-[var(--color-canvas)]"
+        >
           {/* Header mirrors the card page: title left, abandon top-right.
               Nothing saves until commit, so abandoning just drops the drafts. */}
           <div className="-mt-1 mb-2 flex items-center justify-between gap-2">

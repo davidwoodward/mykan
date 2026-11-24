@@ -160,6 +160,12 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   surface in both themes) with a `line-strong` border, so they never blend into the page;
   inputs inside sit on canvas. The theme row flips
   in place and leaves the menu open. A mouse desktop keeps the three icons in the bar.
+- **Touch top bar, left side (KANBAN-88, 2026-11-24).** On project and card pages on the
+  `compact:` layout the brand is the icon only (Home keeps the word), the `<` still opens the
+  project picker, and there is no pencil: the project name itself is the button that opens the
+  project editor (`aria-label` "Edit project <name>"). The editor then spans the screen under
+  the bar (fixed, `inset-x-3`) on the raised shade, since anchoring it at the name ran off the
+  right edge. A mouse desktop keeps the word, the plain title and the pencil.
 - **Alignment rule (this bit twice):** keep icon affordances (back arrow, brand mark) in the
   `items-center` row; reserve baseline alignment for the *text* cluster (title + byline) only.
   Don't put an icon inside a baseline-aligned cluster — it ends up vertically off.
