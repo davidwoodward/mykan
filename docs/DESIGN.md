@@ -149,6 +149,14 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   arrow *beside the project name* (not left of the wordmark), the project title, and the
   byline (creator · age); the description is the title's hover tooltip. Account controls
   (email, theme toggle, sign out) sit on the right.
+- **Touch top bar (KANBAN-87, 2026-11-24).** On the `compact:` layout the right side is only
+  the focus target (when the list is on) and the avatar. GitHub connections, MCP access tokens
+  and the light/dark toggle become the first rows under **Settings** in the profile menu
+  (44px rows, icon + label, above "Keyboard-forward navigation"). GitHub and MCP close the menu
+  and open their usual panel as a centred sheet (`MenuSheet`, a portal on `<body>`) whose
+  overlay tracks `visualViewport`, so the on-screen keyboard shrinks it rather than covering the
+  field; Esc or a press outside closes it and focus returns to the avatar. The theme row flips
+  in place and leaves the menu open. A mouse desktop keeps the three icons in the bar.
 - **Alignment rule (this bit twice):** keep icon affordances (back arrow, brand mark) in the
   `items-center` row; reserve baseline alignment for the *text* cluster (title + byline) only.
   Don't put an icon inside a baseline-aligned cluster — it ends up vertically off.

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { GithubConnection } from "@/lib/types";
 import { GithubHelpButton } from "@/components/GithubHelp";
 import { GITHUB_NEW_TOKEN_PREFILLED_URL } from "@/lib/github-help";
+import { MenuSheet } from "@/components/MenuSheet";
 
 /**
  * "Connect GitHub Account" control for the top bar (KANBAN-21 / GH-2). A GitHub
@@ -16,8 +17,8 @@ import { GITHUB_NEW_TOKEN_PREFILLED_URL } from "@/lib/github-help";
  * their own credential. An `invalid` status (set when GitHub later rejects the
  * token) surfaces a "Reconnect" prompt for that user alone.
  */
-export function GithubConnect() {
-  const [open, setOpen] = useState(false);
+export function GithubConnect({ onSheetClose }: { onSheetClose?: () => void } = {}) {
+  const [open, setOpen] = useState(!!onSheetClose);
   const [connections, setConnections] = useState<GithubConnection[] | null>(null);
   const [configured, setConfigured] = useState(true);
   const [login, setLogin] = useState("");
@@ -53,13 +54,18 @@ export function GithubConnect() {
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) dismiss();
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault(); // handled: nothing underneath (the card page) also acts
-        setOpen(false);
+        dismiss();
       }
+    }
+    // A sheet is closed by its owner (it unmounts); the top-bar panel by itself.
+    function dismiss() {
+      if (onSheetClose) onSheetClose();
+      else setOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -67,7 +73,7 @@ export function GithubConnect() {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, onSheetClose]);
 
   const hasInvalid = (connections ?? []).some((c) => c.status === "invalid");
 
@@ -126,37 +132,8 @@ export function GithubConnect() {
     patRef.current?.focus();
   }
 
-  return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Connect GitHub account"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title="Connect GitHub account"
-        className="relative grid h-8 w-8 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
-      >
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.67 0-1.25.45-2.27 1.19-3.07-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.17a11.1 11.1 0 0 1 5.79 0c2.2-1.48 3.17-1.17 3.17-1.17.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.07 0 4.4-2.69 5.37-5.25 5.66.41.35.78 1.05.78 2.12 0 1.53-.01 2.77-.01 3.15 0 .31.21.68.8.56A10.52 10.52 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"
-          />
-        </svg>
-        {hasInvalid ? (
-          <span
-            aria-hidden="true"
-            className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-bug)] ring-2 ring-[var(--color-canvas)]"
-          />
-        ) : null}
-      </button>
-
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="GitHub connections"
-          className="absolute right-0 top-full z-30 mt-2 w-[min(92vw,24rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-lg"
-        >
+  const panel = (
+    <>
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-faint)]">
               GitHub connections
@@ -281,8 +258,60 @@ export function GithubConnect() {
               </button>
             </div>
           )}
+    </>
+  );
+
+  // Opened from the profile menu on the touch layout (KANBAN-87): the same
+  // panel, in a sheet, with no top-bar trigger.
+  if (onSheetClose) {
+    return (
+      <MenuSheet label="GitHub connections" panelRef={wrapRef}>
+        {panel}
+      </MenuSheet>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Connect GitHub account"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Connect GitHub account"
+        className="relative grid h-8 w-8 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-ink)]"
+      >
+        <GithubIcon />
+        {hasInvalid ? (
+          <span
+            aria-hidden="true"
+            className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-bug)] ring-2 ring-[var(--color-canvas)]"
+          />
+        ) : null}
+      </button>
+
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="GitHub connections"
+          className="absolute right-0 top-full z-30 mt-2 w-[min(92vw,24rem)] rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-lg"
+        >
+          {panel}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** The GitHub mark; also on the profile menu's row on the touch layout (KANBAN-87). */
+export function GithubIcon() {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.67 0-1.25.45-2.27 1.19-3.07-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.17a11.1 11.1 0 0 1 5.79 0c2.2-1.48 3.17-1.17 3.17-1.17.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.07 0 4.4-2.69 5.37-5.25 5.66.41.35.78 1.05.78 2.12 0 1.53-.01 2.77-.01 3.15 0 .31.21.68.8.56A10.52 10.52 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z"
+      />
+    </svg>
   );
 }

@@ -134,9 +134,12 @@ export default async function RootRefPage({ params, searchParams }: Props) {
           </div>
           <div className="flex shrink-0 items-center gap-3">
             {focusOn ? <FocusPeek /> : null}
-            <GithubConnect />
-            <McpTokenSettings />
-            <ThemeToggle />
+            {/* Touch layout: these three move into the profile menu (KANBAN-87). */}
+            <div className="flex items-center gap-3 compact:hidden">
+              <GithubConnect />
+              <McpTokenSettings />
+              <ThemeToggle />
+            </div>
             <ProfileMenu
               name={session.user.name}
               email={email}
