@@ -3,9 +3,11 @@ import Link from "next/link";
 /**
  * The app wordmark: the kanban icon + "MyKan", linking home. Shown in the top
  * bar of every page. The mark is inlined (no network request) and matches the
- * favicon exactly.
+ * favicon exactly. `compactIconOnly` (project and card pages, KANBAN-88) drops
+ * the word on the touch layout to give the project name room; the link keeps
+ * its "MyKan — home" label.
  */
-export function Brand() {
+export function Brand({ compactIconOnly = false }: { compactIconOnly?: boolean } = {}) {
   return (
     <Link
       href="/"
@@ -13,7 +15,7 @@ export function Brand() {
       className="flex items-center gap-2 text-[var(--color-ink)] transition-opacity hover:opacity-80"
     >
       <BrandMark className="h-5 w-5 shrink-0" />
-      <span className="text-base font-semibold tracking-tight">MyKan</span>
+      <span className={`text-base font-semibold tracking-tight ${compactIconOnly ? "compact:hidden" : ""}`}>MyKan</span>
     </Link>
   );
 }

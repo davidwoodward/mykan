@@ -123,7 +123,7 @@ export default async function RootRefPage({ params, searchParams }: Props) {
       <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[var(--color-canvas)]">
         <div className="mx-auto flex min-h-[var(--app-header-h)] w-full items-center justify-between gap-4 px-3 py-2 text-sm sm:w-[95%] sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
-            <Brand />
+            <Brand compactIconOnly />
             <ProjectSwitcher currentId={project.id} />
             <ProjectHeader
               project={project}
