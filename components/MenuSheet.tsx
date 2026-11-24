@@ -10,17 +10,21 @@ import { createPortal } from "react-dom";
  *
  * The overlay tracks `visualViewport`, so when the on-screen keyboard opens the
  * sheet shrinks with the visible area and its own scroll keeps the focused
- * field (e.g. the token label) in view. A press outside the panel or Esc
- * closes it; the owning component already does both against `panelRef`
- * (a mousedown outside it, Esc on the document), so this only lays it out.
+ * field (e.g. the token label) in view. The × in the corner, a press outside
+ * the panel or Esc closes it; the owning component handles the last two
+ * against `panelRef` (a mousedown outside it, Esc on the document). Each
+ * panel's title row keeps `pr-9` clear in sheet mode so nothing sits under
+ * the ×.
  */
 export function MenuSheet({
   label,
   panelRef,
+  onClose,
   children,
 }: {
   label: string;
   panelRef: RefObject<HTMLDivElement | null>;
+  onClose: () => void;
   children: React.ReactNode;
 }) {
   const [box, setBox] = useState<{ top: number; height: number } | null>(null);
@@ -48,8 +52,21 @@ export function MenuSheet({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] p-3 text-sm shadow-2xl"
+        // The raised shade sets the sheet apart from the page in both themes;
+        // fields inside sit on the page colour so they still read as fields.
+        className="relative max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-line-strong)] bg-[var(--color-raised)] p-3 text-sm shadow-2xl [&_input]:bg-[var(--color-canvas)]"
       >
+        <button
+          type="button"
+          onClick={onClose}
+          title="Close (Esc)"
+          aria-label={`Close ${label}`}
+          className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-md text-[var(--color-muted)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-ink)]"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
         {children}
       </div>
     </div>,

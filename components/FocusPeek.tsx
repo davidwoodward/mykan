@@ -238,7 +238,7 @@ function FocusOverlay({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="Focus list"
         tabIndex={-1}
-        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-line)] bg-[var(--color-canvas)] px-3 pb-6 pt-3 shadow-2xl outline-none sm:max-h-[84dvh] sm:px-4"
+        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-line-strong)] bg-[var(--color-raised)] px-3 pb-6 pt-3 shadow-2xl outline-none sm:max-h-[84dvh] sm:px-4"
       >
         <button
           type="button"

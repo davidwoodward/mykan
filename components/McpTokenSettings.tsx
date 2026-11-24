@@ -156,7 +156,7 @@ export function McpTokenSettings({ onSheetClose }: { onSheetClose?: () => void }
 
   const panel = (
     <>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+          <div className={`mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)] ${onSheetClose ? "pr-9 leading-8" : ""}`}>
             MCP access tokens
           </div>
 
@@ -326,7 +326,7 @@ export function McpTokenSettings({ onSheetClose }: { onSheetClose?: () => void }
   // panel, in a sheet, with no top-bar trigger.
   if (onSheetClose) {
     return (
-      <MenuSheet label="MCP access tokens" panelRef={wrapRef}>
+      <MenuSheet label="MCP access tokens" panelRef={wrapRef} onClose={close}>
         {panel}
       </MenuSheet>
     );

@@ -155,7 +155,10 @@ Card text on list rows and board cards honors paragraph breaks with a **small ga
   (44px rows, icon + label, above "Keyboard-forward navigation"). GitHub and MCP close the menu
   and open their usual panel as a centred sheet (`MenuSheet`, a portal on `<body>`) whose
   overlay tracks `visualViewport`, so the on-screen keyboard shrinks it rather than covering the
-  field; Esc or a press outside closes it and focus returns to the avatar. The theme row flips
+  field; the × top-right, Esc or a press outside closes it and focus returns to the avatar.
+  Sheets and the focus overlay use `--color-raised` (a tinted shade distinct from canvas and
+  surface in both themes) with a `line-strong` border, so they never blend into the page;
+  inputs inside sit on canvas. The theme row flips
   in place and leaves the menu open. A mouse desktop keeps the three icons in the bar.
 - **Alignment rule (this bit twice):** keep icon affordances (back arrow, brand mark) in the
   `items-center` row; reserve baseline alignment for the *text* cluster (title + byline) only.
