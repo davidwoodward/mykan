@@ -62,6 +62,27 @@ export function entryTitle(e: Pick<FocusEntryView, "label" | "title">): string |
   return e.label ?? e.title;
 }
 
+const TYPE_LETTER: Record<string, string> = { feature: "F", epic: "E", task: "T", bug: "B", idea: "I" };
+
+/**
+ * The one-letter type column of a compact focus row (KANBAN-85): F feature,
+ * E epic, T task, B bug, I idea ("Thought"). Blank for a personal entry, and
+ * for a card the person can no longer see.
+ */
+export function typeLetter(e: Pick<FocusEntryView, "type" | "personal" | "visible">): string {
+  if (e.personal || !e.visible || !e.type) return "";
+  return TYPE_LETTER[e.type] ?? "";
+}
+
+/**
+ * The status a focus row shows, or null for none (KANBAN-86): a personal
+ * entry shows no status, because nothing in the app can change it; the tick
+ * is how it finishes.
+ */
+export function entryStatus(e: Pick<FocusEntryView, "status" | "personal">): string | null {
+  return e.personal ? null : e.status;
+}
+
 /** A finished or dropped entry, for history and for "completed" reasons. */
 export type FocusHistoryEntry = {
   id: string;
@@ -319,7 +340,8 @@ export function ageLabel(iso: string | null, now: Date): string {
 /**
  * The list as aligned plain text in a code block, preceded by a one-line
  * header and, when a review is due, a "Review due" line naming the reasons.
- * Columns: #, Card, Status, Done, Moved, Note (the title, then "· why now").
+ * Columns: #, T (type letter), Card, Status, Done, Moved, Note (the title,
+ * then "· why now"). A personal entry's T and Status are blank.
  * With `width`, the Note column is cut so no line is longer.
  */
 export function formatFocusText(
@@ -338,21 +360,22 @@ export function formatFocusText(
     lines.push("Your focus list is empty. Add the cards that matter most right now.");
     return lines.join("\n");
   }
-  const headers = ["#", "Card", "Status", "Done", "Moved", "Note"];
+  const headers = ["#", "T", "Card", "Status", "Done", "Moved", "Note"];
   const rows = view.entries.map((e, i) => {
-    if (!e.visible) return [String(i + 1), "(no access)", "-", "-", "-", "You can no longer see this card"];
+    if (!e.visible) return [String(i + 1), "", "(no access)", "-", "-", "-", "You can no longer see this card"];
     const note = [entryTitle(e) ?? "", e.why_now ? `· ${e.why_now}` : ""].filter(Boolean).join(" ");
     return [
       String(i + 1),
+      typeLetter(e),
       e.ref ?? "-",
-      e.status ?? "-",
+      e.personal ? "" : (e.status ?? "-"),
       e.progress ? `${e.progress.done}/${e.progress.total}` : "-",
       (e.stale ? "!" : "") + ageLabel(e.last_moved_at, now),
       note.replace(/\s+/g, " ").trim(),
     ];
   });
   const last = headers.length - 1;
-  const widths = headers.map((h, c) => Math.max(h.length, 2, ...rows.map((r) => Array.from(r[c]).length)));
+  const widths = headers.map((h, c) => Math.max(h.length, c === 1 ? 1 : 2, ...rows.map((r) => Array.from(r[c]).length)));
   if (width !== undefined) {
     const before = widths.slice(0, last).reduce((s, w) => s + w + 2, 0);
     widths[last] = Math.min(widths[last], Math.max(4, width - before));
