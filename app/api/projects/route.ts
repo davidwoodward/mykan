@@ -3,7 +3,7 @@ import { getSupabase } from "@/lib/supabase-server";
 import { requireSession } from "@/lib/api-auth";
 import { whitelist } from "@/lib/auth";
 import { normalizeAssignees } from "@/lib/types";
-import { listProjects } from "@/lib/projects-core";
+import { displayProjects, listProjects } from "@/lib/projects-core";
 import { normalizeKeyInput } from "@/lib/card-url";
 import { keyConstraintMessage, projectKeyWriteError } from "@/lib/project-keys";
 
@@ -12,7 +12,8 @@ export async function GET() {
   if ("error" in gate) return gate.error;
   const r = await listProjects(getSupabase(), gate.email);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json(r.data);
+  // Personal projects (KANBAN-75) are hidden from every project list.
+  return NextResponse.json(displayProjects(r.data));
 }
 
 export async function POST(req: Request) {

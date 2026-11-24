@@ -841,3 +841,38 @@ the top of the visible part of that row, and scrolls away only with the row's en
   over the body text. It stays where it is and scrolls with the row.
 - Clicking behaviour is unchanged: a click on the ref still copies it; the row still selects
   on click and opens with the pencil, double-click or Enter.
+
+## Focus list (KANBAN-74, 2026-11-24)
+
+A person's own private, ranked list of the cards that matter now, across every project.
+**Opt-in:** Profile menu → Settings → **Focus list** switch, off by default (most people
+work inside one project). Off leaves Home exactly as before; nothing focus-related shows
+except the switch. Turning it off keeps the list; turning it on restores it.
+
+- **Where:** the top of Home, above Projects, in the app-shell container. Server-rendered
+  decision (the page reads the setting), so there's no flash of the list for someone who
+  has it off.
+- **Rows:** grip · rank · ref + title (links to the card page) · a quiet meta line (a
+  "Personal" chip, status, epic `N/M done`, open questions, "moved 3d", "by <date>") · the
+  why-now line · icon actions: pencil (edit why now), ✓ (tick off), × (drop). Every icon
+  has `title` + `aria-label`. An idle card's age turns `--color-bug` and reads "idle Nd".
+  A card the person can no longer see renders "No access", never its title.
+- **Rank** by dragging the grip, or from the keyboard (grip focused: Space lifts, arrows
+  move, Space drops, Esc cancels) — the same dnd-kit pattern as an epic's cards.
+- **Why now** edits inline: nothing written while typing; Enter, Esc or click-off saves
+  once, only if changed (Save on finish).
+- **Add box** at the foot of the list is a typeahead overlay (opens on focus, ↑/↓, Enter
+  adds, Esc closes then clears, Tab moves on, outside press closes, clear × when it has
+  text). It matches ref, title and project across every visible project; once you type,
+  the last option is "Add “…” as a new personal card" (quick-add into the hidden personal
+  project). **Hard cap:** at the maximum the box is replaced by a line saying the list is
+  full and to tick off or drop an entry first.
+- **Review banner** above the list when a review is due, naming the reasons ("PS-12 done ·
+  2 entries left", "daily review", "AMOS-3 idle 9d") with **Confirm as is**. Any change to
+  the list also counts as a review; ticking off does not (it raises one).
+- **Recently finished** (done or dropped) sits behind a small toggle under the list.
+- **Settings** (shown only while on): maximum entries (hard cap), "review when down to",
+  idle after N days, daily review hour. The browser's time zone is saved with each change.
+- **Personal project:** created by mykan the first time the list is turned on (key ME, ME2,
+  …), private, never in the project list or switcher; its board URL goes home, its cards
+  keep their pages.

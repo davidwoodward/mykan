@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ItemStatus, Project } from "@/lib/types";
 import {
   coreOk,
+  displayProjects,
   listProjects,
   resolveProject,
   type CoreResult,
@@ -117,8 +118,9 @@ function err(msg: string): string {
 async function cmdProjects(sb: SupabaseClient, actor: string): Promise<string> {
   const r = await listProjects(sb, actor);
   if (!r.ok) return err(r.error);
-  if (!r.data.length) return "No projects yet.";
-  const lines = r.data.map((p) => {
+  const shown = displayProjects(r.data); // personal projects stay hidden (KANBAN-75)
+  if (!shown.length) return "No projects yet.";
+  const lines = shown.map((p) => {
     const key = p.key ? `<code>${esc(p.key)}</code> · ` : "";
     const priv = p.is_private ? " 🔒" : "";
     return `• ${key}${esc(p.name)}${priv}`;

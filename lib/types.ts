@@ -232,6 +232,11 @@ export interface Project {
    * always sees it; these members also see it. Empty = private (owner only).
    */
   shared_with: string[];
+  /**
+   * The owner's hidden personal project (KANBAN-75): created by mykan for the
+   * focus list, never shown in project lists, reached only through the list.
+   */
+  is_personal?: boolean;
   created_at: string;
   updated_at: string;
   created_by: string | null;

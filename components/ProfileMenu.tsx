@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/app/actions";
 import { useKeyboardNav } from "@/components/useKeyboardNav";
+import { FocusSettingsPanel } from "@/components/FocusSettingsPanel";
 
 /**
  * The top-bar profile menu (KANBAN-31). Replaces the old plaintext email + Sign
@@ -68,7 +69,7 @@ export function ProfileMenu({
         <div
           role="menu"
           aria-label="Profile"
-          className="absolute right-0 top-full z-30 mt-2 w-[min(94vw,17rem)] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] text-sm shadow-lg"
+          className="absolute right-0 top-full z-30 mt-2 w-[min(94vw,19rem)] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] text-sm shadow-lg"
         >
           {/* Identity */}
           <div className="flex items-center gap-3 border-b border-[var(--color-line)] px-3 py-3">
@@ -121,6 +122,7 @@ export function ProfileMenu({
                 />
               </span>
             </button>
+            <FocusSettingsPanel />
           </div>
 
           {/* Sign out */}
