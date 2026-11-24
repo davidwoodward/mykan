@@ -78,8 +78,11 @@ export function ProjectHeader({
   const commitRef = useRef<(opts?: { keyConfirmed?: boolean }) => void>(() => {});
   const cancelKeyChangeRef = useRef<() => void>(() => {});
 
+  // A personal project (KANBAN-75) stays private: no share control at all.
   const canToggleVisibility =
-    isOwner && project.created_by?.toLowerCase() === viewerEmail.toLowerCase();
+    isOwner &&
+    !project.is_personal &&
+    project.created_by?.toLowerCase() === viewerEmail.toLowerCase();
 
   // Load the connectable GitHub accounts for the picker. Keeps the last-good
   // list on a transient failure (a lapsed session used to blank it, so the

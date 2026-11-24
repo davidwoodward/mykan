@@ -91,3 +91,10 @@ test("every project-list surface filters personal projects", () => {
     assert.match(readFileSync(join(ROOT, f), "utf8"), /displayProjects\(/, f);
   }
 });
+
+test("a personal project can't be shared", () => {
+  const api = readFileSync(join(ROOT, "app", "api", "projects", "[id]", "route.ts"), "utf8");
+  assert.match(api, /is_personal[\s\S]{0,120}stays private/);
+  const header = readFileSync(join(ROOT, "components", "ProjectHeader.tsx"), "utf8");
+  assert.match(header, /!project\.is_personal/);
+});

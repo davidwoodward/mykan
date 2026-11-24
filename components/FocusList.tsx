@@ -250,8 +250,11 @@ export function FocusList() {
                     <span className="font-mono text-[11px] text-[var(--color-faint)]">no access</span>
                   )}
                   <span className="min-w-0 flex-1 truncate">{h.title ?? ""}</span>
-                  <span className="shrink-0 text-[10px] text-[var(--color-faint)]">
-                    {now ? ageLabel(h.completed_at ?? h.removed_at, now) : ""}
+                  <span
+                    className="shrink-0 text-[10px] text-[var(--color-faint)]"
+                    title="How long it was on your list, and when it left"
+                  >
+                    {now ? `${listedFor(h)} on list · ${ageLabel(h.completed_at ?? h.removed_at, now)} ago`.replace("today ago", "today") : ""}
                   </span>
                 </li>
               ))}
@@ -261,6 +264,13 @@ export function FocusList() {
       ) : null}
     </section>
   );
+}
+
+/** "3d" — whole days an entry spent on the list (at least "<1d"). */
+function listedFor(h: FocusHistoryEntry): string {
+  const end = Date.parse(h.completed_at ?? h.removed_at ?? h.added_at);
+  const days = Math.floor((end - Date.parse(h.added_at)) / 86_400_000);
+  return days < 1 ? "<1d" : `${days}d`;
 }
 
 function FocusRow({
