@@ -878,6 +878,9 @@ except the switch. Turning it off keeps the list; turning it on restores it.
   why-now line · icon actions: pencil (edit why now), ✓ (tick off), × (drop). Every icon
   has `title` + `aria-label`. An idle card's age turns `--color-bug` and reads "idle Nd".
   A card the person can no longer see renders "No access", never its title.
+- **On phones (KANBAN-90)** the title gets the whole first line after rank and type letter;
+  the ref moves to the start of the meta line, and the edit / tick / drop icons sit at its right,
+  smaller (24px) to match that line. Desktop keeps the ref and icons on the title line.
 - **Rank** by dragging the grip, or from the keyboard (grip focused: Space lifts, arrows
   move, Space drops, Esc cancels) — the same dnd-kit pattern as an epic's cards.
 - **Why now** edits inline: nothing written while typing; Enter, Esc or click-off saves

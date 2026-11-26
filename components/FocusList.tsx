@@ -59,6 +59,9 @@ type Option =
 
 const iconBtn =
   "grid h-7 w-7 shrink-0 place-items-center rounded text-[var(--color-faint)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-ink)]";
+/** The row actions on the touch layout's meta line (KANBAN-90): smaller, to match it. */
+const lineBtn =
+  "grid h-6 w-6 shrink-0 place-items-center rounded text-[var(--color-faint)] transition-colors hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-ink)]";
 
 async function call(url: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(url, {
@@ -339,6 +342,56 @@ function FocusRow({
     }
   };
 
+  // The edit / tick / drop icons. Desktop shows them beside the title; the touch
+  // layout (KANBAN-90) moves them to the meta line, smaller, so the title gets
+  // the whole first line. Rendered in both places, one hidden per layout.
+  const actions = (btn: string, icon: string) => (
+    <>
+      <button
+        type="button"
+        disabled={busy || !e.visible}
+        onClick={() => {
+          setTitleDraft(entryTitle(e) ?? "");
+          setDraft(e.why_now ?? "");
+          setEditing(true);
+        }}
+        title="Edit title and why now"
+        aria-label={`Edit the focus title and why now for ${label}`}
+        className={btn}
+      >
+        <svg className={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onComplete}
+        title="Tick off"
+        aria-label={`Tick off ${label}`}
+        className={`${btn} hover:text-[var(--color-feature)]`}
+      >
+        <svg className={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onDrop}
+        title="Drop from list"
+        aria-label={`Drop ${label} from your focus list`}
+        className={`${btn} hover:text-[var(--color-bug)]`}
+      >
+        <svg className={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <path d="M18 6 6 18" />
+          <path d="M6 6l12 12" />
+        </svg>
+      </button>
+    </>
+  );
+
   return (
     <li
       ref={setNodeRef}
@@ -405,7 +458,7 @@ function FocusRow({
             <a
               href={path ?? "#"}
               title={renamed ? `Open ${e.ref}: ${e.title}` : `Open ${e.ref}`}
-              className="shrink-0 font-mono text-[11px] text-[var(--color-faint)] hover:text-[var(--color-ink)]"
+              className="shrink-0 font-mono text-[11px] text-[var(--color-faint)] hover:text-[var(--color-ink)] compact:hidden"
             >
               {e.ref}
             </a>
@@ -421,7 +474,15 @@ function FocusRow({
           <p className="text-sm italic text-[var(--color-faint)]">No access: you can no longer see this card.</p>
         )}
         {e.visible ? (
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-[var(--color-faint)]">
+          <div className="mt-0.5 flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-[var(--color-faint)]">
+            <a
+              href={path ?? "#"}
+              title={renamed ? `Open ${e.ref}: ${e.title}` : `Open ${e.ref}`}
+              className="hidden font-mono text-[var(--color-faint)] hover:text-[var(--color-ink)] compact:inline"
+            >
+              {e.ref}
+            </a>
             {e.personal ? <span className="rounded bg-[var(--color-canvas)] px-1.5">Personal</span> : null}
             {status ? <span className="uppercase tracking-wider">{STATUS_LABEL[status as ItemStatus] ?? status}</span> : null}
             {e.progress ? <span title="Epic cards done">{e.progress.done}/{e.progress.total} done</span> : null}
@@ -441,56 +502,20 @@ function FocusRow({
             ) : null}
             {e.target_date ? <span title="Target date">by {e.target_date}</span> : null}
           </div>
-        ) : null}
+          {/* Touch layout: the actions, sized to this line. */}
+          <div className="-my-1 hidden shrink-0 items-center compact:flex">{actions(lineBtn, "h-3.5 w-3.5")}</div>
+          </div>
+        ) : (
+          // A card you can no longer see has no meta line; keep its drop reachable.
+          <div className="mt-0.5 hidden justify-end compact:flex">{actions(lineBtn, "h-3.5 w-3.5")}</div>
+        )}
         {editing ? null : e.why_now ? (
           <p className="mt-0.5 text-xs text-[var(--color-muted)]">{e.why_now}</p>
         ) : null}
       </div>
 
-      <div className="flex shrink-0 items-center">
-        <button
-          type="button"
-          disabled={busy || !e.visible}
-          onClick={() => {
-            setTitleDraft(entryTitle(e) ?? "");
-            setDraft(e.why_now ?? "");
-            setEditing(true);
-          }}
-          title="Edit title and why now"
-          aria-label={`Edit the focus title and why now for ${label}`}
-          className={iconBtn}
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onComplete}
-          title="Tick off"
-          aria-label={`Tick off ${label}`}
-          className={`${iconBtn} hover:text-[var(--color-feature)]`}
-        >
-          <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onDrop}
-          title="Drop from list"
-          aria-label={`Drop ${label} from your focus list`}
-          className={`${iconBtn} hover:text-[var(--color-bug)]`}
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-            <path d="M18 6 6 18" />
-            <path d="M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+      {/* Desktop: the actions sit at the row's right, level with the title. */}
+      <div className="flex shrink-0 items-center compact:hidden">{actions(iconBtn, "h-4 w-4")}</div>
     </li>
   );
 }
