@@ -550,6 +550,12 @@ function AddBox({
   }, [cands, q, taken]);
 
   const hiClamped = Math.min(hi, Math.max(options.length - 1, 0));
+  const pick = options[hiClamped];
+  const pickLabel = !pick
+    ? ""
+    : pick.kind === "card"
+      ? `Add ${pick.c.ref} to your focus list`
+      : `Add “${pick.text}” as a new personal card`;
 
   async function choose(o: Option | undefined) {
     if (!o) return;
@@ -605,6 +611,8 @@ function AddBox({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder="Add a card, or type something new…"
+          // Phones offer a fixed set of return-key labels; "done" reads as finishing the entry.
+          enterKeyHint="done"
           aria-label="Add to your focus list"
           role="combobox"
           aria-expanded={open}
@@ -612,6 +620,22 @@ function AddBox({
           aria-autocomplete="list"
           className="min-w-0 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-[var(--color-faint)]"
         />
+        {q && pick ? (
+          // KANBAN-89: a visible way to add what Enter adds (the highlighted
+          // option), mainly for phones. Its label names exactly what it adds.
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void choose(pick)}
+            title={pickLabel}
+            aria-label={pickLabel}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[var(--color-accent)] text-[var(--color-surface)] transition-opacity hover:opacity-90 disabled:opacity-50 compact:h-9 compact:w-9"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          </button>
+        ) : null}
         {q ? (
           <button
             type="button"
@@ -621,7 +645,7 @@ function AddBox({
             }}
             title="Clear"
             aria-label="Clear"
-            className={iconBtn}
+            className={`${iconBtn} compact:h-9 compact:w-9`}
           >
             <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <path d="M18 6 6 18" />
