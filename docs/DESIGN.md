@@ -884,7 +884,7 @@ except the switch. Turning it off keeps the list; turning it on restores it.
   once, only if changed (Save on finish).
 - **Add box** at the foot of the list is a typeahead overlay (opens on focus, ↑/↓, Enter
   adds, Esc closes then clears, Tab moves on, outside press closes, clear × when it has
-  text). It matches ref, title and project across every visible project; once you type,
+  text, and a filled accent ✓ that adds the highlighted option, the same as Enter, sized for a finger on touch layouts, with a label naming what it will add (KANBAN-89); the phone keyboard's return key reads "Done"). It matches ref, title and project across every visible project; once you type,
   the last option is "Add “…” as a new personal card" (quick-add into the hidden personal
   project). **Hard cap:** at the maximum the box is replaced by a line saying the list is
   full and to tick off or drop an entry first.
